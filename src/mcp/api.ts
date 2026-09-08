@@ -829,6 +829,53 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     getState().toast(String(p.message ?? ''), p.kind ?? 'info');
     return { ok: true };
   },
+  async brushes(p) {
+    const ops = await import('@/brushes/ops');
+    const act = await import('@/brushes/actions');
+    const op = p.op ?? 'list';
+    const s = getState();
+    if (op === 'list') return s.doc.brushes.map((b) => ({ id: b.id, name: b.name, kind: b.kind, users: ops.nodesUsingBrush(s.doc, b.id).length }));
+    if (op === 'apply') {
+      if (p.ids?.length) s.setSelection(p.ids);
+      return { count: act.applyBrushCommand(String(p.id), { scale: p.scale, flipAlong: p.flipAlong, flipAcross: p.flipAcross, colorization: p.colorization }) };
+    }
+    if (op === 'remove') {
+      if (p.ids?.length) s.setSelection(p.ids);
+      return { count: act.removeBrushStrokeCommand() };
+    }
+    if (op === 'expand') {
+      return { count: act.expandBrushStrokesCommand(p.ids), selection: getState().selection };
+    }
+    if (op === 'calligraphic') {
+      const def = act.newCalligraphicBrush({ name: p.name, size: p.size, angle: p.angle, roundness: p.roundness });
+      return { id: def?.id ?? null };
+    }
+    if (op === 'fromSelection') {
+      const kind = p.kind === 'art' || p.kind === 'pattern' ? p.kind : 'scatter';
+      const def = act.newArtworkBrush(kind, { name: p.name, colorization: p.colorization, ids: p.ids });
+      return { id: def?.id ?? null };
+    }
+    if (op === 'options') {
+      const patch: Record<string, unknown> = {};
+      for (const k of ['name', 'size', 'angle', 'roundness', 'width', 'scale', 'spacing', 'fit', 'stretch', 'colorization', 'flipAlong', 'flipAcross', 'rotationRelativeTo'] as const) if (p[k] !== undefined) patch[k] = p[k];
+      act.updateBrushCommand(String(p.id), patch as never);
+      return { ok: true };
+    }
+    if (op === 'delete') {
+      act.deleteBrushCommand(String(p.id), p.mode === 'expand' ? 'expand' : 'remove');
+      return { ok: true };
+    }
+    if (op === 'library') {
+      const lib = (await import('@/brushes/library')).BRUSH_LIBRARY;
+      if (p.name) {
+        const entry = lib.find((e) => e.id === p.name || e.name === p.name);
+        if (!entry) throw new Error(`Unknown library brush "${p.name}"`);
+        return { id: act.addLibraryBrush(entry.id) };
+      }
+      return { added: act.addWholeBrushLibrary(), available: lib.map((e) => ({ id: e.id, kind: e.kind })) };
+    }
+    throw new Error(`Unknown brushes op "${op}"`);
+  },
   async patterns(p) {
     const ops = await import('@/patterns/ops');
     const reg = await import('@/patterns/register');

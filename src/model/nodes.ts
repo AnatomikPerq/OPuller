@@ -224,6 +224,7 @@ export function createDocument(o: NewDocumentOptions = {}): Document {
     swatches: defaultSwatches(),
     patterns: [],
     symbols: [],
+    brushes: [],
     grid: defaultGrid(),
     colorMode: o.colorMode ?? 'rgb',
     bleed: o.bleed ? { ...o.bleed } : { ...NO_BLEED },

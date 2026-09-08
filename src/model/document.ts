@@ -10,6 +10,7 @@ import { rectUnion } from '@/geometry/vec';
 import { layoutText } from '@/text/layout';
 import { liveShapeSubPaths } from '@/geometry/shapes';
 import { newId } from './nodes';
+import { brushPad } from '@/brushes/geometry';
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -477,6 +478,10 @@ export function visualBounds(doc: Document, id: ID): Rect | null {
     pad = (n.stroke.width / 2) * s;
     if (n.stroke.join === 'miter') pad *= Math.min(n.stroke.miterLimit, 4) / 2 + 0.5;
     if (n.stroke.markerStart !== 'none' || n.stroke.markerEnd !== 'none') pad = Math.max(pad, n.stroke.width * 4 * n.stroke.markerScale * s);
+    if (n.type === 'path' && n.stroke.brush) {
+      const def = doc.brushes.find((b) => b.id === n.stroke.brush!.id);
+      if (def) pad = Math.max(pad, brushPad(def, n.stroke) * s);
+    }
   }
   for (const e of n.effects) {
     if (!e.enabled) continue;

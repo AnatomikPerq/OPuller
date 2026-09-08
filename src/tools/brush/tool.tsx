@@ -19,6 +19,8 @@ import { addWorldPath } from '../freehand/apply';
 import { BRUSH_CURSOR } from '../freehand/cursors';
 import { PolygonPreview, previewColor, toScreen } from '../freehand/preview';
 import { OptionSlider, OptionCheck, OptionsRow, PaintSourceOption } from '../freehand/options';
+import { useBrushStore } from '@/brushes/store';
+import { getBrush } from '@/brushes/ops';
 
 export type BrushOptions = {
   width: number;
@@ -84,7 +86,17 @@ function finish(ctx: ToolContext, g: Gesture) {
     const tolerance = 0.5 + opts.smoothing * 0.08;
     const center = fitPolyline(smoothed, tolerance, false);
     if (!center) return;
-    if (opts.simple) {
+    const activeBrush = useBrushStore.getState().activeId;
+    const brushDef = activeBrush ? getBrush(s.doc, activeBrush) : undefined;
+    if (brushDef) {
+      // a library/defined brush: plain path whose stroke carries the brush (weight 1 = 100 %)
+      const app = currentAppearance(s);
+      const stroke = { ...app.stroke, paint: g.paint, width: 1, cap: 'round' as const, join: 'round' as const, dash: [] as number[], widthProfile: undefined, markerStart: 'none' as const, markerEnd: 'none' as const, brush: { ...(app.stroke.brush?.id === brushDef.id ? app.stroke.brush : {}), id: brushDef.id } };
+      s.updateDoc((d) => {
+        const n = addWorldPath(d, [center], { fill: { type: 'none' }, stroke, name: `${brushDef.name} Stroke` });
+        created.id = n?.id ?? null;
+      }, label);
+    } else if (opts.simple) {
       const app = currentAppearance(s);
       const stroke = { ...app.stroke, paint: g.paint, width: opts.width, cap: 'round' as const, join: 'round' as const, dash: [] as number[], widthProfile: undefined, markerStart: 'none' as const, markerEnd: 'none' as const };
       s.updateDoc((d) => {

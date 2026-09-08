@@ -1136,7 +1136,7 @@ export function looksLikeSvg(text: string): boolean {
 
 export function importSvg(svgText: string, opts: SvgImportOptions = {}): SvgImportResult {
   const root = parseSvgDocument(svgText);
-  const scratch: Document = { id: 'import', name: opts.name ?? 'Import', units: 'px', artboards: [], layers: [], nodes: {}, guides: [], swatches: [], patterns: [], symbols: [], grid: { size: 50, subdivisions: 5, color: '#888888', style: 'lines' }, colorMode: 'rgb', bleed: { top: 0, right: 0, bottom: 0, left: 0 }, meta: { created: '', modified: '', generator: 'OPuller', version: 1 } };
+  const scratch: Document = { id: 'import', name: opts.name ?? 'Import', units: 'px', artboards: [], layers: [], nodes: {}, guides: [], swatches: [], patterns: [], symbols: [], brushes: [], grid: { size: 50, subdivisions: 5, color: '#888888', style: 'lines' }, colorMode: 'rgb', bleed: { top: 0, right: 0, bottom: 0, left: 0 }, meta: { created: '', modified: '', generator: 'OPuller', version: 1 } };
   const ctx: Ctx = { doc: scratch, byId: new Map(), rules: [], nodes: [], warnings: new Set(), useDepth: 0, viewport: { width: 300, height: 150 } };
   // index ids and style sheets (whole document, including defs)
   const all = root.getElementsByTagName('*');

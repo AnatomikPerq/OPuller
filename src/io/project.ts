@@ -225,6 +225,14 @@ function validStroke(v: unknown): StrokeStyle {
     markerEnd: marker(s.markerEnd),
     markerScale: num(s.markerScale, 1),
   };
+  const br = obj(s.brush);
+  if (typeof br.id === 'string') {
+    out.brush = { id: br.id };
+    if (typeof br.scale === 'number') out.brush.scale = Math.max(0.01, br.scale);
+    if (typeof br.flipAlong === 'boolean') out.brush.flipAlong = br.flipAlong;
+    if (typeof br.flipAcross === 'boolean') out.brush.flipAcross = br.flipAcross;
+    if (br.colorization === 'none' || br.colorization === 'tints' || br.colorization === 'tintsShades' || br.colorization === 'hue') out.brush.colorization = br.colorization;
+  }
   if (Array.isArray(s.widthProfile) && s.widthProfile.length) {
     out.widthProfile = s.widthProfile.map((w) => {
       const wo = obj(w);
@@ -437,6 +445,55 @@ export function validateNodeMap(rawNodes: unknown, rawRoot: unknown): { nodes: R
   return { nodes, root: rawRoot };
 }
 
+function validArt(v: unknown): import('@/model/types').BrushArtwork | null {
+  const o = obj(v);
+  return validateNodeMap(o.nodes, o.root);
+}
+
+function validBrush(v: unknown): import('@/model/types').BrushDef | null {
+  const b = obj(v);
+  if (typeof b.id !== 'string') return null;
+  const name = str(b.name, 'Brush');
+  const colorization = (c: unknown): import('@/model/types').BrushColorization => (c === 'tints' || c === 'tintsShades' || c === 'hue' ? c : 'none');
+  const pair = (p: unknown, d: [number, number]): [number, number] => (Array.isArray(p) && p.length === 2 ? [num(p[0], d[0]), num(p[1], d[1])] : d);
+  switch (b.kind) {
+    case 'calligraphic': {
+      const out: import('@/model/types').CalligraphicBrush = { id: b.id, name, kind: 'calligraphic', angle: num(b.angle, 0), roundness: Math.max(0, Math.min(100, num(b.roundness, 100))), size: Math.max(0.1, num(b.size, 5)) };
+      if (typeof b.angleVariation === 'number') out.angleVariation = b.angleVariation;
+      if (typeof b.roundnessVariation === 'number') out.roundnessVariation = b.roundnessVariation;
+      if (typeof b.sizeVariation === 'number') out.sizeVariation = b.sizeVariation;
+      return out;
+    }
+    case 'scatter': {
+      const art = validArt(b.art);
+      if (!art) return null;
+      return { id: b.id, name, kind: 'scatter', art, size: pair(b.size, [100, 100]), spacing: pair(b.spacing, [100, 100]), scatter: pair(b.scatter, [0, 0]), rotation: pair(b.rotation, [0, 0]), rotationRelativeTo: b.rotationRelativeTo === 'path' ? 'path' : 'page', colorization: colorization(b.colorization) };
+    }
+    case 'art': {
+      const art = validArt(b.art);
+      if (!art) return null;
+      const out: import('@/model/types').ArtBrush = { id: b.id, name, kind: 'art', art, width: Math.max(1, num(b.width, 100)), stretch: b.stretch === 'proportional' ? 'proportional' : 'stretch', colorization: colorization(b.colorization) };
+      if (typeof b.flipAlong === 'boolean') out.flipAlong = b.flipAlong;
+      if (typeof b.flipAcross === 'boolean') out.flipAcross = b.flipAcross;
+      return out;
+    }
+    case 'pattern': {
+      const side = validArt(b.side);
+      if (!side) return null;
+      const out: import('@/model/types').PatternBrush = { id: b.id, name, kind: 'pattern', side, scale: Math.max(1, num(b.scale, 100)), spacing: num(b.spacing, 0), fit: b.fit === 'space' || b.fit === 'approximate' ? b.fit : 'stretch', colorization: colorization(b.colorization) };
+      const start = validArt(b.start);
+      const end = validArt(b.end);
+      if (start) out.start = start;
+      if (end) out.end = end;
+      if (typeof b.flipAlong === 'boolean') out.flipAlong = b.flipAlong;
+      if (typeof b.flipAcross === 'boolean') out.flipAcross = b.flipAcross;
+      return out;
+    }
+    default:
+      return null;
+  }
+}
+
 /**
  * Validate and normalise a raw document object. Missing fields get defaults,
  * dangling references are repaired, orphaned nodes are dropped.
@@ -523,6 +580,7 @@ export function validateDocument(raw: unknown): Document {
         })
         .filter((p) => !!p.svg || !!p.nodes)
     : [];
+  const brushes = Array.isArray(d.brushes) ? d.brushes.map(validBrush).filter((b): b is import('@/model/types').BrushDef => !!b) : [];
   const symbols = Array.isArray(d.symbols)
     ? d.symbols
         .map((s) => {
@@ -556,6 +614,7 @@ export function validateDocument(raw: unknown): Document {
     swatches,
     patterns,
     symbols,
+    brushes,
     grid: { size: Math.max(1, num(grid.size, dg.size)), subdivisions: Math.max(1, Math.round(num(grid.subdivisions, dg.subdivisions))), color: validHex(grid.color, dg.color), style: grid.style === 'dots' ? 'dots' : 'lines' },
     colorMode: d.colorMode === 'cmyk' ? 'cmyk' : 'rgb',
     bleed,

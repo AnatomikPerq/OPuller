@@ -6,8 +6,9 @@ import React, { createContext, memo, useContext } from 'react';
 import type { Document, ID, Node, PathNode, TextNode, ImageNode, GroupNode, Paint, StrokeStyle, Effect, Rect, Arrowhead, SubPath } from '@/model/types';
 import { pathToSvgD, pathBounds } from '@/geometry/path';
 import { toSvgTransform, isIdentity, multiply, invert } from '@/geometry/matrix';
-import { roundCorners } from '@/geometry/shapes';
 import { variableWidthOutlines } from '@/geometry/widthProfile';
+import { effectiveSubPaths, isGeometryEffect } from './effectiveGeometry';
+import { brushItems, type BrushItem } from '@/brushes/geometry';
 import { layoutText } from '@/text/layout';
 import { useStore } from '@/store/store';
 import { isContainer } from '@/model/types';
@@ -113,7 +114,7 @@ function PatternDef({ paint, id, doc }: { paint: Paint; id: string; doc: Documen
 // ---------------------------------------------------------------------------
 
 function hasFilterEffects(effects: Effect[]): boolean {
-  return effects.some((e) => e.enabled && e.type !== 'roundCorners');
+  return effects.some((e) => e.enabled && !isGeometryEffect(e.type));
 }
 
 export function FilterDef({ id, effects }: { id: string; effects: Effect[] }) {
@@ -351,13 +352,40 @@ function renderClipContent(n: Node, doc: Document): React.ReactNode {
   return null;
 }
 
-/** Path geometry after geometry effects (round corners). */
-export function effectiveSubPaths(n: PathNode): SubPath[] {
-  let sps = n.subpaths;
-  for (const e of n.effects) {
-    if (e.enabled && e.type === 'roundCorners' && e.radius > 0) sps = sps.map((sp) => roundCorners(sp, e.radius));
-  }
-  return sps;
+export { effectiveSubPaths };
+
+// brush stroke geometry is cached per node (nodes are immutable values)
+const brushCache = new WeakMap<PathNode, { def: unknown; items: BrushItem[] }>();
+
+function brushItemsFor(node: PathNode, doc: Document, sps: SubPath[]): BrushItem[] | null {
+  const ref = node.stroke.brush;
+  if (!ref) return null;
+  const def = doc.brushes.find((b) => b.id === ref.id);
+  if (!def) return null;
+  const cached = brushCache.get(node);
+  if (cached && cached.def === def) return cached.items;
+  const items = brushItems(def, sps, node.stroke, node.id);
+  brushCache.set(node, { def, items });
+  return items;
+}
+
+function BrushStroke({ items, ctx, node }: { items: BrushItem[]; ctx: RenderCtx; node: PathNode }) {
+  const defs: React.ReactNode[] = [];
+  const els = items.map((it, i) => {
+    const fid = `${ctx.prefix}bf-${node.id}-${i}`;
+    const sid = `${ctx.prefix}bs-${node.id}-${i}`;
+    const b = pathBounds(it.subpaths) ?? { x: 0, y: 0, width: 1, height: 1 };
+    if (it.fill.type === 'linear' || it.fill.type === 'radial') defs.push(<GradientDef key={fid} id={fid} paint={it.fill} bounds={b} />);
+    const strokeAttrs = it.stroke && it.stroke.paint.type !== 'none' && it.stroke.width > 0 ? { stroke: paintRef(it.stroke.paint, sid), strokeWidth: it.stroke.width, strokeLinecap: it.stroke.cap, strokeLinejoin: it.stroke.join, strokeOpacity: paintOpacity(it.stroke.paint) !== 1 ? paintOpacity(it.stroke.paint) : undefined } : { stroke: 'none' };
+    if (it.stroke && (it.stroke.paint.type === 'linear' || it.stroke.paint.type === 'radial')) defs.push(<GradientDef key={sid} id={sid} paint={it.stroke.paint} bounds={b} />);
+    return <path key={i} d={pathToSvgD(it.subpaths)} fill={paintRef(it.fill, fid)} fillOpacity={paintOpacity(it.fill) !== 1 ? paintOpacity(it.fill) : undefined} fillRule={it.fillRule} opacity={it.opacity !== 1 ? it.opacity : undefined} {...strokeAttrs} />;
+  });
+  return (
+    <>
+      {defs.length ? <defs>{defs}</defs> : null}
+      {els}
+    </>
+  );
 }
 
 interface PaintDefs {
@@ -411,7 +439,15 @@ function renderPath(node: PathNode, doc: Document, ctx: RenderCtx, common: Recor
   const align = stroke.align;
   const needsDefs = defs.length || filterId || markerStart || markerEnd || (align !== 'center' && !ctx.outline);
   let body: React.ReactNode;
-  if (stroke.widthProfile && stroke.widthProfile.length && stroke.paint.type !== 'none' && !ctx.outline) {
+  const brush = !ctx.outline ? brushItemsFor(node, doc, sps) : null;
+  if (brush) {
+    body = (
+      <>
+        <path d={d} {...fillAttrs} stroke="none" />
+        <BrushStroke items={brush} ctx={ctx} node={node} />
+      </>
+    );
+  } else if (stroke.widthProfile && stroke.widthProfile.length && stroke.paint.type !== 'none' && !ctx.outline) {
     // variable width stroke: fill + outline rendered as a filled shape
     const outline = pathToSvgD(variableWidthOutlines(sps, stroke.widthProfile, stroke.width));
     body = (

@@ -527,6 +527,16 @@ server.registerTool(
 server.registerTool('opuller_toast', { title: 'Toast', description: 'Show a message to the user in the editor.', inputSchema: { message: z.string(), kind: z.enum(['info', 'success', 'error']).optional() } }, async (p) => text(await call('toast', p)));
 
 server.registerTool(
+  'opuller_brushes',
+  {
+    title: 'Brushes',
+    description: 'Brushes (calligraphic, scatter, art, pattern): list, apply a brush to the selected paths (or set it for new Paintbrush strokes when nothing is selected), remove brush strokes, expand brush strokes to plain paths, create a calligraphic brush (size/angle/roundness), create a scatter/art/pattern brush fromSelection (kind), change options, delete, or add built-in library brushes (op "library" with name, or without name for all).',
+    inputSchema: { op: z.enum(['list', 'apply', 'remove', 'expand', 'calligraphic', 'fromSelection', 'options', 'delete', 'library']).optional(), id: z.string().optional(), ids: z.array(z.string()).optional(), name: z.string().optional(), kind: z.enum(['scatter', 'art', 'pattern']).optional(), size: z.number().optional(), angle: z.number().optional(), roundness: z.number().optional(), width: z.number().optional(), scale: z.number().optional(), spacing: z.number().optional(), fit: z.enum(['stretch', 'space', 'approximate']).optional(), stretch: z.enum(['stretch', 'proportional']).optional(), colorization: z.enum(['none', 'tints', 'tintsShades', 'hue']).optional(), flipAlong: z.boolean().optional(), flipAcross: z.boolean().optional(), rotationRelativeTo: z.enum(['page', 'path']).optional(), mode: z.enum(['expand', 'remove']).optional() },
+  },
+  async (p) => text(await call('brushes', p)),
+);
+
+server.registerTool(
   'opuller_patterns',
   {
     title: 'Patterns',

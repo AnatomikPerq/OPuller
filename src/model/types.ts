@@ -144,7 +144,90 @@ export interface StrokeStyle {
    * stroke is rendered as a filled outline (see geometry/widthProfile.ts).
    */
   widthProfile?: WidthPoint[];
+  /** brush applied to the stroke (calligraphic / scatter / art / pattern); see brushes/geometry.ts */
+  brush?: StrokeBrush;
 }
+
+/** Reference from a stroke to a brush definition with per-stroke overrides. */
+export interface StrokeBrush {
+  id: ID;
+  /** extra scale (1 = as defined); the stroke width multiplies it too */
+  scale?: number;
+  flipAlong?: boolean;
+  flipAcross?: boolean;
+  colorization?: BrushColorization;
+}
+
+export type BrushColorization = 'none' | 'tints' | 'tintsShades' | 'hue';
+
+/** Artwork used by scatter / art / pattern brushes (a group `root` and its descendants, in brush space). */
+export interface BrushArtwork {
+  nodes: Record<ID, Node>;
+  root: ID;
+}
+
+export interface BrushBase {
+  id: ID;
+  name: string;
+}
+
+export interface CalligraphicBrush extends BrushBase {
+  kind: 'calligraphic';
+  /** degrees, counter-clockwise */
+  angle: number;
+  /** 0..100 (100 = round) */
+  roundness: number;
+  /** diameter in px */
+  size: number;
+  /** random variation (± value) */
+  angleVariation?: number;
+  roundnessVariation?: number;
+  sizeVariation?: number;
+}
+
+export interface ScatterBrush extends BrushBase {
+  kind: 'scatter';
+  art: BrushArtwork;
+  /** [min, max] percent */
+  size: [number, number];
+  /** [min, max] percent of the artwork width */
+  spacing: [number, number];
+  /** [min, max] percent of the artwork width, perpendicular offset */
+  scatter: [number, number];
+  /** [min, max] degrees */
+  rotation: [number, number];
+  rotationRelativeTo: 'page' | 'path';
+  colorization: BrushColorization;
+}
+
+export interface ArtBrush extends BrushBase {
+  kind: 'art';
+  art: BrushArtwork;
+  /** percent of the artwork height */
+  width: number;
+  /** stretch the artwork to the path length or scale it proportionally */
+  stretch: 'stretch' | 'proportional';
+  flipAlong?: boolean;
+  flipAcross?: boolean;
+  colorization: BrushColorization;
+}
+
+export interface PatternBrush extends BrushBase {
+  kind: 'pattern';
+  side: BrushArtwork;
+  start?: BrushArtwork;
+  end?: BrushArtwork;
+  /** percent */
+  scale: number;
+  /** percent of the tile width */
+  spacing: number;
+  fit: 'stretch' | 'space' | 'approximate';
+  flipAlong?: boolean;
+  flipAcross?: boolean;
+  colorization: BrushColorization;
+}
+
+export type BrushDef = CalligraphicBrush | ScatterBrush | ArtBrush | PatternBrush;
 
 export interface WidthPoint {
   /** 0..1 along the whole path */
@@ -499,6 +582,7 @@ export interface Document {
   swatches: Swatch[];
   patterns: PatternDef[];
   symbols: SymbolDef[];
+  brushes: BrushDef[];
   grid: GridSettings;
   /** document colour mode: how colours are edited/displayed (values are always stored as sRGB hex) */
   colorMode: ColorMode;
