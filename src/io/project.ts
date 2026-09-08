@@ -323,7 +323,7 @@ function validSubPaths(v: unknown): SubPath[] {
   return out;
 }
 
-const EFFECT_TYPES = new Set(['dropShadow', 'innerShadow', 'blur', 'outerGlow', 'innerGlow', 'colorAdjust', 'roundCorners']);
+const EFFECT_TYPES = new Set(['dropShadow', 'innerShadow', 'blur', 'outerGlow', 'innerGlow', 'colorAdjust', 'roundCorners', 'warp', 'freeDistort', 'meshDistort', 'coonsDistort', 'extrude', 'revolve', 'rotate3d']);
 function validEffects(v: unknown): Effect[] {
   if (!Array.isArray(v)) return [];
   const out: Effect[] = [];

@@ -16,6 +16,9 @@ import { nodeScreenOutline } from '@/canvas/SelectionOverlay';
 import { useToolOptions } from '@/canvas/toolContext';
 import { NumberField, Row, Button, Select } from '@/ui/widgets';
 import { makeMesh, baseColorOf, moveNode, setHandle, insertRow, insertCol, removeRow, removeCol, locate, nodeRC, patchEdge, meshNode, type MeshAppearance } from '@/gradients/mesh';
+import { localBounds, worldMatrix } from '@/model/document';
+import { applyToPoint, invert } from '@/geometry/matrix';
+import type { MeshDistortEffect, FreeDistortEffect, Rect, Matrix } from '@/model/types';
 
 interface Options extends Record<string, unknown> {
   rows: number;
@@ -37,6 +40,97 @@ type Gesture = { kind: 'none' } | { kind: 'node'; index: number; model: Model; m
 
 let gesture: Gesture = { kind: 'none' };
 let hover: string | null = null;
+
+// ---------------------------------------------------------------------------
+// Envelope editing: a selected node with a meshDistort / freeDistort effect
+// ---------------------------------------------------------------------------
+
+interface EnvelopeModel {
+  id: ID;
+  index: number;
+  effect: MeshDistortEffect | FreeDistortEffect;
+  frame: Rect;
+  wm: Matrix;
+  inv: Matrix;
+}
+
+let envGesture: { index: number; model: EnvelopeModel } | null = null;
+
+function envelopeOf(ctx: ToolContext): EnvelopeModel | null {
+  const s = ctx.state;
+  for (const id of s.selection) {
+    const n = s.doc.nodes[id];
+    if (!n) continue;
+    const index = n.effects.findIndex((e) => e.enabled && (e.type === 'meshDistort' || e.type === 'freeDistort'));
+    if (index < 0) continue;
+    const effect = n.effects[index] as MeshDistortEffect | FreeDistortEffect;
+    // the frame is the geometry without the envelope effect (its own bounds); use the raw geometry bounds
+    const frame = n.type === 'path' ? rawBounds(n.subpaths) : localBounds(s.doc, id);
+    if (!frame) continue;
+    const wm = worldMatrix(s.doc, id);
+    return { id, index, effect, frame, wm, inv: invert(wm) };
+  }
+  return null;
+}
+
+function rawBounds(sps: import('@/model/types').SubPath[]): Rect | null {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const sp of sps) for (const a of sp.anchors) {
+    minX = Math.min(minX, a.point.x);
+    minY = Math.min(minY, a.point.y);
+    maxX = Math.max(maxX, a.point.x);
+    maxY = Math.max(maxY, a.point.y);
+  }
+  return Number.isFinite(minX) ? { x: minX, y: minY, width: Math.max(maxX - minX, 1e-6), height: Math.max(maxY - minY, 1e-6) } : null;
+}
+
+function envPoints(m: EnvelopeModel): Vec[] {
+  return m.effect.type === 'meshDistort' ? m.effect.points : m.effect.corners;
+}
+
+function envScreen(ctx: ToolContext, m: EnvelopeModel, p: Vec): Vec {
+  return ctx.worldToScreen(applyToPoint(m.wm, { x: m.frame.x + p.x * m.frame.width, y: m.frame.y + p.y * m.frame.height }));
+}
+
+function envUnit(m: EnvelopeModel, world: Vec): Vec {
+  const l = applyToPoint(m.inv, world);
+  return { x: (l.x - m.frame.x) / m.frame.width, y: (l.y - m.frame.y) / m.frame.height };
+}
+
+function setEnvPoint(m: EnvelopeModel, index: number, p: Vec, commit: boolean): void {
+  getState().updateDoc((d) => {
+    const n = d.nodes[m.id];
+    if (!n) return;
+    const e = n.effects[m.index];
+    if (!e) return;
+    if (e.type === 'meshDistort') n.effects[m.index] = { ...e, points: e.points.map((q, i) => (i === index ? p : q)) };
+    else if (e.type === 'freeDistort') n.effects[m.index] = { ...e, corners: e.corners.map((q, i) => (i === index ? p : q)) as FreeDistortEffect['corners'] };
+  }, commit ? (m.effect.type === 'meshDistort' ? 'Envelope Mesh' : 'Free Distort') : undefined);
+}
+
+function renderEnvelope(ctx: ToolContext, m: EnvelopeModel): React.ReactNode {
+  const pts = envPoints(m).map((p) => envScreen(ctx, m, p));
+  const hs = Math.max(5, ctx.state.prefs.handleSize - 1);
+  const lines: string[] = [];
+  if (m.effect.type === 'meshDistort') {
+    const { rows, cols } = m.effect;
+    for (let r = 0; r <= rows; r++) lines.push(Array.from({ length: cols + 1 }, (_, c) => pts[r * (cols + 1) + c]).map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '));
+    for (let c = 0; c <= cols; c++) lines.push(Array.from({ length: rows + 1 }, (_, r) => pts[r * (cols + 1) + c]).map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '));
+  } else lines.push(pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + 'Z');
+  return (
+    <g className="gradient-annotator mesh envelope" data-testid="envelope-annotator">
+      {lines.map((d, i) => (
+        <path key={i} className="ga-line" d={d} fill="none" />
+      ))}
+      {pts.map((p, i) => (
+        <rect key={i} className={`ga-stop ${envGesture?.index === i ? 'active' : ''}`} x={p.x - hs / 2} y={p.y - hs / 2} width={hs} height={hs} fill="#fff" data-testid={`envelope-point-${i}`} />
+      ))}
+    </g>
+  );
+}
 
 function fillOf(ctx: ToolContext, id: ID): Paint | null {
   const n = ctx.doc.nodes[id];
@@ -132,7 +226,7 @@ export const tool: Tool = {
   group: 'edit',
   order: 621,
   cursor: 'crosshair',
-  hint: 'Click an object to create / extend a gradient mesh. Drag nodes and handles; Alt-click a node removes its row and column. Colour the selected node in the Color panel.',
+  hint: 'Gradient mesh: click an object to create / extend a mesh, drag nodes and handles, Alt-click a node removes its lines. Envelopes: drag the mesh points / free distort corners of the selected object.',
   defaults: DEFAULTS,
   Options: MeshOptions,
   showSelectionOverlay: false,
@@ -145,9 +239,10 @@ export const tool: Tool = {
     gesture = { kind: 'none' };
     hover = null;
   },
-  isBusy: () => gesture.kind !== 'none',
+  isBusy: () => gesture.kind !== 'none' || !!envGesture,
   cancel(ctx) {
     gesture = { kind: 'none' };
+    envGesture = null;
     ctx.state.revert();
     ctx.requestOverlay();
   },
@@ -155,6 +250,26 @@ export const tool: Tool = {
   onPointerDown(e, ctx) {
     if (e.button !== 0) return;
     const s = ctx.state;
+    const env = envelopeOf(ctx);
+    if (env) {
+      const tol = Math.max(6, s.prefs.handleSize) + 2;
+      const pts = envPoints(env);
+      let best = -1;
+      let bd = Infinity;
+      pts.forEach((p, i) => {
+        const q = envScreen(ctx, env, p);
+        const d = Math.hypot(q.x - e.screen.x, q.y - e.screen.y);
+        if (d <= tol && d < bd) {
+          bd = d;
+          best = i;
+        }
+      });
+      if (best >= 0) {
+        envGesture = { index: best, model: env };
+        ctx.setCursor('move');
+        return;
+      }
+    }
     const m = modelOf(ctx);
     const tol = Math.max(6, s.prefs.handleSize);
     if (m) {
@@ -189,6 +304,11 @@ export const tool: Tool = {
   },
 
   onPointerMove(e, ctx) {
+    if (envGesture) {
+      const u = envUnit(envGesture.model, e.world);
+      setEnvPoint(envGesture.model, envGesture.index, u, false);
+      return;
+    }
     const g = gesture;
     if (g.kind === 'none') {
       const m = modelOf(ctx);
@@ -219,6 +339,13 @@ export const tool: Tool = {
   },
 
   onPointerUp(_e, ctx) {
+    if (envGesture) {
+      const eg = envGesture;
+      envGesture = null;
+      ctx.commit(eg.model.effect.type === 'meshDistort' ? 'Envelope Mesh' : 'Free Distort');
+      ctx.requestOverlay();
+      return;
+    }
     const g = gesture;
     gesture = { kind: 'none' };
     if (g.kind === 'none') return;
@@ -258,6 +385,8 @@ export const tool: Tool = {
       const d = nodeScreenOutline(s, id);
       return d ? <path key={id} className="ga-outline" d={d} /> : null;
     });
+    const env = envelopeOf(ctx);
+    if (env && !m) return <g className="gradient-annotator mesh">{outlines}{renderEnvelope(ctx, env)}</g>;
     if (!m) return <g className="gradient-annotator mesh">{outlines}</g>;
     const mesh = m.mesh;
     const active = Math.max(0, Math.min(mesh.nodes.length - 1, s.activeGradientStop));

@@ -14,7 +14,8 @@ export function effectTargets(s: EditorState = getState()): string[] {
 export function openEffectDialog(type: EffectType, index?: number): void {
   const s = getState();
   if (!effectTargets(s).length) return;
-  s.openDialog('effect', index !== undefined ? { type, index } : { type });
+  const def = EFFECT_DEFS.find((d) => d.type === type);
+  s.openDialog(def?.dialog ?? 'effect', index !== undefined ? { type, index } : { type });
 }
 
 export function applyLastEffect(): void {
@@ -43,6 +44,7 @@ registerCommands([
     order: 10 + d.order,
     run: () => openEffectDialog(d.type),
     enabled: when.hasSelection,
+    hidden: d.hiddenInMenu,
   })),
   { id: 'effect.clear', label: 'Clear Effects', menu: 'Effect', order: 100, separatorBefore: true, run: clearEffects, enabled: hasEffects },
 ]);

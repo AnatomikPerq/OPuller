@@ -12,7 +12,7 @@ import { runCommand } from '@/commands/registry';
 import { EFFECT_DEFS, effectDef, effectLabel, effectSummary, cloneEffect, type EffectMenu } from '@/commands/effectCommands/effects';
 import { openEffectDialog } from '@/commands/effectCommands/register';
 
-const MENU_GROUPS: EffectMenu[] = ['Stylize', 'Blur', 'Adjust'];
+const MENU_GROUPS: EffectMenu[] = ['Stylize', 'Blur', 'Adjust', 'Distort & Transform', '3D'];
 
 export function AddEffectMenu({ disabled, small }: { disabled?: boolean; small?: boolean }) {
   return (
@@ -31,7 +31,7 @@ export function AddEffectMenu({ disabled, small }: { disabled?: boolean; small?:
           {MENU_GROUPS.map((g) => (
             <React.Fragment key={g}>
               <div className="fx-menu-group">{g}</div>
-              {EFFECT_DEFS.filter((d) => d.menu === g).map((d) => {
+              {EFFECT_DEFS.filter((d) => d.menu === g && !d.hiddenInMenu).map((d) => {
                 const Icon = d.icon;
                 return (
                   <button

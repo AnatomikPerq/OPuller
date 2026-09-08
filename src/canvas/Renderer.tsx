@@ -7,7 +7,10 @@ import type { Document, ID, Node, PathNode, TextNode, ImageNode, GroupNode, Pain
 import { pathToSvgD, pathBounds } from '@/geometry/path';
 import { toSvgTransform, isIdentity, multiply, invert } from '@/geometry/matrix';
 import { variableWidthOutlines } from '@/geometry/widthProfile';
-import { effectiveSubPaths, isGeometryEffect } from './effectiveGeometry';
+import { effectiveSubPaths, isGeometryEffect, applyGeometryEffects, hasGeometryEffects } from './effectiveGeometry';
+import { transformSubPaths } from '@/geometry/path';
+import { localBounds } from '@/model/document';
+import { extrudeFaces, revolveFaces, type Face3D } from '@/effects3d/geometry';
 import { brushItems, type BrushItem } from '@/brushes/geometry';
 import { rasterGradientTile, PAD as RASTER_PAD } from '@/gradients/raster';
 import { layoutText } from '@/text/layout';
@@ -31,6 +34,45 @@ interface RenderCtx extends RenderOptions {
 }
 
 const Ctx = createContext<RenderCtx>({ doc: null, outline: false, exportMode: false, prefix: '' });
+
+/**
+ * Group-level geometry effects (warp, envelopes, 3D on a group): descendants
+ * are rendered in the group's frame with their transforms folded into the
+ * geometry so the nonlinear map applies to the whole group.
+ */
+interface GeomGroupCtx {
+  effects: Effect[];
+  frame: Rect;
+  /** accumulated matrix from the current DOM parent space to the group frame */
+  matrix: import('@/model/types').Matrix;
+}
+const GeomCtx = createContext<GeomGroupCtx | null>(null);
+
+function has3D(effects: Effect[]): boolean {
+  return effects.some((e) => e.enabled && (e.type === 'extrude' || e.type === 'revolve'));
+}
+
+function faces3D(sps: SubPath[], frame: Rect, effects: Effect[], fill: Paint, opacity: number): Face3D[] | null {
+  const fillHex = fill.type === 'solid' ? fill.color : fill.type === 'linear' || fill.type === 'radial' ? fill.stops[0]?.color ?? '#808080' : fill.type === 'none' ? '#c0c0c0' : '#808080';
+  const op = fill.type === 'solid' ? fill.opacity * opacity : opacity;
+  for (const e of effects) {
+    if (!e.enabled) continue;
+    if (e.type === 'extrude') return extrudeFaces(sps, frame, e, fillHex, op);
+    if (e.type === 'revolve') return revolveFaces(sps, frame, e, fillHex, op);
+  }
+  return null;
+}
+
+function FacesView({ faces, stroke, strokeRef, ctx }: { faces: Face3D[]; stroke: StrokeStyle; strokeRef: string; ctx: RenderCtx }) {
+  const sa = strokeAttrs(stroke, strokeRef, ctx);
+  return (
+    <>
+      {faces.map((f, i) => (
+        <path key={i} d={f.rings.map((r) => r.map((p, k) => `${k ? 'L' : 'M'}${+p.x.toFixed(3)} ${+p.y.toFixed(3)}`).join('') + 'Z').join('')} fill={f.color} fillOpacity={f.opacity !== 1 ? f.opacity : undefined} fillRule="evenodd" {...(f.kind === 'front' ? sa : { stroke: 'none' })} strokeLinejoin="round" />
+      ))}
+    </>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Paint helpers
@@ -286,21 +328,25 @@ function useDoc(ctx: RenderCtx): Document {
 
 export const NodeView = memo(function NodeView({ id }: { id: ID }) {
   const ctx = useContext(Ctx);
+  const gctx = useContext(GeomCtx);
   const node = useNode(id, ctx);
   const doc = useDoc(ctx);
   if (!node || !node.visible) return null;
   if (ctx.hidden?.has(id)) return null;
-  return renderNode(node, doc, ctx);
+  return renderNode(node, doc, ctx, gctx);
 });
 
-function renderNode(node: Node, doc: Document, ctx: RenderCtx): React.ReactNode {
+function renderNode(node: Node, doc: Document, ctx: RenderCtx, gctx: GeomGroupCtx | null = null): React.ReactNode {
   const prefix = ctx.prefix;
   const filterId = `${prefix}f-${node.id}`;
   const useFilter = !ctx.outline && hasFilterEffects(node.effects);
   const style: React.CSSProperties = {};
   if (node.blendMode !== 'normal' && !ctx.outline) style.mixBlendMode = node.blendMode as any;
+  // inside a group geometry context the transforms are folded into the geometry (paths) or accumulated (text/images)
+  const folded = !!gctx && (node.type === 'path' || node.type === 'group');
+  const accumulated = gctx ? multiply(gctx.matrix, node.transform) : node.transform;
   const common: React.SVGAttributes<SVGGElement> & { [k: string]: unknown } = {
-    transform: isIdentity(node.transform) ? undefined : toSvgTransform(node.transform),
+    transform: folded ? undefined : isIdentity(accumulated) ? undefined : toSvgTransform(accumulated),
     opacity: node.opacity !== 1 && !ctx.outline ? node.opacity : undefined,
     filter: useFilter ? `url(#${filterId})` : undefined,
     style: Object.keys(style).length ? style : undefined,
@@ -312,17 +358,44 @@ function renderNode(node: Node, doc: Document, ctx: RenderCtx): React.ReactNode 
   let defs: React.ReactNode = null;
   switch (node.type) {
     case 'layer':
-    case 'group':
+    case 'group': {
+      const own = !ctx.outline && node.type === 'group' && (hasGeometryEffects(node.effects) || has3D(node.effects));
+      if (own) {
+        // this group starts a geometry context in its own local space
+        const frame = localBounds(doc, node.id) ?? { x: 0, y: 0, width: 1, height: 1 };
+        const inner: GeomGroupCtx = { effects: node.effects, frame, matrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } };
+        const outer = { ...common, transform: isIdentity(accumulated) ? undefined : toSvgTransform(accumulated) };
+        return (
+          <GeomCtx.Provider value={inner}>
+            {useFilter && (
+              <defs>
+                <FilterDef id={filterId} effects={node.effects} />
+              </defs>
+            )}
+            {renderGroup(node as GroupNode, doc, ctx, outer)}
+          </GeomCtx.Provider>
+        );
+      }
       content = renderGroup(node as GroupNode, doc, ctx, common);
       if (useFilter) defs = <FilterDef id={filterId} effects={node.effects} />;
+      if (gctx && node.type === 'group') {
+        // nested group inside a context: accumulate its matrix for the descendants
+        return (
+          <GeomCtx.Provider value={{ ...gctx, matrix: accumulated }}>
+            {defs && <defs>{defs}</defs>}
+            {content}
+          </GeomCtx.Provider>
+        );
+      }
       return (
         <>
           {defs && <defs>{defs}</defs>}
           {content}
         </>
       );
+    }
     case 'path':
-      return renderPath(node, doc, ctx, common, useFilter ? filterId : null);
+      return renderPath(node, doc, ctx, common, useFilter ? filterId : null, gctx);
     case 'text':
       return renderText(node, doc, ctx, common, useFilter ? filterId : null);
     case 'image':
@@ -447,12 +520,37 @@ function strokeAttrs(stroke: StrokeStyle, strokeRef: string, ctx: RenderCtx, wid
   };
 }
 
-function renderPath(node: PathNode, doc: Document, ctx: RenderCtx, common: Record<string, unknown>, filterId: string | null) {
-  const sps = effectiveSubPaths(node);
+function renderPath(node: PathNode, doc: Document, ctx: RenderCtx, common: Record<string, unknown>, filterId: string | null, gctx: GeomGroupCtx | null = null) {
+  let sps = effectiveSubPaths(node);
+  let faces: Face3D[] | null = null;
+  if (gctx) {
+    // fold the transform chain into the geometry and apply the group's geometry / 3D effects
+    const m = multiply(gctx.matrix, node.transform);
+    sps = isIdentity(m) ? sps : transformSubPaths(sps, m);
+    if (!ctx.outline) {
+      sps = applyGeometryEffects(sps, gctx.effects, gctx.frame);
+      faces = faces3D(sps, gctx.frame, gctx.effects, node.fill, 1);
+    }
+  } else if (!ctx.outline && has3D(node.effects)) {
+    faces = faces3D(sps, pathBounds(sps) ?? { x: 0, y: 0, width: 1, height: 1 }, node.effects, node.fill, 1);
+  }
   const d = pathToSvgD(sps);
   const bounds = pathBounds(sps);
   const { fillRef, strokeRef, defs } = paintDefs(node, bounds, doc, ctx);
   const stroke = node.stroke;
+  if (faces) {
+    return (
+      <g {...(common as any)}>
+        {(defs.length || filterId) && (
+          <defs>
+            {defs}
+            {filterId && <FilterDef id={filterId} effects={node.effects} />}
+          </defs>
+        )}
+        <FacesView faces={faces} stroke={stroke} strokeRef={strokeRef} ctx={ctx} />
+      </g>
+    );
+  }
   const markerStart = stroke.markerStart !== 'none' && stroke.paint.type !== 'none' ? `${ctx.prefix}mk-${node.id}-s` : null;
   const markerEnd = stroke.markerEnd !== 'none' && stroke.paint.type !== 'none' ? `${ctx.prefix}mk-${node.id}-e` : null;
   const fillAttrs = ctx.outline

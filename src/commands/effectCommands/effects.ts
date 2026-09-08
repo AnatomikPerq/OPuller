@@ -4,13 +4,13 @@
  * and the functions that apply an effect to the selection.
  */
 import type { ComponentType } from 'react';
-import { CloudFog, Droplets, Sun, SunMedium, Moon, SquareRoundCorner, Palette } from 'lucide-react';
+import { CloudFog, Droplets, Sun, SunMedium, Moon, SquareRoundCorner, Palette, Waves, Move3d, Grid2x2, Shapes, Box, Disc3, Rotate3d } from 'lucide-react';
 import type { Effect, ID } from '@/model/types';
 import { getState } from '@/store/store';
 import { formatLength } from '@/util/units';
 
 export type EffectType = Effect['type'];
-export type EffectMenu = 'Stylize' | 'Blur' | 'Adjust';
+export type EffectMenu = 'Stylize' | 'Blur' | 'Adjust' | 'Distort & Transform' | '3D';
 
 export type ParamKind = 'length' | 'angle' | 'percent' | 'factor' | 'color';
 
@@ -37,6 +37,10 @@ export interface EffectDef {
   defaults: () => Effect;
   params: EffectParam[];
   summary: (e: Effect) => string;
+  /** custom dialog type (registered with registerDialog) instead of the generic parameter dialog */
+  dialog?: string;
+  /** hide from the Effect menu (effects created by commands, e.g. envelopes) */
+  hiddenInMenu?: boolean;
 }
 
 const px = (v: number) => formatLength(v, getState().prefs.units, 1).replace(/\s+/g, '');
@@ -167,6 +171,104 @@ export const EFFECT_DEFS: EffectDef[] = [
     },
   },
 ];
+
+EFFECT_DEFS.push(
+  {
+    type: 'warp',
+    label: 'Warp',
+    menuLabel: 'Warp…',
+    menu: 'Distort & Transform',
+    order: 40,
+    icon: Waves,
+    description: 'Bends the object with one of 15 warp styles (live).',
+    defaults: () => ({ type: 'warp', enabled: true, style: 'arc', bend: 50, horizontal: true, hDistort: 0, vDistort: 0 }),
+    params: [
+      { key: 'bend', label: 'Bend', kind: 'angle', min: -100, max: 100, step: 1, neutral: 0 },
+      { key: 'hDistort', label: 'Horizontal', kind: 'angle', min: -100, max: 100, step: 1, neutral: 0 },
+      { key: 'vDistort', label: 'Vertical', kind: 'angle', min: -100, max: 100, step: 1, neutral: 0 },
+    ],
+    summary: (e) => (e.type === 'warp' ? `${e.style} · bend ${Math.round(e.bend)}%${e.horizontal ? '' : ' · vertical'}` : ''),
+    dialog: 'effect.warp',
+  },
+  {
+    type: 'freeDistort',
+    label: 'Free Distort',
+    menuLabel: 'Free Distort…',
+    menu: 'Distort & Transform',
+    order: 41,
+    icon: Move3d,
+    description: 'Maps the bounding box onto four draggable corners.',
+    defaults: () => ({ type: 'freeDistort', enabled: true, corners: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }] }),
+    params: [],
+    summary: (e) => (e.type === 'freeDistort' ? e.corners.map((c) => `${Math.round(c.x * 100)},${Math.round(c.y * 100)}`).join(' ') : ''),
+    dialog: 'effect.freeDistort',
+  },
+  {
+    type: 'meshDistort',
+    label: 'Envelope Mesh',
+    menuLabel: 'Envelope Mesh…',
+    menu: 'Distort & Transform',
+    order: 42,
+    icon: Grid2x2,
+    description: 'Envelope mesh: a grid of points the object is stretched over (edit with the Mesh tool).',
+    defaults: () => ({ type: 'meshDistort', enabled: true, rows: 4, cols: 4, points: [] }),
+    params: [],
+    summary: (e) => (e.type === 'meshDistort' ? `${e.rows} × ${e.cols}` : ''),
+    dialog: 'effect.meshDistort',
+  },
+  {
+    type: 'coonsDistort',
+    label: 'Envelope (Top Object)',
+    menuLabel: 'Envelope (Top Object)',
+    menu: 'Distort & Transform',
+    order: 43,
+    icon: Shapes,
+    description: 'Envelope made from a path (Object > Envelope Distort > Make with Top Object).',
+    defaults: () => ({ type: 'coonsDistort', enabled: true, top: [{ x: 0, y: 0 }, { x: 1, y: 0 }], right: [{ x: 1, y: 0 }, { x: 1, y: 1 }], bottom: [{ x: 0, y: 1 }, { x: 1, y: 1 }], left: [{ x: 0, y: 0 }, { x: 0, y: 1 }] }),
+    params: [],
+    summary: () => 'envelope path',
+    hiddenInMenu: true,
+  },
+  {
+    type: 'extrude',
+    label: '3D Extrude & Bevel',
+    menuLabel: 'Extrude & Bevel…',
+    menu: '3D',
+    order: 50,
+    icon: Box,
+    description: 'Extrudes the object into a solid with shaded sides (live).',
+    defaults: () => ({ type: 'extrude', enabled: true, depth: 50, rotX: -18, rotY: -26, rotZ: 8, perspective: 0, bevel: 'none', bevelHeight: 4, shading: 'plastic', lightAngle: 135, lightAltitude: 45, ambient: 50, capped: true }),
+    params: [],
+    summary: (e) => (e.type === 'extrude' ? `depth ${Math.round(e.depth)} · ${Math.round(e.rotX)}°, ${Math.round(e.rotY)}°, ${Math.round(e.rotZ)}°` : ''),
+    dialog: 'effect.3d',
+  },
+  {
+    type: 'revolve',
+    label: '3D Revolve',
+    menuLabel: 'Revolve…',
+    menu: '3D',
+    order: 51,
+    icon: Disc3,
+    description: 'Revolves the path around a vertical axis (live).',
+    defaults: () => ({ type: 'revolve', enabled: true, angle: 360, offset: 0, axis: 'left', rotX: -18, rotY: -26, rotZ: 8, perspective: 0, shading: 'plastic', lightAngle: 135, lightAltitude: 45, ambient: 50, steps: 36 }),
+    params: [],
+    summary: (e) => (e.type === 'revolve' ? `${Math.round(e.angle)}° · ${e.axis} axis` : ''),
+    dialog: 'effect.3d',
+  },
+  {
+    type: 'rotate3d',
+    label: '3D Rotate',
+    menuLabel: 'Rotate…',
+    menu: '3D',
+    order: 52,
+    icon: Rotate3d,
+    description: 'Rotates the flat artwork in 3D with perspective (live).',
+    defaults: () => ({ type: 'rotate3d', enabled: true, rotX: -18, rotY: -26, rotZ: 8, perspective: 0 }),
+    params: [],
+    summary: (e) => (e.type === 'rotate3d' ? `${Math.round(e.rotX)}°, ${Math.round(e.rotY)}°, ${Math.round(e.rotZ)}°` : ''),
+    dialog: 'effect.3d',
+  },
+);
 
 export function effectDef(type: EffectType): EffectDef {
   return EFFECT_DEFS.find((d) => d.type === type)!;

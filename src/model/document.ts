@@ -11,6 +11,7 @@ import { layoutText } from '@/text/layout';
 import { liveShapeSubPaths } from '@/geometry/shapes';
 import { newId } from './nodes';
 import { brushPad } from '@/brushes/geometry';
+import { effectiveSubPaths } from '@/canvas/effectiveGeometry';
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -394,7 +395,7 @@ export function localBounds(doc: Document, id: ID): Rect | null {
     case 'path': {
       const c = leafBoundsCache.get(n);
       if (c !== undefined) return c;
-      const b = pathBounds(n.subpaths);
+      const b = pathBounds(n.effects.some((e) => e.enabled && e.type !== 'roundCorners') ? effectiveSubPaths(n) : n.subpaths);
       leafBoundsCache.set(n, b);
       return b;
     }
@@ -440,7 +441,8 @@ export function worldBounds(doc: Document, id: ID): Rect | null {
   const wm = worldMatrix(doc, id);
   if (n.type === 'path') {
     if (isIdentity(wm)) return localBounds(doc, id);
-    return pathBounds(transformSubPaths(n.subpaths, wm));
+    const geo = n.effects.some((e) => e.enabled && e.type !== 'roundCorners') ? effectiveSubPaths(n) : n.subpaths;
+    return pathBounds(transformSubPaths(geo, wm));
   }
   if (n.type === 'group' || n.type === 'layer') {
     let r: Rect | null = null;

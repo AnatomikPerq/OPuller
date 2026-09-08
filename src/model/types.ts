@@ -338,13 +338,115 @@ export interface RoundCornersEffect {
   radius: number;
 }
 
+export type WarpStyle = 'arc' | 'arcLower' | 'arcUpper' | 'arch' | 'bulge' | 'shellLower' | 'shellUpper' | 'flag' | 'wave' | 'fish' | 'rise' | 'fisheye' | 'inflate' | 'squeeze' | 'twist';
+
+/** Effect > Warp / Envelope Distort > Make with Warp (live geometry effect). */
+export interface WarpEffect {
+  type: 'warp';
+  enabled: boolean;
+  style: WarpStyle;
+  /** −100..100 */
+  bend: number;
+  /** warp axis: horizontal (default) or vertical */
+  horizontal: boolean;
+  /** −100..100 */
+  hDistort: number;
+  vDistort: number;
+}
+
+/** Free Distort: the object's bounding box is mapped onto a quadrilateral (bbox units: TL, TR, BR, BL). */
+export interface FreeDistortEffect {
+  type: 'freeDistort';
+  enabled: boolean;
+  corners: [Vec, Vec, Vec, Vec];
+}
+
+/** Envelope mesh: a grid of (rows+1)×(cols+1) points (bbox units) the object is stretched over. */
+export interface MeshDistortEffect {
+  type: 'meshDistort';
+  enabled: boolean;
+  rows: number;
+  cols: number;
+  points: Vec[];
+}
+
+/** Envelope with a top object: the bbox is mapped onto a Coons patch whose sides are sampled polylines (bbox units). */
+export interface CoonsDistortEffect {
+  type: 'coonsDistort';
+  enabled: boolean;
+  top: Vec[];
+  right: Vec[];
+  bottom: Vec[];
+  left: Vec[];
+}
+
+export type Shading3D = 'none' | 'flat' | 'plastic';
+
+/** Effect > 3D > Extrude & Bevel. */
+export interface Extrude3DEffect {
+  type: 'extrude';
+  enabled: boolean;
+  depth: number;
+  rotX: number;
+  rotY: number;
+  rotZ: number;
+  /** field of view in degrees, 0 = orthographic */
+  perspective: number;
+  bevel: 'none' | 'classic' | 'round';
+  bevelHeight: number;
+  shading: Shading3D;
+  lightAngle: number;
+  lightAltitude: number;
+  /** 0..100 */
+  ambient: number;
+  /** hollow extrusion: only the sides (Illustrator "cap off") */
+  capped: boolean;
+}
+
+/** Effect > 3D > Revolve. */
+export interface Revolve3DEffect {
+  type: 'revolve';
+  enabled: boolean;
+  /** 0..360 */
+  angle: number;
+  offset: number;
+  axis: 'left' | 'right';
+  rotX: number;
+  rotY: number;
+  rotZ: number;
+  perspective: number;
+  shading: Shading3D;
+  lightAngle: number;
+  lightAltitude: number;
+  ambient: number;
+  /** angular steps for a full turn */
+  steps: number;
+}
+
+/** Effect > 3D > Rotate: perspective rotation of the flat artwork (geometry effect). */
+export interface Rotate3DEffect {
+  type: 'rotate3d';
+  enabled: boolean;
+  rotX: number;
+  rotY: number;
+  rotZ: number;
+  perspective: number;
+}
+
 export type Effect =
   | DropShadowEffect
   | InnerShadowEffect
   | BlurEffect
   | GlowEffect
   | ColorAdjustEffect
-  | RoundCornersEffect;
+  | RoundCornersEffect
+  | WarpEffect
+  | FreeDistortEffect
+  | MeshDistortEffect
+  | CoonsDistortEffect
+  | Extrude3DEffect
+  | Revolve3DEffect
+  | Rotate3DEffect;
 
 export type BlendMode =
   | 'normal'
