@@ -720,6 +720,39 @@ export interface GridSettings {
 
 export type Units = 'px' | 'pt' | 'mm' | 'cm' | 'in';
 
+/** Perspective grid (View > Perspective Grid): one / two / three point, all values in world px. */
+export interface PerspectiveGrid {
+  type: 1 | 2 | 3;
+  /** y of the horizon line */
+  horizon: number;
+  /** x of the left / right vanishing points on the horizon (equal for one-point grids) */
+  vpLeft: number;
+  vpRight: number;
+  /** three-point: y of the vertical vanishing point */
+  vpVertical?: number;
+  /** y of the ground line */
+  ground: number;
+  /** x of the corner (station) line where the two walls meet */
+  corner: number;
+  /** depth of the walls / floor along the receding direction (world units before foreshortening) */
+  extent: number;
+  /** wall height */
+  height: number;
+  /** grid cell size */
+  cell: number;
+  /** grid line opacity 0..1 */
+  opacity?: number;
+}
+
+export type PerspectivePlane = 'left' | 'right' | 'floor';
+
+/** Stored on nodes attached to a perspective plane (`data.perspective`): the flat rectangle projected onto the plane. */
+export interface PerspectiveAttachment {
+  plane: PerspectivePlane;
+  /** flat rectangle in world units before projection (x from the corner line, y from the ground line) */
+  rect: Rect;
+}
+
 export interface Document {
   id: ID;
   name: string;
@@ -738,6 +771,8 @@ export interface Document {
   colorMode: ColorMode;
   /** print bleed around artboards */
   bleed: Bleed;
+  /** perspective grid definition (optional) */
+  perspective?: PerspectiveGrid;
   meta: {
     created: string;
     modified: string;

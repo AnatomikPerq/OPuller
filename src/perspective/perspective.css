@@ -1,0 +1,85 @@
+.perspective-grid {
+  pointer-events: none;
+}
+.perspective-grid .pg-line {
+  fill: none;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.perspective-grid .pg-outline {
+  fill: none;
+  stroke-width: 1.5;
+}
+.perspective-grid .pg-plane.active .pg-outline {
+  stroke-width: 2.5;
+}
+.perspective-grid .pg-horizon {
+  stroke: #e5484d;
+  stroke-width: 1;
+  stroke-dasharray: 6 4;
+}
+.perspective-grid .pg-ground,
+.perspective-grid .pg-corner {
+  stroke: rgba(230, 230, 240, 0.85);
+  stroke-width: 1.2;
+}
+.perspective-grid .pg-vp {
+  fill: #e5484d;
+  stroke: #fff;
+  stroke-width: 1;
+}
+.perspective-grid .pg-label {
+  font: 10px Inter, system-ui, sans-serif;
+  fill: var(--text-dim, #aaa);
+}
+
+.perspective-tool-overlay .pg-handle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  cursor: grab;
+}
+.perspective-tool-overlay .pg-handle.hover,
+.perspective-tool-overlay .pg-handle.active {
+  fill: var(--accent);
+  stroke: #fff;
+}
+.perspective-tool-overlay .pg-plane-badge {
+  font: 600 11px Inter, system-ui, sans-serif;
+  fill: #fff;
+  pointer-events: none;
+}
+.perspective-tool-overlay .pg-attached {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
+
+.perspective-plane-widget {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgba(24, 24, 28, 0.85);
+  border: 1px solid var(--border, #333);
+  z-index: 3;
+}
+.perspective-plane-widget button {
+  width: 26px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.perspective-plane-widget button.active {
+  border-color: #fff;
+}
+.perspective-plane-widget button svg {
+  display: block;
+  margin: auto;
+}

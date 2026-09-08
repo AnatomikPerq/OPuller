@@ -599,6 +599,36 @@ server.registerTool(
 );
 
 server.registerTool(
+  'opuller_perspective',
+  {
+    title: 'Perspective grid',
+    description: 'Illustrator-style perspective grid: get the grid state, show / hide it, apply a one / two / three point preset (op "preset" with type), define grid values (horizon, vpLeft, vpRight, vpVertical, ground, corner, extent, height, cell, opacity — world units), pick the active plane (left | floor | right) and whether new shapes are drawn on it, attach the selection / ids to a plane (paths and groups; text is outlined first), release with perspective (bake), remove perspective (flat again), or move an attached node along its plane by dx/dy flat units.',
+    inputSchema: { op: z.enum(['get', 'show', 'hide', 'preset', 'define', 'plane', 'attach', 'release', 'remove', 'move']).optional(), type: z.number().optional(), plane: z.enum(['left', 'floor', 'right']).optional(), drawOnPlane: z.boolean().optional(), ids: z.array(z.string()).optional(), id: z.string().optional(), dx: z.number().optional(), dy: z.number().optional(), horizon: z.number().optional(), vpLeft: z.number().optional(), vpRight: z.number().optional(), vpVertical: z.number().optional(), ground: z.number().optional(), corner: z.number().optional(), extent: z.number().optional(), height: z.number().optional(), cell: z.number().optional(), opacity: z.number().optional() },
+  },
+  async (p) => text(await call('perspective', p)),
+);
+
+server.registerTool(
+  'opuller_livepaint',
+  {
+    title: 'Live Paint',
+    description: 'Live Paint groups: list groups, make one from the selection / ids (paths are split at their intersections into faces and edges), list the parts of a group with their colours and bounds, paint a face / edge (by part id, or by a world point x/y) with fill / stroke / strokeWidth, release (back to the original paths) or expand (plain group of faces and edges).',
+    inputSchema: { op: z.enum(['list', 'make', 'parts', 'paint', 'release', 'expand']).optional(), id: z.string().optional(), ids: z.array(z.string()).optional(), part: z.string().optional(), x: z.number().optional(), y: z.number().optional(), fill: z.string().optional(), stroke: z.string().optional(), strokeWidth: z.number().optional() },
+  },
+  async (p) => text(await call('livepaint', p)),
+);
+
+server.registerTool(
+  'opuller_graphs',
+  {
+    title: 'Graphs',
+    description: 'Data graphs (column, stackedColumn, bar, stackedBar, line, area, scatter, pie, radar): list, create at x/y/width/height with data (rows = categories, columns = series) or a tab-separated table text, get the spec / table of a graph, update its type / data / colors / options (legend, valueAxis, categoryAxis, barWidth, clusterWidth, showValues), or refit the artwork to the graph frame.',
+    inputSchema: { op: z.enum(['list', 'create', 'get', 'update', 'refit']).optional(), id: z.string().optional(), type: z.enum(['column', 'stackedColumn', 'bar', 'stackedBar', 'line', 'area', 'scatter', 'pie', 'radar']).optional(), x: z.number().optional(), y: z.number().optional(), width: z.number().optional(), height: z.number().optional(), data: z.array(z.array(z.number())).optional(), categories: z.array(z.string()).optional(), series: z.array(z.string()).optional(), colors: z.array(z.string()).optional(), table: z.string().optional(), options: z.record(z.string(), z.any()).optional() },
+  },
+  async (p) => text(await call('graphs', p)),
+);
+
+server.registerTool(
   'opuller_projects',
   {
     title: 'Project library',

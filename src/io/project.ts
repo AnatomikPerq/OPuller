@@ -474,6 +474,26 @@ export function validateNodeMap(rawNodes: unknown, rawRoot: unknown): { nodes: R
   return { nodes, root: rawRoot };
 }
 
+function validPerspective(v: unknown): import('@/model/types').PerspectiveGrid | null {
+  const o = obj(v);
+  if (typeof o.horizon !== 'number' || typeof o.ground !== 'number') return null;
+  const type = o.type === 1 || o.type === 3 ? o.type : 2;
+  const out: import('@/model/types').PerspectiveGrid = {
+    type,
+    horizon: num(o.horizon, 0),
+    vpLeft: num(o.vpLeft, -500),
+    vpRight: num(o.vpRight, 500),
+    ground: num(o.ground, 500),
+    corner: num(o.corner, 0),
+    extent: Math.max(10, num(o.extent, 400)),
+    height: Math.max(10, num(o.height, 300)),
+    cell: Math.max(1, num(o.cell, 40)),
+  };
+  if (typeof o.vpVertical === 'number') out.vpVertical = o.vpVertical;
+  if (typeof o.opacity === 'number') out.opacity = clamp01(o.opacity);
+  return out;
+}
+
 function validArt(v: unknown): import('@/model/types').BrushArtwork | null {
   const o = obj(v);
   return validateNodeMap(o.nodes, o.root);
@@ -647,6 +667,7 @@ export function validateDocument(raw: unknown): Document {
     grid: { size: Math.max(1, num(grid.size, dg.size)), subdivisions: Math.max(1, Math.round(num(grid.subdivisions, dg.subdivisions))), color: validHex(grid.color, dg.color), style: grid.style === 'dots' ? 'dots' : 'lines' },
     colorMode: d.colorMode === 'cmyk' ? 'cmyk' : 'rgb',
     bleed,
+    ...(validPerspective(d.perspective) ? { perspective: validPerspective(d.perspective)! } : {}),
     meta: {
       created: str(meta.created, new Date().toISOString()),
       modified: str(meta.modified, new Date().toISOString()),

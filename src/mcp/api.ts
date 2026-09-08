@@ -1067,6 +1067,161 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     }
     throw new Error(`Unknown symbols op "${op}"`);
   },
+  async perspective(p) {
+    const reg = await import('@/perspective/register');
+    const ops = await import('@/perspective/ops');
+    const { usePerspectiveStore } = await import('@/perspective/store');
+    const op = p.op ?? 'get';
+    const s = getState();
+    const summary = () => {
+      const st = getState();
+      const ui = usePerspectiveStore.getState();
+      return { grid: st.doc.perspective ?? null, visible: ui.visible, activePlane: ui.activePlane, drawOnPlane: ui.drawOnPlane, attached: ops.attachedNodes(st.doc).map((id) => ({ id, ...ops.attachmentOf(st.doc, id)! })) };
+    };
+    if (op === 'get') return summary();
+    if (op === 'show' || op === 'hide') {
+      reg.showGrid(op === 'show');
+      return summary();
+    }
+    if (op === 'preset') {
+      reg.setPreset((p.type === 1 || p.type === 3 ? p.type : 2) as 1 | 2 | 3);
+      return summary();
+    }
+    if (op === 'define') {
+      reg.ensureGrid();
+      const patch: Record<string, unknown> = {};
+      for (const k of ['type', 'horizon', 'vpLeft', 'vpRight', 'vpVertical', 'ground', 'corner', 'extent', 'height', 'cell', 'opacity']) if (p[k] !== undefined) patch[k] = p[k];
+      const cur = getState().doc.perspective!;
+      const next = patch.type !== undefined && patch.type !== cur.type ? (await import('@/perspective/grid')).withType(cur, patch.type as 1 | 2 | 3) : cur;
+      reg.updateGrid({ ...next, ...patch } as import('@/model/types').PerspectiveGrid, 'Define Perspective Grid');
+      usePerspectiveStore.getState().setVisible(true);
+      return summary();
+    }
+    if (op === 'plane') {
+      if (p.plane === 'left' || p.plane === 'right' || p.plane === 'floor') reg.setActivePlane(p.plane);
+      if (p.drawOnPlane !== undefined) usePerspectiveStore.getState().setDrawOnPlane(!!p.drawOnPlane);
+      return summary();
+    }
+    if (op === 'attach') {
+      if (p.ids?.length) s.setSelection(p.ids);
+      const done = await reg.attachSelection(undefined, p.plane);
+      return { attached: done, selection: getState().selection };
+    }
+    if (op === 'release') {
+      if (p.ids?.length) s.setSelection(p.ids);
+      return { released: reg.releaseSelection() };
+    }
+    if (op === 'remove') {
+      if (p.ids?.length) s.setSelection(p.ids);
+      return { removed: reg.removeSelection() };
+    }
+    if (op === 'move') {
+      const id = String(p.id ?? s.selection[0] ?? '');
+      const g = s.doc.perspective;
+      if (!g || !ops.isAttached(s.doc, id)) throw new Error('The node is not attached to a perspective plane');
+      s.updateDoc((d) => {
+        ops.moveAttached(d, id, g, Number(p.dx ?? 0), Number(p.dy ?? 0));
+      }, 'Move in Perspective');
+      return { id, ...ops.attachmentOf(getState().doc, id)! };
+    }
+    throw new Error(`Unknown perspective op "${op}"`);
+  },
+  async livepaint(p) {
+    const ops = await import('@/livepaint/ops');
+    const reg = await import('@/livepaint/register');
+    const op = p.op ?? 'list';
+    const s = getState();
+    const groups = () => Object.values(getState().doc.nodes).filter((n) => ops.isLivePaintGroup(n)).map((n) => ({ id: n.id, ...ops.livePaintParts(getState().doc, n.id) }));
+    if (op === 'list') return groups().map((g) => ({ id: g.id, faces: g.faces.length, edges: g.edges.length }));
+    if (op === 'make') {
+      const gid = reg.makeLivePaintCommand(p.ids?.length ? p.ids : undefined);
+      return gid ? { id: gid, ...ops.livePaintParts(getState().doc, gid) } : { id: null };
+    }
+    if (op === 'parts') {
+      const gid = ops.livePaintGroupOf(s.doc, String(p.id ?? s.selection[0] ?? ''));
+      if (!gid) throw new Error('Not a Live Paint group');
+      const parts = ops.livePaintParts(s.doc, gid);
+      const info = (id: ID) => {
+        const n = s.doc.nodes[id] as PathNode;
+        return { id, fill: n.fill.type === 'solid' ? n.fill.color : n.fill.type, stroke: n.stroke.paint.type === 'solid' ? n.stroke.paint.color : n.stroke.paint.type, bounds: worldBounds(s.doc, id) };
+      };
+      return { id: gid, faces: parts.faces.map(info), edges: parts.edges.map(info) };
+    }
+    if (op === 'paint') {
+      // fill a face / stroke an edge by id (or the part under a world point)
+      const gid = ops.livePaintGroupOf(s.doc, String(p.id ?? s.selection[0] ?? ''));
+      if (!gid) throw new Error('Not a Live Paint group');
+      const parts = ops.livePaintParts(s.doc, gid);
+      let target: ID | undefined = p.part ? String(p.part) : undefined;
+      if (!target && p.x !== undefined && p.y !== undefined) {
+        const { hitTest } = await import('@/canvas/hitTest');
+        const hit = hitTest(s.doc, { x: Number(p.x), y: Number(p.y) }, { tolerance: 3, enterGroups: true });
+        if (hit && (parts.faces.includes(hit.id) || parts.edges.includes(hit.id))) target = hit.id;
+      }
+      if (!target) throw new Error('No face or edge found');
+      s.updateDoc((d) => {
+        const n = d.nodes[target!] as PathNode;
+        if (p.fill !== undefined) n.fill = p.fill === 'none' ? { type: 'none' } : { type: 'solid', color: String(p.fill), opacity: 1 };
+        if (p.stroke !== undefined) n.stroke = { ...n.stroke, paint: p.stroke === 'none' ? { type: 'none' } : { type: 'solid', color: String(p.stroke), opacity: 1 } };
+        if (p.strokeWidth !== undefined) n.stroke = { ...n.stroke, width: Number(p.strokeWidth) };
+      }, 'Live Paint');
+      return { painted: target };
+    }
+    if (op === 'release' || op === 'expand') {
+      const gid = ops.livePaintGroupOf(s.doc, String(p.id ?? s.selection[0] ?? ''));
+      if (!gid) throw new Error('Not a Live Paint group');
+      let out: ID[] = [];
+      s.updateDoc((d) => {
+        if (op === 'release') out = ops.releaseLivePaint(d, gid);
+        else out = ops.expandLivePaint(d, gid) ? [gid] : [];
+      }, op === 'release' ? 'Release Live Paint' : 'Expand Live Paint');
+      getState().setSelection(out);
+      return { ids: out };
+    }
+    throw new Error(`Unknown livepaint op "${op}"`);
+  },
+  async graphs(p) {
+    const ops = await import('@/graphs/ops');
+    const reg = await import('@/graphs/register');
+    const build = await import('@/graphs/build');
+    const op = p.op ?? 'list';
+    const s = getState();
+    const spec = (): Partial<import('@/graphs/build').GraphSpec> => {
+      const out: Partial<import('@/graphs/build').GraphSpec> = {};
+      if (p.type) out.type = p.type;
+      if (p.table) {
+        const t = build.parseTable(String(p.table));
+        out.data = t.data;
+        out.categories = t.categories;
+        out.series = t.series;
+      }
+      if (p.data) out.data = p.data;
+      if (p.categories) out.categories = p.categories;
+      if (p.series) out.series = p.series;
+      if (p.options || p.colors) out.options = { ...build.DEFAULT_OPTIONS, ...(p.options ?? {}), ...(p.colors ? { colors: p.colors } : {}) };
+      return out;
+    };
+    if (op === 'list') return Object.values(s.doc.nodes).filter((n) => ops.isGraph(n)).map((n) => ({ id: n.id, type: ops.graphSpec(s.doc, n.id)?.type, bounds: worldBounds(s.doc, n.id) }));
+    if (op === 'create') {
+      const rect = p.x !== undefined && p.y !== undefined ? { x: Number(p.x), y: Number(p.y), width: Number(p.width ?? 400), height: Number(p.height ?? 300) } : undefined;
+      const id = reg.createGraphCommand(rect, spec());
+      return id ? { id, spec: ops.graphSpec(getState().doc, id) } : { id: null };
+    }
+    const gid = ops.graphOf(s.doc, String(p.id ?? s.selection[0] ?? ''));
+    if (!gid) throw new Error('Not a graph');
+    if (op === 'get') return { id: gid, spec: ops.graphSpec(s.doc, gid), table: build.tableText(ops.graphSpec(s.doc, gid)!) };
+    if (op === 'update') {
+      reg.updateGraph(gid, spec(), 'Graph Data');
+      return { id: gid, spec: ops.graphSpec(getState().doc, gid) };
+    }
+    if (op === 'refit') {
+      s.updateDoc((d) => {
+        ops.refitGraph(d, gid);
+      }, 'Refit Graph');
+      return { id: gid };
+    }
+    throw new Error(`Unknown graphs op "${op}"`);
+  },
   async projects(p) {
     const lib = await import('@/home/projects');
     const op = p.op ?? 'list';
