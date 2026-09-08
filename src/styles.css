@@ -1137,3 +1137,16 @@ button:disabled {
   z-index: 50;
   pointer-events: none;
 }
+
+/* logo as a Home button */
+button.app-logo {
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+}
+button.app-logo:hover {
+  background: var(--bg-hover);
+}

@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useSyncExternalStore } from 'react';
 import { useStore } from '@/store/store';
+import { appOverlaysSnapshot, onAppOverlaysChanged } from './appSlots';
 import { MenuBar } from './MenuBar';
 import { Toolbar } from './Toolbar';
 import { ControlBar } from './ControlBar';
@@ -16,6 +17,8 @@ export function App() {
   const theme = useStore((s) => s.prefs.theme);
   const uiScale = useStore((s) => s.prefs.uiScale);
   const leftCollapsed = useStore((s) => s.leftDockCollapsed);
+
+  const overlays = useSyncExternalStore(onAppOverlaysChanged, appOverlaysSnapshot, appOverlaysSnapshot);
 
   useEffect(() => installShortcuts(), []);
 
@@ -61,6 +64,11 @@ export function App() {
       <ContextMenuHost />
       <DialogHost />
       <Toasts />
+      {overlays.map((o) => (
+        <ErrorBoundary key={o.id}>
+          <o.component />
+        </ErrorBoundary>
+      ))}
     </div>
   );
 }

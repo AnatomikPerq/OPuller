@@ -124,7 +124,8 @@ function scheduleRetry(): void {
     retryTimer = null;
     if (!stopped && useBridgeStore.getState().enabled) connect();
   }, retryDelay);
-  retryDelay = Math.min(15000, retryDelay * 1.6);
+  // back off quickly to a slow poll so an absent server does not spam the console
+  retryDelay = Math.min(45000, retryDelay * 2);
 }
 
 export function disconnect(): void {

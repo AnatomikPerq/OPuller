@@ -24,8 +24,10 @@ test.describe('help, preferences, samples and the scripting API', () => {
 
   test('welcome screen opens the bird sample built with pathfinder', async ({ page }) => {
     await runCommand(page, 'help.welcome');
-    await expect(page.getByTestId('welcome-sample-bird')).toBeVisible();
-    await page.getByTestId('welcome-sample-bird').click();
+    await expect(page.getByTestId('home-screen')).toBeVisible();
+    await page.getByTestId('home-nav-samples').click();
+    await expect(page.getByTestId('home-sample-bird')).toBeVisible();
+    await page.getByTestId('home-sample-bird').locator('.home-card-thumb').click();
     await expect.poll(async () => (await getState(page)).doc.name).toBe('Bird from circles');
     const s = await getState(page);
     expect(s.doc.layers.length).toBe(2);

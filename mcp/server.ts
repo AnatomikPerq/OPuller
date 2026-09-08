@@ -526,6 +526,16 @@ server.registerTool(
 
 server.registerTool('opuller_toast', { title: 'Toast', description: 'Show a message to the user in the editor.', inputSchema: { message: z.string(), kind: z.enum(['info', 'success', 'error']).optional() } }, async (p) => text(await call('toast', p)));
 
+server.registerTool(
+  'opuller_projects',
+  {
+    title: 'Project library',
+    description: 'The browser project library shown on the Home screen: list projects, save the current document (optionally under a new name), open / rename / delete a project by id, or show/hide the Home screen (op "home").',
+    inputSchema: { op: z.enum(['list', 'save', 'open', 'delete', 'rename', 'home']).optional(), id: z.string().optional(), name: z.string().optional(), open: z.boolean().optional(), section: z.enum(['home', 'projects', 'recent', 'samples', 'learn', 'ai']).optional() },
+  },
+  async (p) => text(await call('projects', p)),
+);
+
 // ---- resources / prompts ----------------------------------------------------
 
 server.registerResource('status', 'opuller://status', { title: 'Editor status', mimeType: 'application/json' }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(await call('status'), null, 2) }] }));

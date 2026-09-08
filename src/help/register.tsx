@@ -14,6 +14,8 @@ import { shortcutLabel } from '@/util/keys';
 import { recentEntries, loadRecent, onRecentChanged } from '@/io/recent';
 import { loadDocument, confirmDiscard } from '@/io/fileOps';
 import { SAMPLES, openSample } from '@/samples/register';
+import { TIPS } from '@/home/tips';
+import { useHomeStore } from '@/home/store';
 import './help.css';
 
 const WELCOME_KEY = 'opuller.welcome.v1';
@@ -25,9 +27,9 @@ const VERSION = '0.1.0';
 
 registerCommands([
   { id: 'edit.preferences', label: 'Preferences…', menu: 'Edit', shortcut: 'mod+k', order: 900, separatorBefore: true, run: () => getState().openDialog('preferences', {}), allowInTextEdit: false },
-  { id: 'help.welcome', label: 'Welcome Screen', menu: 'Help', order: 1, run: () => getState().openDialog('welcome', {}) },
+  { id: 'help.welcome', label: 'Home Screen', menu: 'Help', order: 1, run: () => useHomeStore.getState().setOpen(true, 'home') },
   { id: 'help.shortcuts', label: 'Keyboard Shortcuts…', menu: 'Help', shortcut: 'mod+/', order: 2, run: () => getState().openDialog('shortcuts', {}) },
-  { id: 'help.tour', label: 'Quick Tips', menu: 'Help', order: 3, run: () => getState().openDialog('welcome', { tab: 'tips' }) },
+  { id: 'help.tour', label: 'Quick Tips', menu: 'Help', order: 3, run: () => useHomeStore.getState().setOpen(true, 'learn') },
   { id: 'help.about', label: 'About OPuller', menu: 'Help', order: 100, separatorBefore: true, run: () => getState().openDialog('about', {}) },
 ]);
 
@@ -319,17 +321,7 @@ function WelcomeDialog({ props, close }: { props: { tab?: WelcomeTab }; close: (
       close();
     }
   };
-  const tips: Array<[string, string]> = [
-    ['Draw', 'Shapes: M rectangle, L ellipse, \\ line. Pen (P) for Béziers, Pencil (N) for freehand, Curvature (Shift+`) for smooth curves.'],
-    ['Combine', 'Select overlapping shapes and use the Pathfinder panel (Unite, Minus Front, Intersect…) or the Shape Builder (Shift+M): drag across regions to merge, Alt-drag to delete.'],
-    ['Colour', 'The Color, Swatches and Gradient panels edit the fill or stroke of the selection (X swaps, Shift+X swaps fill/stroke). Gradient tool (G) edits gradients on the canvas.'],
-    ['Strokes', 'Stroke panel: width, caps, joins, dashes, arrowheads. Width tool (Shift+W) makes variable-width strokes.'],
-    ['Type', 'T creates point text, drag for area text, click a path for type on a path. Type > Create Outlines turns text into paths.'],
-    ['Transform', 'Bounding-box handles scale, corners rotate. R/S/O/Shift+E tools, the Transform panel and Object > Transform dialogs give numeric control; Ctrl+D repeats.'],
-    ['Cut', 'Scissors (C) split paths at a point, Knife (K) cuts shapes along a drawn line, Eraser (Shift+E) removes areas.'],
-    ['Export', 'File > Export (Ctrl+E): SVG, PNG, JPEG, WebP, PDF per artboard or selection. Save projects as .opuller JSON.'],
-    ['AI', 'Help > Connect an AI: an MCP server lets Claude (or any MCP client) build and edit documents with every tool.'],
-  ];
+  const tips = TIPS;
   return (
     <DialogFrame
       title="Welcome to OPuller"
@@ -444,12 +436,3 @@ registerDialog('preferences', ({ close }) => <PreferencesDialog close={close} />
 registerDialog('shortcuts', ({ close }) => <ShortcutsDialog close={close} />);
 registerDialog('about', ({ close }) => <AboutDialog close={close} />);
 registerDialog<{ tab?: WelcomeTab }>('welcome', WelcomeDialog);
-
-// Show the welcome screen at startup (not under test automation, not when a recovery dialog appears).
-try {
-  const wantWelcome = localStorage.getItem(WELCOME_KEY) !== 'off';
-  const automated = typeof navigator !== 'undefined' && (navigator as any).webdriver;
-  if (wantWelcome && !automated && !getState().dialog) getState().openDialog('welcome', {});
-} catch {
-  /* ignore */
-}

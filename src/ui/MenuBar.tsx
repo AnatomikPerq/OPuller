@@ -85,10 +85,10 @@ export function MenuBar() {
 
   return (
     <div className="menubar" ref={barRef} role="menubar">
-      <div className="app-logo" title="OPuller">
+      <button type="button" className="app-logo" title="Home — projects, recent files, samples" onClick={() => runCommand('file.home')} data-testid="home-button">
         <img src="/favicon.svg" alt="" />
         <span>OPuller</span>
-      </div>
+      </button>
       {menus.map((m) => (
         <button
           key={m}

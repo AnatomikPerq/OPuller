@@ -827,6 +827,41 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     getState().toast(String(p.message ?? ''), p.kind ?? 'info');
     return { ok: true };
   },
+  async projects(p) {
+    const lib = await import('@/home/projects');
+    const op = p.op ?? 'list';
+    if (op === 'list') return (await lib.listProjects()).map((m) => ({ id: m.id, name: m.name, fileName: m.fileName, updated: m.updated, created: m.created, width: m.width, height: m.height, artboards: m.artboards, objects: m.objects, bytes: m.bytes }));
+    if (op === 'save') {
+      const s = getState();
+      const m = await lib.saveProject(s.doc, { fileName: s.fileName, name: p.name });
+      return m ? { saved: m.id, name: m.name } : { saved: null };
+    }
+    if (op === 'open') {
+      const doc = await lib.loadProject(String(p.id));
+      if (!doc) throw new Error('Unknown project id');
+      const s = getState();
+      if (s.dirty && lib.shouldPersist(s.doc)) await lib.saveProject(s.doc, { fileName: s.fileName });
+      const { loadDocument: load } = await import('@/io/fileOps');
+      load(doc, { fileName: lib.getProjectMeta(String(p.id))?.fileName ?? null, remember: false, dirty: false });
+      fitArtboard();
+      void lib.touchProject(String(p.id));
+      return mcpApi.status({});
+    }
+    if (op === 'delete') {
+      await lib.deleteProject(String(p.id));
+      return { ok: true };
+    }
+    if (op === 'rename') {
+      await lib.renameProject(String(p.id), String(p.name ?? ''));
+      return { ok: true };
+    }
+    if (op === 'home') {
+      const { useHomeStore } = await import('@/home/store');
+      useHomeStore.getState().setOpen(!!(p.open ?? true), p.section);
+      return { open: useHomeStore.getState().open };
+    }
+    throw new Error('op must be list | save | open | delete | rename | home');
+  },
   ping() {
     return { pong: true, time: Date.now(), title: document.title, url: location.href };
   },
