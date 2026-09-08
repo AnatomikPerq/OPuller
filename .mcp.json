@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "opuller": {
+      "command": "node",
+      "args": ["mcp/server.ts"],
+      "env": {
+        "OPULLER_URL": "http://localhost:5180"
+      }
+    }
+  }
+}

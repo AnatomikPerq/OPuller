@@ -19,6 +19,7 @@ import * as paperApi from './geometry/paperBridge';
 
 // Expose internals for e2e tests and debugging (window.__opuller).
 (window as any).__opuller = {
+  ...((window as any).__opuller ?? {}),
   store: useStore,
   runCommand,
   allCommands,

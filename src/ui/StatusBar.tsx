@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { useStore, getState } from '@/store/store';
 import { formatLength } from '@/util/units';
 import { Select } from './widgets';
 import { getTool } from '@/tools/registry';
 import { screenToWorld } from '@/store/store';
+import { statusItemsSnapshot, onStatusItemsChanged } from './statusItems';
 
 export function StatusBar() {
   const zoom = useStore((s) => s.zoom);
@@ -30,6 +31,7 @@ export function StatusBar() {
     return () => el.removeEventListener('pointermove', onMove);
   }, []);
 
+  const extra = useSyncExternalStore(onStatusItemsChanged, statusItemsSnapshot, statusItemsSnapshot);
   const tool = getTool(toolId);
   const ab = artboards.find((a) => a.id === activeArtboardId);
   const ox = ab?.x ?? 0;
@@ -76,6 +78,9 @@ export function StatusBar() {
       <div className="status-item" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {status || tool?.hint || ''}
       </div>
+      {extra.map((it) => (
+        <it.component key={it.id} />
+      ))}
     </div>
   );
 }

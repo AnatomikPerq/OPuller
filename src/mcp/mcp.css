@@ -1,0 +1,52 @@
+/* AI bridge indicator (status bar) --------------------------------------- */
+
+.mcp-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  margin-left: 6px;
+}
+.mcp-indicator:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.mcp-indicator.on {
+  color: #7ee2a8;
+  border-color: rgba(126, 226, 168, 0.5);
+}
+
+/* setup dialog */
+.mcp-setup pre {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg-input, var(--bg-panel-alt));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  user-select: text;
+}
+.mcp-setup ol {
+  margin: 4px 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mcp-setup code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-panel-alt);
+  padding: 1px 4px;
+  border-radius: 3px;
+}

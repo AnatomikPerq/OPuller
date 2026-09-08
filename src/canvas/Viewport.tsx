@@ -15,6 +15,15 @@ import { IS_MAC } from '@/util/keys';
 import { getViewportSlots, onSlotsChanged, buildContextMenu } from './viewportSlots';
 import type { ID } from '@/model/types';
 
+/** setPointerCapture that tolerates synthetic pointer ids (scripted gestures). */
+function safeCapture(el: HTMLElement, pointerId: number): void {
+  try {
+    el.setPointerCapture(pointerId);
+  } catch {
+    /* synthetic event: no active pointer */
+  }
+}
+
 function makePointerEvent(e: PointerEvent | React.PointerEvent, el: HTMLElement): ToolPointerEvent {
   const r = el.getBoundingClientRect();
   const screen = { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -151,7 +160,7 @@ export function Viewport() {
       const s = getState();
       if (e.button === 1 || (s.temporaryTool === 'hand' && e.button === 0)) {
         e.preventDefault();
-        el.setPointerCapture(e.pointerId);
+        safeCapture(el, e.pointerId);
         drag.current = { kind: 'pan', pointerId: e.pointerId, last: ev.screen };
         s.setCursor('grabbing');
         return;
@@ -161,7 +170,7 @@ export function Viewport() {
       if (e.button === 0 && (toolId === 'select' || toolId === 'direct') && !s.editingTextId) {
         const gid = guideNear(ev.screen);
         if (gid) {
-          el.setPointerCapture(e.pointerId);
+          safeCapture(el, e.pointerId);
           const g = s.doc.guides.find((x) => x.id === gid)!;
           drag.current = { kind: 'guide', pointerId: e.pointerId, last: ev.screen, guideId: gid, startPos: g.position };
           return;
@@ -169,7 +178,7 @@ export function Viewport() {
       }
       const tool = getTool(toolId);
       drag.current = { kind: 'tool', pointerId: e.pointerId, last: ev.screen };
-      el.setPointerCapture(e.pointerId);
+      safeCapture(el, e.pointerId);
       tool?.onPointerDown?.(ev, toolContext);
     },
     [guideNear],
