@@ -115,8 +115,11 @@ test.describe('artboards module', () => {
     s = await getState(page);
     expect(s.selection).toEqual([r1]);
 
-    // convert a rectangle to an artboard
-    const r2 = await drawRect(page, 3000, 3000, 500, 400);
+    // convert a rectangle to an artboard (reset the view first: the commands above zoomed around)
+    await setView(page, 0.25, { x: 100, y: 100 });
+    await selectTool(page, 'rect');
+    await dragWorld(page, { x: 3000, y: 3000 }, { x: 3500, y: 3400 }, { modifiers: ['Control'] });
+    const r2 = (await getState(page)).selection[0];
     await withStore(page, (st) => st.setSelection([JSON.parse(JSON.stringify(st.selection))[0]]));
     await runCommand(page, 'artboard.convert');
     abs = await artboards(page);
@@ -128,9 +131,9 @@ test.describe('artboards module', () => {
 
     // rearrange in one column with artwork
     await runCommand(page, 'artboard.rearrange');
-    await expect(page.locator('[data-testid="rearrange-columns"] input')).toBeVisible();
-    await page.locator('[data-testid="rearrange-columns"] input').fill('1');
-    await page.locator('[data-testid="rearrange-columns"] input').press('Enter');
+    await expect(page.getByTestId('rearrange-columns')).toBeVisible();
+    await page.getByTestId('rearrange-columns').fill('1');
+    await page.getByTestId('rearrange-columns').press('Enter');
     await page.locator('[data-testid="rearrange-ok"]').click();
     abs = await artboards(page);
     expect(abs.every((a: any) => Math.round(a.x) === 100)).toBeTruthy();
@@ -142,6 +145,7 @@ test.describe('artboards module', () => {
   test('panel lists artboards, activates, renames and reorders; options dialog edits size', async ({ page }) => {
     await runCommand(page, 'artboard.new');
     await runCommand(page, 'artboard.new');
+    await page.getByTestId('panel-tab-artboards').click();
     const panel = page.locator('[data-testid="artboards-panel"]');
     await expect(panel).toBeVisible();
     await expect(panel.locator('.ab-row')).toHaveCount(3);
@@ -163,10 +167,10 @@ test.describe('artboards module', () => {
 
     // options dialog
     await runCommand(page, 'artboard.options');
-    await page.locator('[data-testid="ab-opt-w"] input').fill('800');
-    await page.locator('[data-testid="ab-opt-w"] input').press('Enter');
-    await page.locator('[data-testid="ab-opt-h"] input').fill('600');
-    await page.locator('[data-testid="ab-opt-h"] input').press('Enter');
+    await page.getByTestId('ab-opt-w').fill('800');
+    await page.getByTestId('ab-opt-w').press('Enter');
+    await page.getByTestId('ab-opt-h').fill('600');
+    await page.getByTestId('ab-opt-h').press('Enter');
     await page.locator('[data-testid="artboard-options-ok"]').click();
     abs = await artboards(page);
     const cover = abs.find((a: any) => a.name === 'Cover');

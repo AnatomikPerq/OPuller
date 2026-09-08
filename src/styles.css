@@ -559,7 +559,8 @@ button:disabled {
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-height: 0;
 }
 .panel-group.collapsed .panel-body {
   display: none;
@@ -606,7 +607,9 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 60vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 36vh;
   overflow: auto;
 }
 .panel-body.no-padding {

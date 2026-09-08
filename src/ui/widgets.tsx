@@ -67,7 +67,14 @@ export function NumberField(props: NumberFieldProps) {
 
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
 
+  const dirtyRef = useRef(false);
   const commitText = (t: string, viaEnter: boolean) => {
+    if (!dirtyRef.current && !viaEnter) {
+      // nothing typed: just restore the display, never emit (avoids phantom undo steps)
+      setText(display(value));
+      return;
+    }
+    dirtyRef.current = false;
     let v: number | null;
     if (isLength) v = parseLength(t, unit as Units, props.percentBase);
     else {
@@ -142,18 +149,23 @@ export function NumberField(props: NumberFieldProps) {
           disabled={disabled}
           onFocus={(e) => {
             setEditing(true);
+            dirtyRef.current = false;
             e.currentTarget.select();
           }}
           onBlur={() => {
             setEditing(false);
             commitText(text, false);
           }}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            dirtyRef.current = true;
+            setText(e.target.value);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               commitText(text, true);
               e.preventDefault();
             } else if (e.key === 'Escape') {
+              dirtyRef.current = false;
               setText(display(value));
               (e.currentTarget as HTMLInputElement).blur();
               e.preventDefault();

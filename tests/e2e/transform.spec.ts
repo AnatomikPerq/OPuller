@@ -1,6 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 import { openApp, drawRect, selectTool, dragWorld, clickWorld, getState, withStore, runCommand, nodeById, worldBounds, press, setView, viewport, worldToScreen, selection } from './helpers';
 
+async function showTransformPanel(page: Page): Promise<void> {
+  const tab = page.getByTestId('panel-tab-transform');
+  if (await tab.count()) await tab.click();
+}
+
 /** Type into a NumberField and commit it. Dialog fields commit on blur (Tab) because Enter applies the dialog. */
 async function setField(page: Page, testId: string, value: string, commitKey: 'Enter' | 'Tab' = 'Tab') {
   const input = page.getByTestId(testId);
@@ -39,6 +44,7 @@ async function dragWorldWith(page: Page, from: { x: number; y: number }, to: { x
 test.describe('transform module', () => {
   test('rotate dialog rotates a rectangle by 90° (bounds swap) and undo restores it', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const id = await drawRect(page, 100, 100, 200, 120);
     await selectTool(page, 'select');
     const before = await undoCount(page);
@@ -68,6 +74,7 @@ test.describe('transform module', () => {
 
   test('dialog Cancel reverts the preview, Copy keeps the original', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const id = await drawRect(page, 100, 100, 200, 120);
     await selectTool(page, 'select');
     await runCommand(page, 'object.moveDialog');
@@ -95,6 +102,7 @@ test.describe('transform module', () => {
 
   test('Transform panel X/Y/W/H move and resize the selection relative to the artboard', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const id = await drawRect(page, 100, 100, 200, 120);
     await selectTool(page, 'select');
     // reference point = center by default → X shows 200
@@ -130,6 +138,7 @@ test.describe('transform module', () => {
 
   test('Transform panel rotation field and flip / rotate buttons', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const id = await drawRect(page, 100, 100, 200, 120);
     await selectTool(page, 'select');
     await setField(page, 'tp-rotate', '90', 'Enter');
@@ -152,6 +161,7 @@ test.describe('transform module', () => {
 
   test('Align to artboard centers the object; align/distribute selection', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const a = await drawRect(page, 100, 100, 200, 120);
     await selectTool(page, 'select');
     await page.getByTestId('panel-tab-align').click();
@@ -185,6 +195,7 @@ test.describe('transform module', () => {
 
   test('align to key object: clicking a selected object sets the key (outlined) and others align to it', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const a = await drawRect(page, 100, 100, 100, 100);
     const b = await drawRect(page, 400, 300, 60, 60);
     await selectTool(page, 'select');
@@ -200,6 +211,7 @@ test.describe('transform module', () => {
 
   test('Transform Again repeats a move (Ctrl+D) on another object', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const a = await drawRect(page, 100, 100, 100, 100);
     const b = await drawRect(page, 400, 100, 100, 100);
     await selectTool(page, 'select');
@@ -230,6 +242,7 @@ test.describe('transform module', () => {
 
   test('rotate tool: drag rotates with Shift constraint, Alt-drag copies, Escape cancels', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const id = await drawRect(page, 100, 100, 200, 120);
     await selectTool(page, 'rotate');
     // click sets the reference point
@@ -285,6 +298,7 @@ test.describe('transform module', () => {
 
   test('scale, reflect and shear tools', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const id = await drawRect(page, 100, 100, 200, 100);
     // scale tool: uniform with Shift from the center pivot (200,150)
     await selectTool(page, 'scale');
@@ -331,6 +345,7 @@ test.describe('transform module', () => {
 
   test('free transform: corner drag scales, Shift uniform, outside-corner rotate, Ctrl-drag edge shears, Escape cancels', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const id = await drawRect(page, 100, 100, 200, 120);
     await selectTool(page, 'freetransform');
     // SE corner → scale
@@ -400,6 +415,7 @@ test.describe('transform module', () => {
 
   test('objects inside a transformed group and zoomed views', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const id = await drawRect(page, 100, 100, 200, 120);
     await selectTool(page, 'select');
     await runCommand(page, 'object.group');
@@ -443,6 +459,7 @@ test.describe('transform module', () => {
 
   test('Transform Each scales every object around its own center; flip/rotate commands; reset bounding box', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const a = await drawRect(page, 100, 100, 100, 50);
     const b = await drawRect(page, 500, 400, 100, 50);
     await selectTool(page, 'select');
@@ -496,6 +513,7 @@ test.describe('transform module', () => {
 
   test('scale strokes preference and the Scale dialog', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     const id = await drawRect(page, 100, 100, 200, 100);
     await selectTool(page, 'select');
     await withStore(page, (s) => s.setPrefs({ scaleStrokes: false }));
@@ -522,6 +540,7 @@ test.describe('transform module', () => {
 
   test('tool shortcuts, menu entries and Enter opens the transform dialog from the selection tool', async ({ page }) => {
     await openApp(page);
+    await showTransformPanel(page);
     await drawRect(page, 100, 100, 100, 100);
     await selectTool(page, 'select');
     await page.mouse.click(800, 700);
@@ -544,7 +563,7 @@ test.describe('transform module', () => {
     await press(page, 'Escape');
     await expect(page.getByTestId('dialog')).toBeHidden();
     // Object menu has the Transform submenu
-    await page.getByRole('button', { name: 'Object' }).dispatchEvent('pointerdown');
+    await page.getByRole('button', { name: 'Object', exact: true }).dispatchEvent('pointerdown');
     await expect(page.locator('.menu')).toBeVisible();
     await expect(page.locator('.menu-item', { hasText: 'Transform' }).first()).toBeVisible();
     await expect(page.locator('.menu-item', { hasText: 'Align' }).first()).toBeVisible();

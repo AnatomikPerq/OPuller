@@ -1,0 +1,152 @@
+/* Preferences ---------------------------------------------------------------- */
+
+.prefs-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+  min-height: 220px;
+}
+.prefs-color {
+  width: 34px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Shortcuts ------------------------------------------------------------------ */
+
+.shortcuts-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+  max-height: 60vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+.shortcuts-columns h4 {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+.shortcut-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.shortcut-table td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.shortcut-table td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* About ---------------------------------------------------------------------- */
+
+.about-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.about-name {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* Welcome -------------------------------------------------------------------- */
+
+.welcome-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding-top: 6px;
+}
+.welcome-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.welcome-col h4 {
+  margin: 6px 0 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.welcome-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel-alt);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.welcome-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+.welcome-card.compact {
+  padding: 6px 12px;
+}
+.welcome-card > svg {
+  flex: 0 0 auto;
+  color: var(--accent-strong, var(--accent));
+}
+.welcome-card span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.welcome-card b {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.welcome-card small {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.welcome-tips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  padding-top: 6px;
+  max-height: 55vh;
+  overflow: auto;
+}
+.welcome-tips .tip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.welcome-tips .tip b {
+  color: var(--accent-strong, var(--accent));
+}
+.welcome-tips .tip span {
+  color: var(--text-muted);
+  line-height: 1.4;
+}

@@ -311,7 +311,7 @@ test.describe('type tool', () => {
     expect(line.data.typeOnPath).toBeTruthy();
     await press(page, 'Escape');
     // rendered as textPath
-    expect(await page.locator(`[data-id="${id}"] textPath`).count()).toBe(1);
+    expect(await page.locator(`[data-testid="viewport"] [data-id="${id}"] textPath`).count()).toBe(1);
     // flip reverses the path direction
     const before = (await nodeById(page, lineId)).subpaths[0].anchors[0].point.x;
     await runCommand(page, 'type.flipPath');

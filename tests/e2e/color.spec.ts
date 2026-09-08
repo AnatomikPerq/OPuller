@@ -3,7 +3,7 @@
  * and Eyedropper tool.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { openApp, drawRect, getState, selectTool, nodeById, press, setView, viewport, worldToScreen } from './helpers';
+import { openApp, withStore, drawRect, getState, selectTool, nodeById, press, setView, viewport, worldToScreen } from './helpers';
 
 type Vec = { x: number; y: number };
 
@@ -233,7 +233,7 @@ test.describe('colour module', () => {
     // double-click opens the editor and updates objects using the swatch
     await page.getByTestId(`swatch-${myId}`).dblclick();
     await expect(page.getByTestId('swatch-editor')).toBeVisible();
-    const hex = page.getByTestId('swatch-editor').locator('input[type="text"]').nth(1);
+    const hex = page.getByTestId('swatch-editor').locator('label.text-field', { has: page.locator('.field-label', { hasText: /^#$/ }) }).locator('input');
     await hex.fill('abcdef');
     await hex.press('Enter');
     sw = (await getState(page)).doc.swatches;
@@ -423,6 +423,8 @@ test.describe('colour module', () => {
       return rect.id;
     });
     await selectTool(page, 'gradient');
+    // the tool keeps the last used type (radial above); ask for linear again
+    await withStore(page, (st) => st.setToolOptions('gradient', { type: 'linear' }));
     // group occupies world 600..800 x 300..500; drag across its middle
     await dragScreen(page, await screenPoint(page, { x: 600, y: 400 }), await screenPoint(page, { x: 800, y: 400 }));
     const inner = await nodeById(page, gid);
