@@ -527,6 +527,16 @@ server.registerTool(
 server.registerTool('opuller_toast', { title: 'Toast', description: 'Show a message to the user in the editor.', inputSchema: { message: z.string(), kind: z.enum(['info', 'success', 'error']).optional() } }, async (p) => text(await call('toast', p)));
 
 server.registerTool(
+  'opuller_gradients',
+  {
+    title: 'Mesh & freeform gradients',
+    description: 'Advanced gradients on the selected objects (or ids): op "mesh" turns the fill into an editable gradient mesh (rows, cols, appearance flat|toCenter|toEdge, highlight %), "freeform" applies a freeform gradient from colour points (x/y in 0..1 of the object box, color, opacity, spread), "setNode" recolours / moves one mesh node (index, color, x, y), "release" replaces a mesh by its average colour, "info" describes the current fills.',
+    inputSchema: { op: z.enum(['mesh', 'freeform', 'setNode', 'release', 'info']).optional(), ids: z.array(z.string()).optional(), rows: z.number().optional(), cols: z.number().optional(), appearance: z.enum(['flat', 'toCenter', 'toEdge']).optional(), highlight: z.number().optional(), points: z.array(z.object({ x: z.number(), y: z.number(), color: z.string(), opacity: z.number().optional(), spread: z.number().optional() })).optional(), mode: z.enum(['points', 'lines']).optional(), index: z.number().optional(), color: z.string().optional(), opacity: z.number().optional(), x: z.number().optional(), y: z.number().optional() },
+  },
+  async (p) => text(await call('gradients', p)),
+);
+
+server.registerTool(
   'opuller_brushes',
   {
     title: 'Brushes',

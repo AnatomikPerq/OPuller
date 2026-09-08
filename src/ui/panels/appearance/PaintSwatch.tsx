@@ -20,6 +20,10 @@ export function paintLabel(p: Paint, mixed = false): string {
       return 'Radial gradient';
     case 'pattern':
       return 'Pattern';
+    case 'freeform':
+      return 'Freeform gradient';
+    case 'mesh':
+      return 'Gradient mesh';
   }
 }
 

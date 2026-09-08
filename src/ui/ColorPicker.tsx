@@ -254,6 +254,13 @@ export function paintCss(p: Paint): string {
       return `radial-gradient(circle at ${p.cx * 100}% ${p.cy * 100}%, ${p.stops.map((s) => `${s.color} ${s.offset * 100}%`).join(', ')})`;
     case 'pattern':
       return 'repeating-linear-gradient(45deg, #888 0 4px, #ccc 4px 8px)';
+    case 'freeform':
+      return p.points.map((pt) => `radial-gradient(circle at ${(pt.x * 100).toFixed(1)}% ${(pt.y * 100).toFixed(1)}%, ${pt.color} 0%, transparent ${(pt.spread * 120).toFixed(0)}%)`).join(', ') || '#888';
+    case 'mesh': {
+      const c0 = p.nodes[0]?.color ?? '#888';
+      const c1 = p.nodes[p.nodes.length - 1]?.color ?? c0;
+      return `linear-gradient(135deg, ${c0}, ${c1})`;
+    }
   }
 }
 

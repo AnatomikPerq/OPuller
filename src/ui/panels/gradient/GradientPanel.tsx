@@ -17,6 +17,8 @@ import { linearAngle, withLinearAngle, reverseGradient, toGradient, convertGradi
 import { clampFocal } from '@/color/annotator';
 import { GradientBar } from './GradientBar';
 import { PaintTargets, PaintPreview, SolidColorPopover } from '../color/shared';
+import { FreeformFields } from './FreeformFields';
+import { defaultFreeform } from '@/gradients/freeform';
 import './gradient.css';
 
 let lastGradient: GradientPaint | null = null;
@@ -55,10 +57,15 @@ export function GradientPanel() {
   const [chipPopover, setChipPopover] = useState(false);
   const chipRef = useRef<HTMLButtonElement>(null);
 
-  const setType = (t: 'linear' | 'radial') => {
-    if (mixed || !g) apply(toGradient(paint, t, stopIndex));
+  const setType = (t: 'linear' | 'radial' | 'freeform') => {
+    if (t === 'freeform') {
+      if (paint.type !== 'freeform') apply(defaultFreeform(paint));
+      return;
+    }
+    if (mixed || !g) apply(toGradient(paint.type === 'freeform' ? { type: 'solid', color: paint.points[0]?.color ?? '#000000', opacity: 1 } : paint, t, stopIndex));
     else if (g.type !== t) apply(convertGradientType(g, t));
   };
+  const isFreeform = paint.type === 'freeform';
 
   const angle = g && g.type === 'linear' ? linearAngle(g, aspect) : 0;
 
@@ -82,11 +89,12 @@ export function GradientPanel() {
         <div className="gradient-head-controls">
           <div className="gradient-head-row">
             <Segmented
-              value={g ? g.type : null}
+              value={g ? g.type : isFreeform ? 'freeform' : null}
               onChange={setType}
               options={[
                 { value: 'linear', label: 'Linear', title: 'Linear gradient' },
                 { value: 'radial', label: 'Radial', title: 'Radial gradient' },
+                { value: 'freeform', label: 'Freeform', title: 'Freeform gradient: colour points blended across the object' },
               ]}
               className="gradient-type"
             />
@@ -100,7 +108,7 @@ export function GradientPanel() {
           <div className="gradient-head-row">
             <PaintTargets fill={app.fill} stroke={app.stroke.paint} mixedFill={app.mixedFill} mixedStroke={app.mixedStroke} target={target} onSelect={setTarget} size={18} testIdPrefix="gradient" />
             <span className="muted small" data-testid="gradient-target-label">
-              {label}: {mixed ? 'Mixed' : g ? (g.type === 'linear' ? 'Linear' : 'Radial') : paint.type === 'none' ? 'None' : paint.type === 'solid' ? 'Solid' : 'Pattern'}
+              {label}: {mixed ? 'Mixed' : g ? (g.type === 'linear' ? 'Linear' : 'Radial') : paint.type === 'none' ? 'None' : paint.type === 'solid' ? 'Solid' : paint.type === 'freeform' ? 'Freeform' : paint.type === 'mesh' ? 'Mesh' : 'Pattern'}
             </span>
           </div>
         </div>
@@ -193,9 +201,15 @@ export function GradientPanel() {
             </div>
           )}
         </>
+      ) : paint.type === 'freeform' && !mixed ? (
+        <FreeformFields paint={paint} index={stopIndex} setIndex={setStop} live={(p) => applyActivePaint(p, false)} apply={apply} commit={commit} />
+      ) : paint.type === 'mesh' && !mixed ? (
+        <div className="gradient-hint" data-testid="gradient-hint">
+          Gradient mesh {paint.rows} × {paint.cols}: edit nodes with the Mesh tool (U); the Color panel colours the selected node.
+        </div>
       ) : (
         <div className="gradient-hint" data-testid="gradient-hint">
-          {mixed ? 'Mixed paints. ' : ''}Choose Linear or Radial, click the preview, or pick a preset to apply a gradient to the {label.toLowerCase()}.
+          {mixed ? 'Mixed paints. ' : ''}Choose Linear, Radial or Freeform, click the preview, or pick a preset to apply a gradient to the {label.toLowerCase()}.
         </div>
       )}
 

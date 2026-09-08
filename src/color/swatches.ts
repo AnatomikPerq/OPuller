@@ -33,6 +33,10 @@ export function defaultSwatchName(paint: Paint, mode: ColorMode = 'rgb'): string
       return 'Radial Gradient';
     case 'pattern':
       return 'Pattern';
+    case 'freeform':
+      return 'Freeform Gradient';
+    case 'mesh':
+      return 'Gradient Mesh';
     case 'none':
       return 'None';
   }
@@ -121,6 +125,12 @@ export function sanitizePaint(p: unknown): Paint | null {
     case 'pattern':
       if (typeof o.patternId !== 'string') return null;
       return { type: 'pattern', patternId: o.patternId, scale: num(o.scale, 1), angle: num(o.angle, 0) };
+    case 'freeform':
+      if (!Array.isArray(o.points) || !o.points.length) return null;
+      return { type: 'freeform', mode: o.mode === 'lines' ? 'lines' : 'points', points: o.points.map((pt: any) => ({ x: num(pt?.x, 0.5), y: num(pt?.y, 0.5), color: typeof pt?.color === 'string' && isValidHex(pt.color) ? normalizeHex(pt.color) : '#000000', opacity: Math.max(0, Math.min(1, num(pt?.opacity, 1))), spread: Math.max(0.02, num(pt?.spread, 0.5)) })), lines: Array.isArray(o.lines) ? o.lines : undefined };
+    case 'mesh':
+      if (!Array.isArray(o.nodes) || typeof o.rows !== 'number' || typeof o.cols !== 'number' || o.nodes.length !== (o.rows + 1) * (o.cols + 1)) return null;
+      return { type: 'mesh', rows: o.rows, cols: o.cols, nodes: o.nodes.map((n: any) => ({ x: num(n?.x, 0), y: num(n?.y, 0), color: typeof n?.color === 'string' && isValidHex(n.color) ? normalizeHex(n.color) : '#000000', opacity: Math.max(0, Math.min(1, num(n?.opacity, 1))), up: n?.up ?? null, down: n?.down ?? null, left: n?.left ?? null, right: n?.right ?? null })) };
     default:
       return null;
   }

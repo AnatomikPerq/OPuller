@@ -829,6 +829,49 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     getState().toast(String(p.message ?? ''), p.kind ?? 'info');
     return { ok: true };
   },
+  async gradients(p) {
+    const reg = await import('@/gradients/register');
+    const meshMod = await import('@/gradients/mesh');
+    const op = p.op ?? 'mesh';
+    const s = getState();
+    if (p.ids?.length) s.setSelection(p.ids);
+    if (op === 'mesh') {
+      const n = reg.createMeshOnSelection({ rows: p.rows, cols: p.cols, appearance: p.appearance, highlight: p.highlight });
+      return { count: n };
+    }
+    if (op === 'freeform') {
+      if (!p.points?.length) throw new Error('points required');
+      reg.applyFreeform(p.points, p.mode);
+      return { ok: true, points: p.points.length };
+    }
+    if (op === 'release') return { count: reg.releaseMesh() };
+    if (op === 'setNode') {
+      const st = getState();
+      st.updateDoc((d) => {
+        for (const id of st.selection) {
+          const n = d.nodes[id];
+          if (!n || (n.type !== 'path' && n.type !== 'text') || n.fill.type !== 'mesh') continue;
+          const idx = Number(p.index ?? 0);
+          const node = n.fill.nodes[idx];
+          if (!node) continue;
+          n.fill = { ...n.fill, nodes: n.fill.nodes.map((m, i) => (i === idx ? { ...m, color: p.color ?? m.color, opacity: p.opacity ?? m.opacity, x: p.x ?? m.x, y: p.y ?? m.y } : m)) };
+        }
+      }, 'Gradient Mesh');
+      return { ok: true };
+    }
+    if (op === 'info') {
+      const st = getState();
+      return st.selection.map((id) => {
+        const n = st.doc.nodes[id];
+        if (!n || (n.type !== 'path' && n.type !== 'text')) return { id, fill: null };
+        if (n.fill.type === 'mesh') return { id, fill: 'mesh', rows: n.fill.rows, cols: n.fill.cols, nodes: n.fill.nodes.map((m) => ({ x: +m.x.toFixed(3), y: +m.y.toFixed(3), color: m.color })) };
+        if (n.fill.type === 'freeform') return { id, fill: 'freeform', mode: n.fill.mode, points: n.fill.points };
+        return { id, fill: n.fill.type };
+      });
+    }
+    void meshMod;
+    throw new Error(`Unknown gradients op "${op}"`);
+  },
   async brushes(p) {
     const ops = await import('@/brushes/ops');
     const act = await import('@/brushes/actions');

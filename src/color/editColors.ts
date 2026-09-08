@@ -49,6 +49,26 @@ function mapPaint(p: Paint, slot: 'fill' | 'stroke', fn: ColorMapper, t: Require
     });
     return changed ? { ...p, stops } : p;
   }
+  if (p.type === 'freeform' && t.gradients) {
+    let changed = false;
+    const points = p.points.map((pt) => {
+      const color = fn(pt.color, 'stop');
+      if (color === pt.color) return pt;
+      changed = true;
+      return { ...pt, color };
+    });
+    return changed ? { ...p, points } : p;
+  }
+  if (p.type === 'mesh' && t.gradients) {
+    let changed = false;
+    const nodes = p.nodes.map((n) => {
+      const color = fn(n.color, 'stop');
+      if (color === n.color) return n;
+      changed = true;
+      return { ...n, color };
+    });
+    return changed ? { ...p, nodes } : p;
+  }
   return p;
 }
 
@@ -101,6 +121,8 @@ export function collectColors(doc: Document, ids: ID[], targets: ColorTargets = 
     if (p.type === 'solid') {
       if ((slot === 'fill' && t.fills) || (slot === 'stroke' && t.strokes)) add(p.color, slot);
     } else if ((p.type === 'linear' || p.type === 'radial') && t.gradients) for (const s of p.stops) add(s.color, 'stop');
+    else if (p.type === 'freeform' && t.gradients) for (const pt of p.points) add(pt.color, 'stop');
+    else if (p.type === 'mesh' && t.gradients) for (const n of p.nodes) add(n.color, 'stop');
   };
   for (const id of colorLeaves(doc, ids)) {
     const n = doc.nodes[id];

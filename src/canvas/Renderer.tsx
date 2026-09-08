@@ -9,6 +9,7 @@ import { toSvgTransform, isIdentity, multiply, invert } from '@/geometry/matrix'
 import { variableWidthOutlines } from '@/geometry/widthProfile';
 import { effectiveSubPaths, isGeometryEffect } from './effectiveGeometry';
 import { brushItems, type BrushItem } from '@/brushes/geometry';
+import { rasterGradientTile, PAD as RASTER_PAD } from '@/gradients/raster';
 import { layoutText } from '@/text/layout';
 import { useStore } from '@/store/store';
 import { isContainer } from '@/model/types';
@@ -44,8 +45,28 @@ export function paintRef(paint: Paint, id: string): string {
     case 'linear':
     case 'radial':
     case 'pattern':
+    case 'freeform':
+    case 'mesh':
       return `url(#${id})`;
   }
+}
+
+/** Freeform / mesh gradients: a raster tile mapped onto the bounds (+ padding). */
+function RasterGradientDef({ paint, id, bounds }: { paint: Paint; id: string; bounds: Rect }) {
+  if (paint.type !== 'freeform' && paint.type !== 'mesh') return null;
+  const w = Math.max(bounds.width, 1e-3);
+  const h = Math.max(bounds.height, 1e-3);
+  const tile = rasterGradientTile(paint, w / h);
+  if (!tile) return null;
+  const x = bounds.x - w * RASTER_PAD;
+  const y = bounds.y - h * RASTER_PAD;
+  const tw = w * (1 + RASTER_PAD * 2);
+  const th = h * (1 + RASTER_PAD * 2);
+  return (
+    <pattern id={id} patternUnits="userSpaceOnUse" x={x} y={y} width={tw} height={th}>
+      <image href={tile.dataUrl} x={0} y={0} width={tw} height={th} preserveAspectRatio="none" />
+    </pattern>
+  );
 }
 
 export function paintOpacity(paint: Paint): number {
@@ -401,9 +422,11 @@ function paintDefs(node: PathNode | TextNode, bounds: Rect | null, doc: Document
   const b = bounds ?? { x: 0, y: 0, width: 1, height: 1 };
   if (node.fill.type === 'linear' || node.fill.type === 'radial') defs.push(<GradientDef key="f" id={fillId} paint={node.fill} bounds={b} />);
   else if (node.fill.type === 'pattern') defs.push(<PatternDef key="f" id={fillId} paint={node.fill} doc={doc} />);
+  else if (node.fill.type === 'freeform' || node.fill.type === 'mesh') defs.push(<RasterGradientDef key="f" id={fillId} paint={node.fill} bounds={b} />);
   const sp = node.stroke.paint;
   if (sp.type === 'linear' || sp.type === 'radial') defs.push(<GradientDef key="s" id={strokeId} paint={sp} bounds={b} />);
   else if (sp.type === 'pattern') defs.push(<PatternDef key="s" id={strokeId} paint={sp} doc={doc} />);
+  else if (sp.type === 'freeform' || sp.type === 'mesh') defs.push(<RasterGradientDef key="s" id={strokeId} paint={sp} bounds={b} />);
   return { fillRef: paintRef(node.fill, fillId), strokeRef: paintRef(sp, strokeId), defs };
 }
 

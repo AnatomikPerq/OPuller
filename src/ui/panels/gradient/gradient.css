@@ -155,3 +155,31 @@
 .gradient-fields.three {
   grid-template-columns: 1fr 1fr 1fr;
 }
+
+/* freeform gradient section */
+.gradient-freeform {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gradient-freeform-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.gradient-freeform-point {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  padding: 0;
+}
+.gradient-freeform-point.active {
+  outline: 2px solid var(--selection);
+  outline-offset: 1px;
+}
+.gradient-annotator .ga-handle.active {
+  stroke: var(--selection);
+  stroke-width: 2;
+}

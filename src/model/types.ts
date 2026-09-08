@@ -108,8 +108,56 @@ export interface PatternPaint {
   y?: number;
 }
 
-export type Paint = NoPaint | SolidPaint | LinearGradientPaint | RadialGradientPaint | PatternPaint;
+/** A colour point of a freeform gradient (object bounding box units). */
+export interface FreeformPoint {
+  x: number;
+  y: number;
+  color: HexColor;
+  opacity: number;
+  /** how far the colour reaches, in bbox units (0.05 .. 2) */
+  spread: number;
+}
+
+/**
+ * Freeform gradient (Illustrator's Freeform): colour points blended smoothly
+ * (points mode) or connected into lines (lines mode: `lines` lists point
+ * indices forming polylines). Rendered through a raster tile (gradients/raster.ts).
+ */
+export interface FreeformGradientPaint {
+  type: 'freeform';
+  mode: 'points' | 'lines';
+  points: FreeformPoint[];
+  lines?: number[][];
+}
+
+/** A gradient mesh node: position, colour and the four tangent handles (relative offsets, bbox units). */
+export interface MeshNode {
+  x: number;
+  y: number;
+  color: HexColor;
+  opacity: number;
+  /** handle towards the row above */
+  up?: Vec | null;
+  down?: Vec | null;
+  left?: Vec | null;
+  right?: Vec | null;
+}
+
+/**
+ * Gradient mesh: (rows+1) × (cols+1) nodes in row-major order forming
+ * rows × cols Coons patches with bilinear colours. Coordinates are object
+ * bounding box units so the mesh follows transforms of the object.
+ */
+export interface MeshGradientPaint {
+  type: 'mesh';
+  rows: number;
+  cols: number;
+  nodes: MeshNode[];
+}
+
+export type Paint = NoPaint | SolidPaint | LinearGradientPaint | RadialGradientPaint | PatternPaint | FreeformGradientPaint | MeshGradientPaint;
 export type GradientPaint = LinearGradientPaint | RadialGradientPaint;
+export type RasterGradientPaint = FreeformGradientPaint | MeshGradientPaint;
 
 export type LineCap = 'butt' | 'round' | 'square';
 export type LineJoin = 'miter' | 'round' | 'bevel';

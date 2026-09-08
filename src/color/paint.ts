@@ -13,12 +13,20 @@ export function clampStopIndex(p: GradientPaint, i: number): number {
   return Math.max(0, Math.min(p.stops.length - 1, Math.floor(Number.isFinite(i) ? i : 0)));
 }
 
-/** The colour edited by the colour UI: a solid paint, or the active gradient stop. */
+/** The colour edited by the colour UI: a solid paint, the active gradient stop, freeform point or mesh node. */
 export function activeSolid(paint: Paint, stopIndex = 0): SolidPaint {
   if (paint.type === 'solid') return paint;
   if (isGradient(paint)) {
     const s = paint.stops[clampStopIndex(paint, stopIndex)];
     return { type: 'solid', color: s?.color ?? '#000000', opacity: s?.opacity ?? 1 };
+  }
+  if (paint.type === 'freeform') {
+    const p = paint.points[Math.max(0, Math.min(paint.points.length - 1, stopIndex))];
+    return { type: 'solid', color: p?.color ?? '#000000', opacity: p?.opacity ?? 1 };
+  }
+  if (paint.type === 'mesh') {
+    const n = paint.nodes[Math.max(0, Math.min(paint.nodes.length - 1, stopIndex))];
+    return { type: 'solid', color: n?.color ?? '#000000', opacity: n?.opacity ?? 1 };
   }
   return { type: 'solid', color: '#000000', opacity: 1 };
 }
@@ -34,6 +42,14 @@ export function withActiveColor(paint: Paint, stopIndex: number, patch: { color?
   if (isGradient(paint)) {
     const idx = clampStopIndex(paint, stopIndex);
     return { ...paint, stops: paint.stops.map((s, i) => (i === idx ? { ...s, color, opacity } : s)) };
+  }
+  if (paint.type === 'freeform') {
+    const idx = Math.max(0, Math.min(paint.points.length - 1, stopIndex));
+    return { ...paint, points: paint.points.map((p, i) => (i === idx ? { ...p, color, opacity } : p)) };
+  }
+  if (paint.type === 'mesh') {
+    const idx = Math.max(0, Math.min(paint.nodes.length - 1, stopIndex));
+    return { ...paint, nodes: paint.nodes.map((n, i) => (i === idx ? { ...n, color, opacity } : n)) };
   }
   return { type: 'solid', color, opacity };
 }
@@ -66,6 +82,10 @@ export function paintLabel(p: Paint): string {
       return 'Radial gradient';
     case 'pattern':
       return 'Pattern';
+    case 'freeform':
+      return `Freeform gradient (${p.points.length} points)`;
+    case 'mesh':
+      return `Gradient mesh ${p.rows}×${p.cols}`;
   }
 }
 
@@ -81,5 +101,9 @@ export function paintTypeLabel(p: Paint): string {
       return 'Radial';
     case 'pattern':
       return 'Pattern';
+    case 'freeform':
+      return 'Freeform';
+    case 'mesh':
+      return 'Mesh';
   }
 }

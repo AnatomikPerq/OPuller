@@ -187,6 +187,35 @@ function validPaint(v: unknown, d: Paint): Paint {
       if (p.type === 'linear') return { type: 'linear', x1: num(p.x1, 0), y1: num(p.y1, 0), x2: num(p.x2, 1), y2: num(p.y2, 0), stops, spread };
       return { type: 'radial', cx: num(p.cx, 0.5), cy: num(p.cy, 0.5), r: num(p.r, 0.5), fx: typeof p.fx === 'number' ? p.fx : undefined, fy: typeof p.fy === 'number' ? p.fy : undefined, stops, spread };
     }
+    case 'freeform': {
+      const points = (Array.isArray(p.points) ? p.points : []).map((pt) => {
+        const o = obj(pt);
+        return { x: num(o.x, 0.5), y: num(o.y, 0.5), color: validHex(o.color, '#000000'), opacity: clamp01(num(o.opacity, 1)), spread: Math.max(0.02, num(o.spread, 0.5)) };
+      });
+      if (!points.length) return d;
+      const fp: Paint = { type: 'freeform', mode: p.mode === 'lines' ? 'lines' : 'points', points };
+      if (Array.isArray(p.lines)) fp.lines = p.lines.filter((l): l is number[] => Array.isArray(l) && l.every((i) => typeof i === 'number' && i >= 0 && i < points.length));
+      return fp;
+    }
+    case 'mesh': {
+      const rows = Math.max(1, Math.round(num(p.rows, 1)));
+      const cols = Math.max(1, Math.round(num(p.cols, 1)));
+      const vec = (v: unknown): { x: number; y: number } | null => {
+        const o = obj(v);
+        return typeof o.x === 'number' && typeof o.y === 'number' ? { x: o.x, y: o.y } : null;
+      };
+      const nodes = (Array.isArray(p.nodes) ? p.nodes : []).map((n) => {
+        const o = obj(n);
+        const out: import('@/model/types').MeshNode = { x: num(o.x, 0), y: num(o.y, 0), color: validHex(o.color, '#000000'), opacity: clamp01(num(o.opacity, 1)) };
+        for (const k of ['up', 'down', 'left', 'right'] as const) {
+          const h = vec(o[k]);
+          if (h) out[k] = h;
+        }
+        return out;
+      });
+      if (nodes.length !== (rows + 1) * (cols + 1)) return d;
+      return { type: 'mesh', rows, cols, nodes };
+    }
     case 'pattern': {
       const pp: Paint = { type: 'pattern', patternId: str(p.patternId, ''), scale: num(p.scale, 1), angle: num(p.angle, 0) };
       if (typeof p.x === 'number' || typeof p.y === 'number') {

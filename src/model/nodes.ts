@@ -153,6 +153,10 @@ export function clonePaint(p: Paint): Paint {
       return { ...p, stops: p.stops.map((s) => ({ ...s })) };
     case 'pattern':
       return { ...p };
+    case 'freeform':
+      return { ...p, points: p.points.map((pt) => ({ ...pt })), lines: p.lines ? p.lines.map((l) => [...l]) : undefined };
+    case 'mesh':
+      return { ...p, nodes: p.nodes.map((n) => ({ ...n, up: n.up ? { ...n.up } : n.up, down: n.down ? { ...n.down } : n.down, left: n.left ? { ...n.left } : n.left, right: n.right ? { ...n.right } : n.right })) };
   }
 }
 

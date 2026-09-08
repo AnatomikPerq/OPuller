@@ -20,9 +20,11 @@ import { Row, Segmented, IconButton, NumberField, Tooltip } from '@/ui/widgets';
 import { bboxToWorld, worldToBbox, radialRadiusFromWorld, clampFocal, type GradientFrame } from '@/color/annotator';
 import { toGradient, convertGradientType, updateStop, removeStop, addStopAt, reverseGradient, clamp01, linearAngle, withLinearAngle } from '@/color/gradient';
 import { isGradient, clampStopIndex } from '@/color/paint';
+import { defaultFreeform } from '@/gradients/freeform';
 import { buildAnnotator, hitAnnotator, projectOnSegment, constrainTo45, type AnnotatorModel, type AnnotatorHit } from './model';
 import { useGradientToolStore } from './state';
 import { GRADIENT_CURSOR } from './cursors';
+import { freeformActive, freeformHandlers } from './freeform';
 import './gradient-tool.css';
 
 type Gesture =
@@ -93,8 +95,9 @@ export const gradientTool: Tool = {
     useGradientToolStore.getState().setHover(null);
     ctx.state.setHover(null);
   },
-  isBusy: () => gesture.kind === 'draw' || gesture.kind === 'handle' || gesture.kind === 'stop',
+  isBusy: () => gesture.kind === 'draw' || gesture.kind === 'handle' || gesture.kind === 'stop' || freeformHandlers.isBusy(),
   cancel(ctx) {
+    if (freeformHandlers.isBusy()) return freeformHandlers.cancel(ctx);
     if (gesture.kind === 'draw' || gesture.kind === 'handle' || gesture.kind === 'stop') ctx.state.revert();
     gesture = { kind: 'none' };
     ctx.setCursor(GRADIENT_CURSOR);
@@ -103,6 +106,7 @@ export const gradientTool: Tool = {
 
   onPointerDown(e, ctx) {
     if (e.button !== 0) return;
+    if (freeformActive(ctx)) return freeformHandlers.onPointerDown(e, ctx);
     const s = ctx.state;
     useGradientToolStore.getState().setPopover(null);
     const m = model(ctx);
@@ -121,6 +125,7 @@ export const gradientTool: Tool = {
   },
 
   onPointerMove(e, ctx) {
+    if (freeformActive(ctx) && gesture.kind === 'none') return freeformHandlers.onPointerMove(e, ctx);
     const s = ctx.state;
     const g = gesture;
     if (g.kind === 'none') {
@@ -222,6 +227,7 @@ export const gradientTool: Tool = {
   },
 
   onPointerUp(e, ctx) {
+    if (freeformActive(ctx) && gesture.kind === 'none') return freeformHandlers.onPointerUp(e, ctx);
     const s = ctx.state;
     const g = gesture;
     gesture = { kind: 'none' };
@@ -263,6 +269,7 @@ export const gradientTool: Tool = {
   },
 
   onDoubleClick(e, ctx) {
+    if (freeformActive(ctx)) return freeformHandlers.onDoubleClick(e, ctx);
     const s = ctx.state;
     const m = model(ctx);
     if (!m || !m.paint) return;
@@ -286,6 +293,10 @@ export const gradientTool: Tool = {
   },
 
   onKeyDown(e, ctx) {
+    if (freeformActive(ctx)) {
+      const r = freeformHandlers.onKeyDown(e, ctx);
+      if (r) return true;
+    }
     if (e.key === 'Escape') {
       if (this.isBusy!()) {
         this.cancel!(ctx);
@@ -313,6 +324,7 @@ export const gradientTool: Tool = {
   },
 
   renderOverlay(ctx) {
+    if (freeformActive(ctx)) return freeformHandlers.renderOverlay(ctx);
     const s = ctx.state;
     const m = model(ctx);
     if (!m) return null;
@@ -367,10 +379,10 @@ function GradientToolOptions() {
   const app = useCurrentAppearance();
   const doc = useStore((s) => s.doc);
   const target = useStore((s) => s.activePaintTarget);
-  const [opts, set] = useToolOptions<{ type: 'linear' | 'radial' }>('gradient');
+  const [opts, set] = useToolOptions<{ type: 'linear' | 'radial' | 'freeform' }>('gradient');
   const paint = target === 'fill' ? app.fill : app.stroke.paint;
   const g = isGradient(paint) ? paint : null;
-  const type = g ? g.type : opts.type === 'radial' ? 'radial' : 'linear';
+  const type: 'linear' | 'radial' | 'freeform' = paint.type === 'freeform' ? 'freeform' : g ? g.type : opts.type === 'radial' ? 'radial' : opts.type === 'freeform' ? 'freeform' : 'linear';
   const id = app.targets[0];
   const b = id ? localBounds(doc, id) : null;
   const aspect = b && b.width > 1e-6 && b.height > 1e-6 ? b.width / b.height : 1;
@@ -381,11 +393,17 @@ function GradientToolOptions() {
         value={type}
         onChange={(t) => {
           set({ type: t });
-          if (g && g.type !== t) applyActivePaint(convertGradientType(g, t), true);
+          if (t === 'freeform') {
+            if (paint.type !== 'freeform' && app.targets.length) applyActivePaint(defaultFreeform(paint), true);
+            return;
+          }
+          if (paint.type === 'freeform' && app.targets.length) applyActivePaint(toGradient({ type: 'solid', color: paint.points[0]?.color ?? '#000000', opacity: 1 }, t), true);
+          else if (g && g.type !== t) applyActivePaint(convertGradientType(g, t), true);
         }}
         options={[
           { value: 'linear', label: 'Linear', title: 'Linear gradient' },
           { value: 'radial', label: 'Radial', title: 'Radial gradient' },
+          { value: 'freeform', label: 'Freeform', title: 'Freeform gradient (colour points)' },
         ]}
       />
       <Tooltip text="Reverse gradient">
@@ -406,7 +424,7 @@ function GradientToolOptions() {
         />
       )}
       <span className="muted">
-        {app.targets.length ? (g ? `${label}: ${g.type} gradient` : `${label}: drag to apply a ${type} gradient`) : 'Select an object to edit its gradient'}
+        {app.targets.length ? (paint.type === 'freeform' ? `${label}: freeform — drag points, click to add, Delete removes` : g ? `${label}: ${g.type} gradient` : `${label}: drag to apply a ${type} gradient`) : 'Select an object to edit its gradient'}
       </span>
     </Row>
   );
