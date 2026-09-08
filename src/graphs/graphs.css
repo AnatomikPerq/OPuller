@@ -1,0 +1,77 @@
+/* Graph dialogs */
+.graph-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.graph-table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.graph-table th,
+.graph-table td {
+  border: 1px solid var(--border);
+  padding: 0;
+}
+.graph-table th {
+  background: var(--bg-panel-alt);
+}
+.graph-table input {
+  width: 92px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0 6px;
+  font: inherit;
+  outline: none;
+}
+.graph-table input:focus {
+  background: var(--bg-input);
+  outline: 1px solid var(--accent);
+}
+.graph-table thead input {
+  font-weight: 600;
+}
+.graph-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 6px;
+}
+.graph-raw textarea {
+  width: 100%;
+  min-height: 200px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  resize: vertical;
+  margin-bottom: 8px;
+}
+.graph-colors {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.graph-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.graph-color input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}

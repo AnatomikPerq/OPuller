@@ -79,7 +79,6 @@ function knifeSubPath(pts: Vec[]): SubPath | null {
 export const tool: Tool = {
   id: 'knife',
   name: 'Knife Tool',
-  shortcut: 'k',
   icon: Slice,
   group: 'edit',
   order: 631,
