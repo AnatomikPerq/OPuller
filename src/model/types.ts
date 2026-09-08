@@ -303,6 +303,8 @@ export interface NodeBase {
   blendMode: BlendMode;
   transform: Matrix;
   effects: Effect[];
+  /** Module-specific serializable data (e.g. blend parameters). */
+  data?: Record<string, unknown>;
 }
 
 export interface LayerNode extends NodeBase {

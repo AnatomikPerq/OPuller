@@ -366,7 +366,7 @@ registerCommands([
   { id: 'edit.pasteInFront', label: 'Paste in Front', menu: 'Edit', shortcut: 'mod+f', order: 13, run: () => pasteClipboard({ inPlace: true, position: 'front' }), enabled: () => hasClipboard() },
   { id: 'edit.pasteInBack', label: 'Paste in Back', menu: 'Edit', shortcut: 'mod+b', order: 14, run: () => pasteClipboard({ inPlace: true, position: 'back' }), enabled: () => hasClipboard() },
   { id: 'edit.pasteInPlace', label: 'Paste in Place', menu: 'Edit', shortcut: 'mod+shift+v', order: 15, run: () => pasteClipboard({ inPlace: true }), enabled: () => hasClipboard() },
-  { id: 'edit.duplicate', label: 'Duplicate', menu: 'Edit', shortcut: 'mod+d', order: 16, run: () => duplicateSelection({ x: 10, y: 10 }), enabled: when.hasSelection },
+  { id: 'edit.duplicate', label: 'Duplicate', menu: 'Edit', shortcut: 'mod+alt+d', order: 16, run: () => duplicateSelection({ x: 10, y: 10 }), enabled: when.hasSelection },
   { id: 'edit.delete', label: 'Delete', menu: 'Edit', shortcut: ['delete', 'backspace'], order: 17, run: deleteSelection, enabled: when.hasSelection },
   { id: 'edit.nudgeUp', label: 'Nudge Up', shortcut: 'up', hidden: true, run: () => nudgeSelection(0, -getState().prefs.nudge), enabled: when.hasSelection },
   { id: 'edit.nudgeDown', label: 'Nudge Down', shortcut: 'down', hidden: true, run: () => nudgeSelection(0, getState().prefs.nudge), enabled: when.hasSelection },

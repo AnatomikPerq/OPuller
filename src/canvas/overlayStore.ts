@@ -13,7 +13,9 @@ export interface OverlayState {
   hud: { screen: Vec; text: string } | null;
   /** guide being dragged from a ruler or moved (world position) */
   dragGuide: { axis: 'x' | 'y'; position: number } | null;
-  /** extra screen-space overlay elements registered by modules (e.g. text editor) */
+  /** node ids temporarily hidden from the live render (a module draws them itself) */
+  hiddenNodes: string[];
+  setHiddenNodes: (ids: string[]) => void;
   setSnap: (s: SnapResult | null) => void;
   setMarquee: (r: Rect | null) => void;
   setHud: (h: { screen: Vec; text: string } | null) => void;
@@ -25,6 +27,8 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   marquee: null,
   hud: null,
   dragGuide: null,
+  hiddenNodes: [],
+  setHiddenNodes: (hiddenNodes) => set({ hiddenNodes }),
   setSnap: (snap) => set({ snap }),
   setMarquee: (marquee) => set({ marquee }),
   setHud: (hud) => set({ hud }),

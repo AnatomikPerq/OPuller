@@ -281,7 +281,10 @@ export function Viewport() {
 
   // --- derived visuals ----------------------------------------------------
   const worldTransform = `matrix(${zoom} 0 0 ${zoom} ${pan.x} ${pan.y})`;
-  const hidden = useMemo(() => (editingTextId ? new Set([editingTextId]) : undefined), [editingTextId]);
+  // nodes hidden from the live render (modules may hide nodes they draw themselves)
+  const hiddenIds = useOverlayStore((s) => s.hiddenNodes);
+  const hidden = useMemo(() => (hiddenIds && hiddenIds.length ? new Set(hiddenIds) : undefined), [hiddenIds]);
+  void editingTextId;
 
   const slots = useSyncExternalStore(onSlotsChanged, () => getViewportSlots('overlay'), () => getViewportSlots('overlay'));
   const htmlSlots = useSyncExternalStore(onSlotsChanged, () => getViewportSlots('html'), () => getViewportSlots('html'));
