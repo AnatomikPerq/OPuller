@@ -103,6 +103,9 @@ export interface PatternPaint {
   patternId: ID;
   scale: number;
   angle: number;
+  /** tile offset in px (moves the pattern inside the object) */
+  x?: number;
+  y?: number;
 }
 
 export type Paint = NoPaint | SolidPaint | LinearGradientPaint | RadialGradientPaint | PatternPaint;
@@ -438,13 +441,41 @@ export interface Bleed {
   left: number;
 }
 
+export type PatternLayout = 'grid' | 'brick-row' | 'brick-col' | 'hex-row' | 'hex-col';
+
 export interface PatternDef {
   id: ID;
   name: string;
+  /** tile size (px) */
   width: number;
   height: number;
-  /** SVG markup of a tile (children of an <svg> with viewBox = 0 0 width height) */
+  /**
+   * SVG markup of one pattern *cell* (children of an <svg> with viewBox
+   * 0 0 cellWidth cellHeight, see patterns/tile.ts). Regenerated from the
+   * artwork whenever the pattern is edited; library patterns may only have this.
+   */
   svg: string;
+  /** editable tile artwork: a group `root` and its descendants, in tile space (0,0 = tile origin) */
+  nodes?: Record<ID, Node>;
+  root?: ID;
+  layout?: PatternLayout;
+  /** brick offset as a fraction of the tile (0.5 = half a tile) */
+  offset?: number;
+  /** gap between tiles (px; negative = overlap) */
+  spacing?: { x: number; y: number };
+  /** tile background colour (null/undefined = transparent) */
+  background?: HexColor | null;
+}
+
+/** Reusable artwork placed as linked instances (a group with `data.symbol`). */
+export interface SymbolDef {
+  id: ID;
+  name: string;
+  /** artwork nodes keyed by id; `root` is a group whose children form the symbol, in symbol space (registration point at 0,0) */
+  nodes: Record<ID, Node>;
+  root: ID;
+  /** bumped on every redefinition; instances store the version they were built from */
+  version: number;
 }
 
 export interface GridSettings {
@@ -467,6 +498,7 @@ export interface Document {
   guides: Guide[];
   swatches: Swatch[];
   patterns: PatternDef[];
+  symbols: SymbolDef[];
   grid: GridSettings;
   /** document colour mode: how colours are edited/displayed (values are always stored as sRGB hex) */
   colorMode: ColorMode;

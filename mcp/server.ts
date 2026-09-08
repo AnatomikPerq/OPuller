@@ -527,6 +527,16 @@ server.registerTool(
 server.registerTool('opuller_toast', { title: 'Toast', description: 'Show a message to the user in the editor.', inputSchema: { message: z.string(), kind: z.enum(['info', 'success', 'error']).optional() } }, async (p) => text(await call('toast', p)));
 
 server.registerTool(
+  'opuller_symbols',
+  {
+    title: 'Symbols',
+    description: 'Reusable symbols (Illustrator-style): list definitions, make a symbol from the selection / given ids (replaced by an instance), place instances at world coordinates, break links, redefine from the selection, edit (isolation) / finishEdit, delete, rename, list instances, or add built-in library symbols (op "library" with name, or without name for all).',
+    inputSchema: { op: z.enum(['list', 'make', 'place', 'break', 'redefine', 'edit', 'finishEdit', 'delete', 'rename', 'instances', 'library']).optional(), id: z.string().optional(), ids: z.array(z.string()).optional(), name: z.string().optional(), x: z.number().optional(), y: z.number().optional(), scale: z.number().optional(), rotation: z.number().optional(), mode: z.enum(['break', 'delete']).optional() },
+  },
+  async (p) => text(await call('symbols', p)),
+);
+
+server.registerTool(
   'opuller_projects',
   {
     title: 'Project library',

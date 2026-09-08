@@ -187,8 +187,14 @@ function validPaint(v: unknown, d: Paint): Paint {
       if (p.type === 'linear') return { type: 'linear', x1: num(p.x1, 0), y1: num(p.y1, 0), x2: num(p.x2, 1), y2: num(p.y2, 0), stops, spread };
       return { type: 'radial', cx: num(p.cx, 0.5), cy: num(p.cy, 0.5), r: num(p.r, 0.5), fx: typeof p.fx === 'number' ? p.fx : undefined, fy: typeof p.fy === 'number' ? p.fy : undefined, stops, spread };
     }
-    case 'pattern':
-      return { type: 'pattern', patternId: str(p.patternId, ''), scale: num(p.scale, 1), angle: num(p.angle, 0) };
+    case 'pattern': {
+      const pp: Paint = { type: 'pattern', patternId: str(p.patternId, ''), scale: num(p.scale, 1), angle: num(p.angle, 0) };
+      if (typeof p.x === 'number' || typeof p.y === 'number') {
+        pp.x = num(p.x, 0);
+        pp.y = num(p.y, 0);
+      }
+      return pp;
+    }
     default:
       return d;
   }
@@ -402,6 +408,36 @@ function validArtboard(v: unknown, i: number): Artboard | null {
 }
 
 /**
+ * Validate a map of nodes forming a subtree under `root` (symbol / pattern /
+ * brush artwork). Returns null when the root is missing or not a group.
+ */
+export function validateNodeMap(rawNodes: unknown, rawRoot: unknown): { nodes: Record<ID, Node>; root: ID } | null {
+  if (!rawNodes || typeof rawNodes !== 'object' || typeof rawRoot !== 'string') return null;
+  const nodes: Record<ID, Node> = {};
+  for (const [id, v] of Object.entries(rawNodes as Record<string, unknown>)) {
+    const n = validNode(id, v);
+    if (n) nodes[id] = n;
+  }
+  const root = nodes[rawRoot];
+  if (!root || root.type !== 'group') return null;
+  root.parent = null;
+  const reachable = new Set<ID>();
+  const visit = (id: ID, parent: ID | null) => {
+    const n = nodes[id];
+    if (!n || reachable.has(id)) return;
+    reachable.add(id);
+    n.parent = parent;
+    if (n.type === 'layer' || n.type === 'group') {
+      n.children = n.children.filter((c) => nodes[c] && c !== id && !reachable.has(c));
+      for (const c of n.children) visit(c, id);
+    }
+  };
+  visit(rawRoot, null);
+  for (const id of Object.keys(nodes)) if (!reachable.has(id)) delete nodes[id];
+  return { nodes, root: rawRoot };
+}
+
+/**
  * Validate and normalise a raw document object. Missing fields get defaults,
  * dangling references are repaired, orphaned nodes are dropped.
  */
@@ -472,9 +508,31 @@ export function validateDocument(raw: unknown): Document {
     ? d.patterns
         .map((p) => {
           const po = obj(p);
-          return { id: str(po.id, newId()), name: str(po.name, 'Pattern'), width: Math.max(1, num(po.width, 10)), height: Math.max(1, num(po.height, 10)), svg: str(po.svg, '') };
+          const def: import('@/model/types').PatternDef = { id: str(po.id, newId()), name: str(po.name, 'Pattern'), width: Math.max(1, num(po.width, 10)), height: Math.max(1, num(po.height, 10)), svg: str(po.svg, '') };
+          const art = validateNodeMap(po.nodes, po.root);
+          if (art) {
+            def.nodes = art.nodes;
+            def.root = art.root;
+          }
+          if (po.layout === 'brick-row' || po.layout === 'brick-col' || po.layout === 'hex-row' || po.layout === 'hex-col' || po.layout === 'grid') def.layout = po.layout;
+          if (typeof po.offset === 'number') def.offset = Math.max(0, Math.min(1, po.offset));
+          const sp = obj(po.spacing);
+          if (typeof sp.x === 'number' || typeof sp.y === 'number') def.spacing = { x: num(sp.x, 0), y: num(sp.y, 0) };
+          if (typeof po.background === 'string') def.background = validHex(po.background, '#ffffff');
+          return def;
         })
-        .filter((p) => !!p.svg)
+        .filter((p) => !!p.svg || !!p.nodes)
+    : [];
+  const symbols = Array.isArray(d.symbols)
+    ? d.symbols
+        .map((s) => {
+          const so = obj(s);
+          const art = validateNodeMap(so.nodes, so.root);
+          if (!art) return null;
+          const def: import('@/model/types').SymbolDef = { id: str(so.id, newId()), name: str(so.name, 'Symbol'), nodes: art.nodes, root: art.root, version: Math.max(1, Math.round(num(so.version, 1))) };
+          return def;
+        })
+        .filter((s): s is import('@/model/types').SymbolDef => !!s)
     : [];
   const guides = Array.isArray(d.guides)
     ? d.guides
@@ -497,6 +555,7 @@ export function validateDocument(raw: unknown): Document {
     guides,
     swatches,
     patterns,
+    symbols,
     grid: { size: Math.max(1, num(grid.size, dg.size)), subdivisions: Math.max(1, Math.round(num(grid.subdivisions, dg.subdivisions))), color: validHex(grid.color, dg.color), style: grid.style === 'dots' ? 'dots' : 'lines' },
     colorMode: d.colorMode === 'cmyk' ? 'cmyk' : 'rgb',
     bleed,

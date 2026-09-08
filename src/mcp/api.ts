@@ -829,6 +829,51 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     getState().toast(String(p.message ?? ''), p.kind ?? 'info');
     return { ok: true };
   },
+  async symbols(p) {
+    const sym = await import('@/symbols/ops');
+    const act = await import('@/symbols/actions');
+    const op = p.op ?? 'list';
+    const s = getState();
+    if (op === 'list') return s.doc.symbols.map((d) => ({ id: d.id, name: d.name, version: d.version, instances: sym.symbolInstances(s.doc, d.id).length, bounds: sym.symbolBounds(s.doc, d) }));
+    if (op === 'make') {
+      if (p.ids?.length) s.setSelection(p.ids);
+      const id = act.makeSymbolCommand(p.name);
+      return { id, instance: getState().selection[0] ?? null };
+    }
+    if (op === 'place') {
+      const id = act.placeSymbolCommand(String(p.id ?? act.currentSymbolId()), p.x !== undefined && p.y !== undefined ? { x: Number(p.x), y: Number(p.y) } : undefined, { scale: p.scale, rotation: p.rotation });
+      return { instance: id };
+    }
+    if (op === 'break') return { count: act.breakLinkCommand(p.ids) };
+    if (op === 'redefine') {
+      if (p.ids?.length) s.setSelection(p.ids);
+      return { ok: act.redefineCommand(String(p.id)) };
+    }
+    if (op === 'edit') return { ok: act.editSymbolCommand(String(p.id)) };
+    if (op === 'finishEdit') {
+      getState().setIsolation(null);
+      return { ok: true };
+    }
+    if (op === 'delete') {
+      act.deleteSymbolCommand(String(p.id), p.mode === 'delete' ? 'delete' : 'break');
+      return { ok: true };
+    }
+    if (op === 'rename') {
+      act.renameSymbolCommand(String(p.id), String(p.name ?? ''));
+      return { ok: true };
+    }
+    if (op === 'instances') return { ids: sym.symbolInstances(s.doc, p.id ? String(p.id) : undefined) };
+    if (op === 'library') {
+      if (p.name) {
+        const lib = (await import('@/symbols/library')).SYMBOL_LIBRARY;
+        const entry = lib.find((e) => e.id === p.name || e.name === p.name);
+        if (!entry) throw new Error(`Unknown library symbol "${p.name}"`);
+        return { id: act.addLibrarySymbol(entry.id) };
+      }
+      return { added: act.addWholeLibrary(), available: (await import('@/symbols/library')).SYMBOL_LIBRARY.map((e) => e.id) };
+    }
+    throw new Error(`Unknown symbols op "${op}"`);
+  },
   async projects(p) {
     const lib = await import('@/home/projects');
     const op = p.op ?? 'list';
