@@ -231,3 +231,31 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 9. Keep the model serializable (plain JSON). No class instances or functions in nodes.
 10. Report at the end: what was built (files), what works (tested how), what is missing,
     and any requested core changes.
+
+## Feature modules (where things live)
+
+| Area | Folder(s) | Notes |
+| --- | --- | --- |
+| Path editing tools | `src/tools/{direct,pen,anchor,curvature,lasso}`, shared helpers in `src/tools/pathEditing` | world-space anchor/handle editing |
+| Freehand tools | `src/tools/{pencil,brush,blob,smooth,patheraser,eraser}`, `src/tools/freehand` | cutting/sampling helpers reused by the Knife |
+| Type | `src/tools/text`, `src/text/{fonts,layout,outline,editing}.ts`, panels `character`, `paragraph`, `src/commands/typeCommands` | |
+| Transform | `src/transform`, `src/tools/{rotate,scale,reflect,shear,freetransform}`, panels `transform`, `align`, dialogs `transform` | angles use Illustrator's convention |
+| Pathfinder / Shape Builder | `src/pathops`, `src/tools/shapebuilder`, panel `pathfinder`, `src/commands/pathCommands` | paper.js booleans |
+| Colour | `src/color`, panels `color`, `swatches`, `gradient`, `stroke`, `src/tools/{gradient,eyedropper}` | |
+| Layers & appearance | panels `layers`, `properties`, `appearance`, `effects`, `history`, `navigator`, `info`, `src/commands/{layerCommands,effectCommands}` | |
+| IO | `src/io` (SVG import/export, raster, PDF, project files, clipboard, autosave, recent), dialogs `export`, `recover`, `newDocument`, `documentSetup` | |
+| Artboards | `src/artboards`, `src/tools/artboard` | panel + Object > Artboards |
+| Cut tools | `src/tools/{scissors,knife}` | knife uses a thin blade polygon subtracted with paper.js |
+| Width tool | `src/tools/width` | writes `stroke.widthProfile`, rendered by `geometry/widthProfile.ts` |
+| Blend | `src/blend`, `src/tools/blend` | blend group = `data.blend`, steps carry `data.blendStep`; steps regenerate on commit |
+| Measure | `src/tools/measure` | |
+| Raster | `src/raster` (Image Trace via imagetracerjs, Rasterize, Crop), `src/tools/pixelbrush` | |
+| Samples | `src/samples` | File > Open Sample; the bird is built with boolean ops at load |
+| Help & preferences | `src/help` | Preferences (Ctrl+K), Keyboard Shortcuts, About, Welcome screen |
+| AI bridge / MCP | `src/mcp` (page side: `api.ts` methods, `bridge.ts` WebSocket client), `mcp/server.ts` (MCP stdio server), `.mcp.json` | `window.__opuller.mcp` exposes the same methods |
+
+### Extension points added later
+
+* `registerStatusItem(id, Component)` (`src/ui/statusItems.ts`) — small components at the right end of the status bar.
+* `Tool.getCursor(ctx)` — dynamic cursors that survive Space/hand pans.
+* Synthetic pointer events (`PointerEvent` dispatched on `[data-testid="viewport"]`) drive tools exactly like real input; the viewport tolerates unknown pointer ids.

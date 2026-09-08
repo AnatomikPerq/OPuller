@@ -27,7 +27,7 @@ export async function openSample(id: string, ask = true): Promise<boolean> {
   if (ask && !(await confirmDiscard('open a sample'))) return false;
   try {
     const doc = def.build();
-    loadDocument(doc, { fileName: null, dirty: false });
+    loadDocument(doc, { fileName: null, dirty: false, remember: false });
     getState().setSelection([]);
     fitArtboard();
     return true;

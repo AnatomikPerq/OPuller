@@ -151,11 +151,16 @@ useStore.subscribe(
   },
 );
 
-// mark sources of freshly created blends as seen
+// mark the sources of freshly created blends as seen (existing blends keep tracking changes)
+const known = new Set<ID>();
 useStore.subscribe(
   (s) => s.doc,
   (doc) => {
-    for (const n of Object.values(doc.nodes)) if (isBlendGroup(n)) markSeen(doc, n.id);
+    for (const n of Object.values(doc.nodes)) {
+      if (!isBlendGroup(n) || known.has(n.id)) continue;
+      known.add(n.id);
+      markSeen(doc, n.id);
+    }
   },
 );
 
