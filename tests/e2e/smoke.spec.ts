@@ -66,7 +66,7 @@ test.describe('core editor', () => {
     expect((await getState(page)).activeTool).toBe('ellipse');
     await press(page, 'v');
     expect((await getState(page)).activeTool).toBe('select');
-    await page.getByRole('button', { name: 'View' }).dispatchEvent('pointerdown');
+    await page.getByRole('button', { name: 'View', exact: true }).dispatchEvent('pointerdown');
     await expect(page.locator('.menu')).toBeVisible();
     await page.locator('.menu-item', { hasText: 'Show Grid' }).click();
     expect((await getState(page)).view.grid).toBe(true);

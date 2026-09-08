@@ -337,7 +337,7 @@ function DefineGridDialog({ close }: { close: () => void }) {
     <DialogFrame
       title="Define Perspective Grid"
       onClose={cancel}
-      width={440}
+      width={600}
       footer={
         <>
           <Button onClick={() => set(defaultGrid(activeArtboardRect(), ref.current.type))}>Reset</Button>
@@ -355,17 +355,17 @@ function DefineGridDialog({ close }: { close: () => void }) {
       </Row>
       <div className="section-title">Vanishing points</div>
       <Row gap={8}>
-        {g.type !== 1 && <NumberField label="Left X" value={Math.round(g.vpLeft)} onChange={(v) => set({ vpLeft: v })} width={110} data-testid="perspective-vp-left" />}
-        <NumberField label={g.type === 1 ? 'VP X' : 'Right X'} value={Math.round(g.vpRight)} onChange={(v) => set(g.type === 1 ? { vpLeft: v, vpRight: v } : { vpRight: v })} width={110} data-testid="perspective-vp-right" />
-        <NumberField label="Horizon Y" value={Math.round(g.horizon)} onChange={(v) => set({ horizon: v })} width={110} data-testid="perspective-horizon" />
-        {g.type === 3 && <NumberField label="Vertical Y" value={Math.round(g.vpVertical ?? 0)} onChange={(v) => set({ vpVertical: v })} width={110} data-testid="perspective-vp-vertical" />}
+        {g.type !== 1 && <NumberField label="Left X" value={Math.round(g.vpLeft)} onChange={(v) => set({ vpLeft: v })} width={124} data-testid="perspective-vp-left" />}
+        <NumberField label={g.type === 1 ? 'VP X' : 'Right X'} value={Math.round(g.vpRight)} onChange={(v) => set(g.type === 1 ? { vpLeft: v, vpRight: v } : { vpRight: v })} width={124} data-testid="perspective-vp-right" />
+        <NumberField label="Horizon Y" value={Math.round(g.horizon)} onChange={(v) => set({ horizon: v })} width={124} data-testid="perspective-horizon" />
+        {g.type === 3 && <NumberField label="Vertical Y" value={Math.round(g.vpVertical ?? 0)} onChange={(v) => set({ vpVertical: v })} width={124} data-testid="perspective-vp-vertical" />}
       </Row>
       <div className="section-title">Grid</div>
       <Row gap={8}>
-        <NumberField label="Corner X" value={Math.round(g.corner)} onChange={(v) => set({ corner: v })} width={110} data-testid="perspective-corner" />
-        <NumberField label="Ground Y" value={Math.round(g.ground)} onChange={(v) => set({ ground: v })} width={110} data-testid="perspective-ground" />
-        <NumberField label="Extent" value={Math.round(g.extent)} min={10} onChange={(v) => set({ extent: Math.max(10, v) })} width={100} data-testid="perspective-extent" />
-        <NumberField label="Height" value={Math.round(g.height)} min={10} onChange={(v) => set({ height: Math.max(10, v) })} width={100} data-testid="perspective-height" />
+        <NumberField label="Corner X" value={Math.round(g.corner)} onChange={(v) => set({ corner: v })} width={124} data-testid="perspective-corner" />
+        <NumberField label="Ground Y" value={Math.round(g.ground)} onChange={(v) => set({ ground: v })} width={124} data-testid="perspective-ground" />
+        <NumberField label="Extent" value={Math.round(g.extent)} min={10} onChange={(v) => set({ extent: Math.max(10, v) })} width={124} data-testid="perspective-extent" />
+        <NumberField label="Height" value={Math.round(g.height)} min={10} onChange={(v) => set({ height: Math.max(10, v) })} width={124} data-testid="perspective-height" />
       </Row>
       <Row gap={8}>
         <NumberField label="Cell size" value={Math.round(g.cell)} min={1} onChange={(v) => set({ cell: Math.max(1, v) })} width={100} data-testid="perspective-cell" />
