@@ -48,6 +48,10 @@ export interface GradientStop {
   color: HexColor;
   /** 0..1 */
   opacity: number;
+  /** linked global/spot swatch (the colour follows the swatch) */
+  swatchId?: ID;
+  /** tint of the linked swatch, 0..100 (100 = full colour) */
+  tint?: number;
 }
 
 export type SpreadMethod = 'pad' | 'reflect' | 'repeat';
@@ -61,6 +65,10 @@ export interface SolidPaint {
   color: HexColor;
   /** 0..1 */
   opacity: number;
+  /** linked global/spot swatch: the colour follows the swatch (see color/swatches.ts) */
+  swatchId?: ID;
+  /** tint of the linked swatch, 0..100 (100 = full colour, mixed with white below) */
+  tint?: number;
 }
 
 /**
@@ -400,10 +408,34 @@ export interface Guide {
   locked?: boolean;
 }
 
+/** process = plain colour; global = objects follow swatch edits; spot = named ink (also global). */
+export type SwatchKind = 'process' | 'global' | 'spot';
+
+/** Ink percentages 0..100. */
+export interface CMYK {
+  c: number;
+  m: number;
+  y: number;
+  k: number;
+}
+
 export interface Swatch {
   id: ID;
   name: string;
   paint: Paint;
+  kind?: SwatchKind;
+  /** authored CMYK values (kept exact instead of round-tripping through RGB) */
+  cmyk?: CMYK;
+}
+
+export type ColorMode = 'rgb' | 'cmyk';
+
+/** Bleed around every artboard in px. */
+export interface Bleed {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 }
 
 export interface PatternDef {
@@ -436,6 +468,10 @@ export interface Document {
   swatches: Swatch[];
   patterns: PatternDef[];
   grid: GridSettings;
+  /** document colour mode: how colours are edited/displayed (values are always stored as sRGB hex) */
+  colorMode: ColorMode;
+  /** print bleed around artboards */
+  bleed: Bleed;
   meta: {
     created: string;
     modified: string;

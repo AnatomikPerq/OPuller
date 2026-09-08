@@ -181,7 +181,11 @@ export interface NewDocumentOptions {
   artboards?: number;
   background?: string;
   transparent?: boolean;
+  colorMode?: Document['colorMode'];
+  bleed?: Document['bleed'];
 }
+
+export const NO_BLEED: Document['bleed'] = { top: 0, right: 0, bottom: 0, left: 0 };
 
 export function createDocument(o: NewDocumentOptions = {}): Document {
   const width = o.width ?? 1920;
@@ -220,6 +224,8 @@ export function createDocument(o: NewDocumentOptions = {}): Document {
     swatches: defaultSwatches(),
     patterns: [],
     grid: defaultGrid(),
+    colorMode: o.colorMode ?? 'rgb',
+    bleed: o.bleed ? { ...o.bleed } : { ...NO_BLEED },
     meta: { created: now, modified: now, generator: 'OPuller', version: 1 },
   };
 }

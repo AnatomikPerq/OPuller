@@ -673,7 +673,7 @@ export const mcpApi: Record<string, (p: Params) => any> = {
   exportSvg(p) {
     const s = getState();
     const scope = p.scope ?? (p.ids?.length ? 'selection' : 'artboard');
-    const res = exportSvg(s.doc, { scope, ids: p.ids ?? (scope === 'selection' ? s.selection : undefined), artboardId: p.artboardId ?? s.activeArtboardId, pretty: p.pretty ?? true, background: p.background, margin: p.margin, precision: p.precision });
+    const res = exportSvg(s.doc, { scope, ids: p.ids ?? (scope === 'selection' ? s.selection : undefined), artboardId: p.artboardId ?? s.activeArtboardId, pretty: p.pretty ?? true, background: p.background, margin: p.margin, precision: p.precision, bleed: p.bleed ? true : undefined, marks: p.marks ? { trimMarks: true, registrationMarks: true, colorBars: true, pageInfo: true, ...(typeof p.marks === 'object' ? p.marks : {}) } : undefined });
     return { svg: res.svg, x: res.x, y: res.y, width: res.width, height: res.height, name: res.name };
   },
   async renderPng(p) {
@@ -690,6 +690,8 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       backgroundColor: p.background === undefined ? undefined : p.background,
       margin: p.margin,
       maxSize: 4096,
+      bleed: p.bleed ? true : undefined,
+      marks: p.marks ? { trimMarks: true, registrationMarks: true, colorBars: true, pageInfo: true, ...(typeof p.marks === 'object' ? p.marks : {}) } : undefined,
     });
     return { dataUrl: r.dataUrl, width: r.width, height: r.height };
   },

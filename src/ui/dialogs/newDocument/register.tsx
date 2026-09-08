@@ -8,7 +8,8 @@ import { DialogFrame } from '@/ui/DialogHost';
 import { Button, Checkbox, NumberField, Row, Segmented, Select, TextField, PopoverButton } from '@/ui/widgets';
 import { ColorPicker } from '@/ui/ColorPicker';
 import { getState } from '@/store/store';
-import type { Units } from '@/model/types';
+import type { Units, ColorMode, Bleed } from '@/model/types';
+import { BleedFields } from '@/print/BleedFields';
 import { unitToPx, pxToUnit, UNIT_LABELS } from '@/util/units';
 import { newDocument } from '@/io/fileOps';
 
@@ -34,7 +35,7 @@ const PRESETS: Preset[] = [
 
 const UNIT_OPTIONS = (Object.keys(UNIT_LABELS) as Units[]).map((u) => ({ value: u, label: UNIT_LABELS[u] }));
 
-let lastState: { presetId: string; width: number; height: number; units: Units; artboards: number; background: string; transparent: boolean } | null = null;
+let lastState: { presetId: string; width: number; height: number; units: Units; artboards: number; background: string; transparent: boolean; colorMode?: ColorMode; bleed?: Bleed } | null = null;
 
 function NewDocumentDialog({ close }: { props: Record<string, unknown>; close: () => void }) {
   const prefsUnits = getState().prefs.units;
@@ -48,6 +49,8 @@ function NewDocumentDialog({ close }: { props: Record<string, unknown>; close: (
   const [artboards, setArtboards] = useState(initial.artboards);
   const [background, setBackground] = useState(initial.background);
   const [transparent, setTransparent] = useState(initial.transparent);
+  const [colorMode, setColorMode] = useState<ColorMode>(initial.colorMode ?? 'rgb');
+  const [bleed, setBleed] = useState<Bleed>(initial.bleed ?? { top: 0, right: 0, bottom: 0, left: 0 });
 
   const orientation = width >= height ? 'landscape' : 'portrait';
 
@@ -56,6 +59,15 @@ function NewDocumentDialog({ close }: { props: Record<string, unknown>; close: (
     setUnits(p.units);
     setWidth(unitToPx(p.width, p.units));
     setHeight(unitToPx(p.height, p.units));
+    // print presets default to CMYK with a 3 mm bleed
+    if (p.units === 'mm' || p.units === 'in') {
+      setColorMode('cmyk');
+      const b = unitToPx(3, 'mm');
+      setBleed({ top: b, right: b, bottom: b, left: b });
+    } else {
+      setColorMode('rgb');
+      setBleed({ top: 0, right: 0, bottom: 0, left: 0 });
+    }
   };
 
   const setOrientation = (o: 'portrait' | 'landscape') => {
@@ -67,8 +79,8 @@ function NewDocumentDialog({ close }: { props: Record<string, unknown>; close: (
   const create = () => {
     const w = Math.max(1, width);
     const h = Math.max(1, height);
-    lastState = { presetId, width: w, height: h, units, artboards, background, transparent };
-    newDocument({ name: name.trim() || 'Untitled', width: w, height: h, units, artboards: Math.max(1, Math.min(100, Math.round(artboards))), background, transparent });
+    lastState = { presetId, width: w, height: h, units, artboards, background, transparent, colorMode, bleed };
+    newDocument({ name: name.trim() || 'Untitled', width: w, height: h, units, artboards: Math.max(1, Math.min(100, Math.round(artboards))), background, transparent, colorMode, bleed });
     getState().setPrefs({ units });
     close();
     getState().setStatus(`New document ${Math.round(w)} × ${Math.round(h)} px`);
@@ -156,6 +168,24 @@ function NewDocumentDialog({ close }: { props: Record<string, unknown>; close: (
           />
           <span className="io-hint">{sizeLabel}</span>
         </Row>
+      </div>
+      <div className="io-form-row">
+        <span className="io-form-label">Color mode</span>
+        <Row gap={8}>
+          <Segmented
+            value={colorMode}
+            onChange={setColorMode}
+            options={[
+              { value: 'rgb', label: 'RGB' },
+              { value: 'cmyk', label: 'CMYK' },
+            ]}
+          />
+          <span className="io-hint">{colorMode === 'cmyk' ? 'Print: colours edited as inks' : 'Screen'}</span>
+        </Row>
+      </div>
+      <div className="io-form-row">
+        <span className="io-form-label">Bleed</span>
+        <BleedFields value={bleed} onChange={setBleed} units={units} testIdPrefix="new-doc-bleed" />
       </div>
       <div className="io-form-row">
         <span className="io-form-label">Artboards</span>

@@ -8,8 +8,10 @@ import { DialogFrame } from '@/ui/DialogHost';
 import { Button, Checkbox, NumberField, Row, Section, Select, TextField, PopoverButton, Segmented } from '@/ui/widgets';
 import { ColorPicker } from '@/ui/ColorPicker';
 import { getState, useStore, DEFAULT_PREFS } from '@/store/store';
-import type { Units } from '@/model/types';
+import type { Units, ColorMode, Bleed } from '@/model/types';
 import { UNIT_LABELS } from '@/util/units';
+import { BleedFields } from '@/print/BleedFields';
+import { setDocumentColorMode } from '@/print/register';
 
 const UNIT_OPTIONS = (Object.keys(UNIT_LABELS) as Units[]).map((u) => ({ value: u, label: UNIT_LABELS[u] }));
 
@@ -31,6 +33,8 @@ function DocumentSetupDialog({ close }: { props: Record<string, unknown>; close:
   const [artboards, setArtboards] = useState(() => doc.artboards.map((a) => ({ ...a })));
   const [grid, setGrid] = useState({ ...doc.grid });
   const [canvasColor, setCanvasColor] = useState(prefs.canvasColor);
+  const [colorMode, setColorMode] = useState<ColorMode>(doc.colorMode);
+  const [bleed, setBleed] = useState<Bleed>({ ...doc.bleed });
 
   const ab = artboards.find((a) => a.id === artboardId) ?? artboards[0];
   const patchArtboard = (patch: Partial<typeof ab>) => setArtboards((list) => list.map((a) => (a.id === ab?.id ? { ...a, ...patch } : a)));
@@ -52,7 +56,9 @@ function DocumentSetupDialog({ close }: { props: Record<string, unknown>; close:
         target.transparent = a.transparent;
       }
       d.grid = { size: Math.max(1, grid.size), subdivisions: Math.max(1, Math.round(grid.subdivisions)), color: grid.color, style: grid.style };
+      d.bleed = { top: Math.max(0, bleed.top), right: Math.max(0, bleed.right), bottom: Math.max(0, bleed.bottom), left: Math.max(0, bleed.left) };
     }, 'Document Setup');
+    if (colorMode !== doc.colorMode) setDocumentColorMode(colorMode);
     s.setPrefs({ units, canvasColor });
     if (ab) s.setActiveArtboard(ab.id);
     close();
@@ -80,6 +86,21 @@ function DocumentSetupDialog({ close }: { props: Record<string, unknown>; close:
         <div className="io-form-row">
           <span className="io-form-label">Units</span>
           <Select value={units} options={UNIT_OPTIONS} onChange={setUnits} width={90} />
+        </div>
+        <div className="io-form-row">
+          <span className="io-form-label">Color mode</span>
+          <Segmented
+            value={colorMode}
+            onChange={setColorMode}
+            options={[
+              { value: 'rgb', label: 'RGB' },
+              { value: 'cmyk', label: 'CMYK' },
+            ]}
+          />
+        </div>
+        <div className="io-form-row">
+          <span className="io-form-label">Bleed</span>
+          <BleedFields value={bleed} onChange={setBleed} units={units} testIdPrefix="doc-setup-bleed" />
         </div>
       </Section>
       {ab && (

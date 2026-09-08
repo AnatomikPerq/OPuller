@@ -2,13 +2,66 @@
  * Built-in swatch libraries (named hex colours) that can be appended to the
  * document swatches from the Swatches panel.
  */
+import type { SwatchKind } from '@/model/types';
+
 export interface SwatchLibrary {
   id: string;
   name: string;
   colors: Array<[string, string]>;
+  /** kind of the swatches created from the library (default process) */
+  kind?: SwatchKind;
+  /** store CMYK values with the swatches (print libraries) */
+  cmyk?: boolean;
+}
+
+/** Hex of a CMYK colour (naive device conversion). */
+function ink(c: number, m: number, y: number, k: number): string {
+  const f = (v: number) => Math.round(255 * (1 - v / 100) * (1 - k / 100));
+  const h = (v: number) => v.toString(16).padStart(2, '0');
+  return `#${h(f(c))}${h(f(m))}${h(f(y))}`;
 }
 
 export const SWATCH_LIBRARIES: SwatchLibrary[] = [
+  {
+    id: 'print',
+    name: 'Print (CMYK)',
+    cmyk: true,
+    colors: [
+      ['C=100 M=0 Y=0 K=0', ink(100, 0, 0, 0)],
+      ['C=0 M=100 Y=0 K=0', ink(0, 100, 0, 0)],
+      ['C=0 M=0 Y=100 K=0', ink(0, 0, 100, 0)],
+      ['C=0 M=0 Y=0 K=100', ink(0, 0, 0, 100)],
+      ['Rich Black', ink(60, 40, 40, 100)],
+      ['C=100 M=90 Y=10 K=0', ink(100, 90, 10, 0)],
+      ['C=85 M=10 Y=100 K=10', ink(85, 10, 100, 10)],
+      ['C=0 M=90 Y=85 K=0', ink(0, 90, 85, 0)],
+      ['C=0 M=50 Y=100 K=0', ink(0, 50, 100, 0)],
+      ['C=75 M=100 Y=0 K=0', ink(75, 100, 0, 0)],
+      ['C=0 M=0 Y=0 K=80', ink(0, 0, 0, 80)],
+      ['C=0 M=0 Y=0 K=60', ink(0, 0, 0, 60)],
+      ['C=0 M=0 Y=0 K=40', ink(0, 0, 0, 40)],
+      ['C=0 M=0 Y=0 K=20', ink(0, 0, 0, 20)],
+      ['C=0 M=0 Y=0 K=10', ink(0, 0, 0, 10)],
+    ],
+  },
+  {
+    id: 'spot',
+    name: 'Spot inks (sample)',
+    kind: 'spot',
+    cmyk: true,
+    colors: [
+      ['Spot Warm Red', ink(0, 85, 90, 0)],
+      ['Spot Process Blue', ink(100, 25, 0, 5)],
+      ['Spot Reflex Blue', ink(100, 90, 0, 5)],
+      ['Spot Green', ink(90, 0, 75, 0)],
+      ['Spot Yellow', ink(0, 5, 100, 0)],
+      ['Spot Orange', ink(0, 65, 100, 0)],
+      ['Spot Purple', ink(55, 100, 0, 0)],
+      ['Spot Rhodamine', ink(5, 90, 0, 0)],
+      ['Spot Cool Gray', ink(0, 0, 0, 55)],
+      ['Spot Black', ink(0, 0, 0, 100)],
+    ],
+  },
   {
     id: 'basic',
     name: 'Basic',

@@ -1,0 +1,15 @@
+/* Print module: bleed guides & export options */
+.bleed-guides rect {
+  vector-effect: non-scaling-stroke;
+}
+.io-marks-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.io-marks-options .io-marks-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-left: 18px;
+}

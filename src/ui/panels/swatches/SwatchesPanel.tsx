@@ -9,14 +9,16 @@ import { LayoutGrid, List, Plus, Trash2, BookOpen, Upload, Download, Blend, Chec
 import { useStore, getState, type ContextMenuItem } from '@/store/store';
 import type { ID, Paint, Swatch, SolidPaint } from '@/model/types';
 import { useCurrentAppearance } from '@/commands/appearance';
-import { IconButton, Select, Popover, PopoverButton, Checkbox, TextField, Button } from '@/ui/widgets';
+import { IconButton, Select, Popover, PopoverButton, Checkbox, TextField, Button, Segmented } from '@/ui/widgets';
 import { ColorPicker } from '@/ui/ColorPicker';
 import { paintEquals, paintTypeLabel, paintLabel } from '@/color/paint';
 import { toGradient } from '@/color/gradient';
 import { SWATCH_LIBRARIES } from '@/color/libraries';
 import { exportSwatchesJson } from '@/color/swatches';
-import { applySwatchPaint, deleteSwatches, duplicateSwatch, reorderSwatch, addLibrary, importSwatchesFromJson, selectObjectsUsing, updateSwatchPaint, renameSwatch, addSwatch } from '@/color/actions';
-import { PaintPreview } from '../color/shared';
+import { applySwatchPaint, applySwatch, deleteSwatches, duplicateSwatch, reorderSwatch, addLibrary, importSwatchesFromJson, selectObjectsUsing, updateSwatchPaint, renameSwatch, addSwatch, setSwatchKind, setSwatchCmyk } from '@/color/actions';
+import { findSwatchByPaint } from '@/color/swatches';
+import { isGlobalSwatch, colorValuesLabel, hexToCmyk } from '@/color/globals';
+import { PaintPreview, CmykFields } from '../color/shared';
 import './swatches.css';
 
 type View = 'grid' | 'list';
@@ -75,13 +77,14 @@ export function SwatchesPanel() {
     if (selectedId && !swatches.some((s) => s.id === selectedId)) setSelectedId(null);
   }, [swatches, selectedId]);
 
-  const inUseId = swatches.find((s) => paintEquals(s.paint, activePaint))?.id ?? null;
+  const colorMode = useStore((s) => s.doc.colorMode);
+  const inUseId = findSwatchByPaint(swatches, activePaint)?.id ?? null;
   const selected = selectedId ? swatches.find((s) => s.id === selectedId) ?? null : null;
 
   // --- actions --------------------------------------------------------------
   const apply = (sw: Swatch, alt: boolean) => {
     const t = alt ? (target === 'fill' ? 'stroke' : 'fill') : target;
-    applySwatchPaint(sw.paint, t);
+    applySwatch(sw, t);
     setSelectedId(sw.id);
   };
 
@@ -92,16 +95,20 @@ export function SwatchesPanel() {
 
   const menuFor = (sw: Swatch, anchor: HTMLElement): ContextMenuItem[] => {
     const s = getState();
+    const solid = sw.paint.type === 'solid';
     return [
-      { label: 'Apply to Fill', onSelect: () => applySwatchPaint(sw.paint, 'fill') },
-      { label: 'Apply to Stroke', onSelect: () => applySwatchPaint(sw.paint, 'stroke') },
+      { label: 'Apply to Fill', onSelect: () => applySwatch(sw, 'fill') },
+      { label: 'Apply to Stroke', onSelect: () => applySwatch(sw, 'stroke') },
       { separator: true },
-      { label: 'Edit Swatch…', onSelect: () => openEditor(sw.id, anchor) },
+      { label: 'Swatch Options…', onSelect: () => openEditor(sw.id, anchor) },
       { label: 'Rename…', onSelect: () => s.openDialog('swatch.rename', { id: sw.id, name: sw.name }) },
       { label: 'Duplicate', onSelect: () => duplicateSwatch(sw.id) },
       { label: 'Delete', onSelect: () => deleteSwatches([sw.id]) },
       { separator: true },
-      { label: 'Select All Objects Using This Swatch', onSelect: () => selectObjectsUsing(sw.paint) },
+      { label: 'Global Color', checked: sw.kind === 'global', disabled: !solid, onSelect: () => setSwatchKind(sw.id, sw.kind === 'global' ? 'process' : 'global') },
+      { label: 'Spot Color', checked: sw.kind === 'spot', disabled: !solid, onSelect: () => setSwatchKind(sw.id, sw.kind === 'spot' ? 'process' : 'spot') },
+      { separator: true },
+      { label: 'Select All Objects Using This Swatch', onSelect: () => selectObjectsUsing(sw.paint, sw.id) },
     ];
   };
 
@@ -264,9 +271,10 @@ export function SwatchesPanel() {
       >
         <NoneCell view={prefs.view} selected={activePaint.type === 'none'} onClick={(alt) => applySwatchPaint({ type: 'none' }, alt ? (target === 'fill' ? 'stroke' : 'fill') : target)} />
         {swatches.map((sw, index) => {
-          const cls = `${sw.id === selectedId ? 'selected' : ''} ${sw.id === inUseId ? 'in-use' : ''} ${drag?.id === sw.id ? 'dragging' : ''} ${dropClass(index)} ${sw.paint.type === 'linear' || sw.paint.type === 'radial' ? 'gradient-cell' : ''}`;
+          const cls = `${sw.id === selectedId ? 'selected' : ''} ${sw.id === inUseId ? 'in-use' : ''} ${drag?.id === sw.id ? 'dragging' : ''} ${dropClass(index)} ${sw.paint.type === 'linear' || sw.paint.type === 'radial' ? 'gradient-cell' : ''} ${sw.kind === 'global' ? 'global' : ''} ${sw.kind === 'spot' ? 'spot' : ''}`;
+          const kindLabel = sw.kind === 'spot' ? ' (spot)' : sw.kind === 'global' ? ' (global)' : '';
           const common = {
-            title: `${sw.name} — ${paintLabel(sw.paint)}\nClick: apply to ${target}. Alt+click: apply to ${target === 'fill' ? 'stroke' : 'fill'}. Double-click: edit.`,
+            title: `${sw.name}${kindLabel} — ${sw.paint.type === 'solid' ? colorValuesLabel(sw, colorMode) : paintLabel(sw.paint)}\nClick: apply to ${target}. Alt+click: apply to ${target === 'fill' ? 'stroke' : 'fill'}. Double-click: options.`,
             'data-swatch-index': index,
             'data-swatch-id': sw.id,
             'data-testid': `swatch-${sw.id}`,
@@ -291,7 +299,7 @@ export function SwatchesPanel() {
                 <PaintPreview paint={sw.paint} />
               </span>
               <span className="sw-row-name">{sw.name}</span>
-              <span className="sw-row-type">{paintTypeLabel(sw.paint)}</span>
+              <span className="sw-row-type">{sw.kind === 'spot' ? 'Spot' : sw.kind === 'global' ? 'Global' : paintTypeLabel(sw.paint)}</span>
             </button>
           );
         })}
@@ -299,7 +307,7 @@ export function SwatchesPanel() {
 
       <div className="sw-footer">
         <span className="sw-footer-name" data-testid="swatches-status">
-          {selected ? `${selected.name} — ${paintLabel(selected.paint)}` : `${swatches.length} swatches`}
+          {selected ? `${selected.name} — ${selected.paint.type === 'solid' ? colorValuesLabel(selected, colorMode) : paintLabel(selected.paint)}` : `${swatches.length} swatches`}
         </span>
         <span>{target === 'fill' ? 'Fill' : 'Stroke'}</span>
       </div>
@@ -332,8 +340,10 @@ function NoneCell({ view, selected, onClick }: { view: View; selected: boolean; 
 /** Popover to edit a swatch's name and paint (optionally updating objects that use it). */
 function SwatchEditor({ id, anchor, onClose }: { id: ID; anchor: HTMLElement; onClose: () => void }) {
   const sw = useStore((s) => s.doc.swatches.find((x) => x.id === id));
+  const colorMode = useStore((s) => s.doc.colorMode);
   const [name, setName] = useState(sw?.name ?? '');
   const [updateObjects, setUpdateObjects] = useState(true);
+  const [valueMode, setValueMode] = useState<'rgb' | 'cmyk'>(colorMode === 'cmyk' || sw?.kind === 'spot' ? 'cmyk' : 'rgb');
   const initial = useRef<{ paint: Paint; name: string } | null>(sw ? { paint: JSON.parse(JSON.stringify(sw.paint)), name: sw.name } : null);
   const close = useCallback(() => {
     if (sw && name.trim() && name.trim() !== sw.name) renameSwatch(id, name);
@@ -346,15 +356,37 @@ function SwatchEditor({ id, anchor, onClose }: { id: ID; anchor: HTMLElement; on
       <div className="sw-editor" data-testid="swatch-editor">
         <div className="section-title">Swatch options</div>
         <TextField label="Name" value={name} onChange={setName} onCommit={setName} />
-        <ColorPicker
-          paint={solidish}
-          allowNone={false}
-          allowGradient
-          showSwatches={false}
-          onChange={(p) => updateSwatchPaint(id, p, updateObjects, false)}
-          onCommit={() => getState().commit('Edit Swatch')}
-        />
-        <Checkbox checked={updateObjects} onChange={setUpdateObjects} label="Update objects using this swatch" title="Objects painted with exactly this swatch follow the edit" />
+        {sw.paint.type === 'solid' && (
+          <div className="sw-kind-row" data-testid="swatch-kind-row">
+            <Select
+              label="Type"
+              value={sw.kind === 'spot' ? 'spot' : 'process'}
+              options={[
+                { value: 'process', label: 'Process Color' },
+                { value: 'spot', label: 'Spot Color' },
+              ]}
+              onChange={(v) => setSwatchKind(id, v === 'spot' ? 'spot' : sw.kind === 'global' ? 'global' : 'process')}
+              width={120}
+              id="swatch-edit-kind"
+            />
+            <Checkbox checked={isGlobalSwatch(sw)} disabled={sw.kind === 'spot'} onChange={(v) => setSwatchKind(id, v ? 'global' : 'process')} label="Global" title="Objects painted with a global colour follow its edits" />
+            <Segmented value={valueMode} onChange={setValueMode} options={[{ value: 'rgb', label: 'RGB' }, { value: 'cmyk', label: 'CMYK' }]} />
+          </div>
+        )}
+        {sw.paint.type === 'solid' && valueMode === 'cmyk' ? (
+          <CmykFields value={sw.cmyk ?? hexToCmyk(sw.paint.color)} onChange={(v) => setSwatchCmyk(id, v, false)} onCommit={() => getState().commit('Edit Swatch')} preview={sw.paint.color} />
+        ) : (
+          <ColorPicker
+            paint={solidish}
+            allowNone={false}
+            allowGradient
+            showSwatches={false}
+            onChange={(p) => updateSwatchPaint(id, p, updateObjects, false)}
+            onCommit={() => getState().commit('Edit Swatch')}
+          />
+        )}
+        {!isGlobalSwatch(sw) && <Checkbox checked={updateObjects} onChange={setUpdateObjects} label="Update objects using this swatch" title="Objects painted with exactly this swatch follow the edit" />}
+        {isGlobalSwatch(sw) && <div className="dim small">{sw.kind === 'spot' ? 'Spot colour: objects painted with it (and their tints) follow every edit.' : 'Global colour: objects painted with it (and their tints) follow every edit.'}</div>}
         <div className="sw-editor-footer">
           <Button
             small
@@ -376,3 +408,6 @@ function SwatchEditor({ id, anchor, onClose }: { id: ID; anchor: HTMLElement; on
     </Popover>
   );
 }
+
+void paintEquals;
+void applySwatchPaint;

@@ -160,13 +160,24 @@ function validPaint(v: unknown, d: Paint): Paint {
   switch (p.type) {
     case 'none':
       return { type: 'none' };
-    case 'solid':
-      return { type: 'solid', color: validHex(p.color, '#000000'), opacity: clamp01(num(p.opacity, 1)) };
+    case 'solid': {
+      const sp: Paint = { type: 'solid', color: validHex(p.color, '#000000'), opacity: clamp01(num(p.opacity, 1)) };
+      if (typeof p.swatchId === 'string') {
+        sp.swatchId = p.swatchId;
+        sp.tint = Math.max(0, Math.min(100, num(p.tint, 100)));
+      }
+      return sp;
+    }
     case 'linear':
     case 'radial': {
       const stops = (Array.isArray(p.stops) ? p.stops : []).map((s) => {
         const so = obj(s);
-        return { offset: clamp01(num(so.offset, 0)), color: validHex(so.color, '#000000'), opacity: clamp01(num(so.opacity, 1)) };
+        const stop: import('@/model/types').GradientStop = { offset: clamp01(num(so.offset, 0)), color: validHex(so.color, '#000000'), opacity: clamp01(num(so.opacity, 1)) };
+        if (typeof so.swatchId === 'string') {
+          stop.swatchId = so.swatchId;
+          stop.tint = Math.max(0, Math.min(100, num(so.tint, 100)));
+        }
+        return stop;
       });
       if (stops.length < 2) {
         if (!stops.length) stops.push({ offset: 0, color: '#000000', opacity: 1 });
@@ -449,7 +460,11 @@ export function validateDocument(raw: unknown): Document {
     ? d.swatches
         .map((s) => {
           const so = obj(s);
-          return { id: str(so.id, newId()), name: str(so.name, 'Swatch'), paint: validPaint(so.paint, { type: 'solid', color: '#000000', opacity: 1 }) };
+          const sw: import('@/model/types').Swatch = { id: str(so.id, newId()), name: str(so.name, 'Swatch'), paint: validPaint(so.paint, { type: 'solid', color: '#000000', opacity: 1 }) };
+          if (so.kind === 'global' || so.kind === 'spot') sw.kind = so.kind;
+          const cm = obj(so.cmyk);
+          if (typeof cm.c === 'number' && typeof cm.m === 'number' && typeof cm.y === 'number' && typeof cm.k === 'number') sw.cmyk = { c: num(cm.c, 0), m: num(cm.m, 0), y: num(cm.y, 0), k: num(cm.k, 0) };
+          return sw;
         })
         .filter((s) => s.paint.type !== 'none')
     : defaultSwatches();
@@ -470,6 +485,8 @@ export function validateDocument(raw: unknown): Document {
         .filter((g) => Number.isFinite(g.position))
     : [];
   const dg = defaultGrid();
+  const bleedRaw = obj(d.bleed);
+  const bleed = { top: Math.max(0, num(bleedRaw.top, 0)), right: Math.max(0, num(bleedRaw.right, 0)), bottom: Math.max(0, num(bleedRaw.bottom, 0)), left: Math.max(0, num(bleedRaw.left, 0)) };
   return {
     id: str(d.id, newId()),
     name: str(d.name, 'Untitled'),
@@ -481,6 +498,8 @@ export function validateDocument(raw: unknown): Document {
     swatches,
     patterns,
     grid: { size: Math.max(1, num(grid.size, dg.size)), subdivisions: Math.max(1, Math.round(num(grid.subdivisions, dg.subdivisions))), color: validHex(grid.color, dg.color), style: grid.style === 'dots' ? 'dots' : 'lines' },
+    colorMode: d.colorMode === 'cmyk' ? 'cmyk' : 'rgb',
+    bleed,
     meta: {
       created: str(meta.created, new Date().toISOString()),
       modified: str(meta.modified, new Date().toISOString()),

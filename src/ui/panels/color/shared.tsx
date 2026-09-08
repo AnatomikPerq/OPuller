@@ -3,9 +3,10 @@
  * fill/stroke target swatches and a stop colour popover.
  */
 import React from 'react';
-import type { Paint, SolidPaint, Document } from '@/model/types';
+import type { Paint, SolidPaint, Document, CMYK } from '@/model/types';
 import { paintCss, ColorPicker } from '@/ui/ColorPicker';
-import { Popover } from '@/ui/widgets';
+import { Popover, NumberField } from '@/ui/widgets';
+import { cmykToHex } from '@/color/globals';
 import { useStore } from '@/store/store';
 import './color.css';
 
@@ -114,5 +115,23 @@ export function SolidColorPopover({
       />
       {children}
     </Popover>
+  );
+}
+
+/** C/M/Y/K sliders + fields (0..100 %) with a colour preview. */
+export function CmykFields({ value, onChange, onCommit, preview, testIdPrefix = 'cmyk' }: { value: CMYK; onChange: (v: CMYK) => void; onCommit?: () => void; preview?: string; testIdPrefix?: string }) {
+  const keys: Array<keyof CMYK> = ['c', 'm', 'y', 'k'];
+  const set = (k: keyof CMYK, v: number) => onChange({ ...value, [k]: Math.max(0, Math.min(100, Math.round(v))) });
+  return (
+    <div className="cmyk-fields" data-testid={`${testIdPrefix}-fields`}>
+      <div className="cmyk-preview" style={{ background: preview ?? cmykToHex(value) }} />
+      {keys.map((k) => (
+        <React.Fragment key={k}>
+          <span className="field-label">{k.toUpperCase()}</span>
+          <input type="range" min={0} max={100} step={1} value={Math.round(value[k])} onChange={(e) => set(k, Number(e.target.value))} onPointerUp={() => onCommit?.()} onKeyUp={() => onCommit?.()} onKeyDown={(e) => e.stopPropagation()} data-testid={`${testIdPrefix}-slider-${k}`} />
+          <NumberField value={Math.round(value[k])} min={0} max={100} decimals={0} unit="%" width={64} scrub={false} onChange={(v) => set(k, v)} onCommit={() => onCommit?.()} data-testid={`${testIdPrefix}-${k}`} />
+        </React.Fragment>
+      ))}
+    </div>
   );
 }

@@ -87,6 +87,8 @@ export function defaultSwatches(): Swatch[] {
     name,
     paint: solid(color),
   }));
+  // registration colour: prints on every plate (used for marks); a spot swatch like Illustrator's
+  list.splice(2, 0, { id: 'sw-registration', name: '[Registration]', paint: solid('#000000'), kind: 'spot', cmyk: { c: 100, m: 100, y: 100, k: 100 } });
   list.push({
     id: 'sw-grad-1',
     name: 'Burgundy fade',

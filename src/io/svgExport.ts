@@ -5,7 +5,8 @@
  */
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { Document, ID, Rect, Node, TextNode } from '@/model/types';
+import type { Document, ID, Rect, Node, TextNode, Bleed } from '@/model/types';
+import { printerMarksSvg, marksMargin, expandByBleed, anyMarks, bleedIsZero, pageInfoText, type PrinterMarks } from '@/print/marks';
 import { StaticDocument } from '@/canvas/Renderer';
 import { parentWorldMatrix, worldBounds, topmostOf, sortByPaintOrder, selectionBounds, ancestors } from '@/model/document';
 import { toSvgTransform, isIdentity } from '@/geometry/matrix';
@@ -40,6 +41,10 @@ export interface SvgExportOptions {
   css?: string;
   /** add an XML declaration */
   xmlDeclaration?: boolean;
+  /** include bleed around artboards: true = the document bleed, or explicit values */
+  bleed?: boolean | Bleed;
+  /** printer's marks around artboards (drawn outside the bleed box) */
+  marks?: PrinterMarks;
 }
 
 export interface SvgExportResult {
@@ -69,6 +74,31 @@ export interface ExportRegion {
   artboardId?: ID;
   /** background colour from the artboard, when applicable */
   background: string | null;
+  /** the artboard (trim box) when the region has bleed/marks around it */
+  trim?: Rect;
+  /** trim box + bleed */
+  bleedBox?: Rect;
+  bleed?: Bleed;
+  marks?: PrinterMarks;
+}
+
+/** Resolve the bleed option against the document. */
+export function resolveBleed(doc: Document, opt: SvgExportOptions['bleed']): Bleed | null {
+  if (!opt) return null;
+  const b = opt === true ? doc.bleed : opt;
+  return bleedIsZero(b) ? null : { ...b };
+}
+
+function artboardRegion(doc: Document, a: Document['artboards'][number], name: string, opts: SvgExportOptions): ExportRegion {
+  const trim = { x: a.x, y: a.y, width: a.width, height: a.height };
+  const bleed = resolveBleed(doc, opts.bleed);
+  const marks = opts.marks && anyMarks(opts.marks) ? { ...opts.marks, info: opts.marks.info ?? pageInfoText(doc.name, doc.artboards.length > 1 ? a.name : undefined) } : undefined;
+  if (!bleed && !marks) return { rect: trim, name, artboardId: a.id, background: a.transparent ? null : a.background };
+  const b: Bleed = bleed ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const bleedBox = expandByBleed(trim, b);
+  const margin = marks ? marksMargin(marks, b) : 0;
+  const rect = { x: bleedBox.x - margin, y: bleedBox.y - margin, width: bleedBox.width + margin * 2, height: bleedBox.height + margin * 2 };
+  return { rect, name, artboardId: a.id, background: a.transparent ? null : a.background, trim, bleedBox, bleed: b, marks };
 }
 
 export function safeFileName(name: string): string {
@@ -91,11 +121,11 @@ export function exportRegions(doc: Document, opts: SvgExportOptions): ExportRegi
   const abName = (a: Document['artboards'][number]) => (multi ? `${safeFileName(doc.name)}-${safeFileName(a.name)}` : safeFileName(doc.name));
   switch (scope) {
     case 'artboards':
-      return doc.artboards.map((a) => ({ rect: { x: a.x, y: a.y, width: a.width, height: a.height }, name: abName(a), artboardId: a.id, background: a.transparent ? null : a.background }));
+      return doc.artboards.map((a) => artboardRegion(doc, a, abName(a), opts));
     case 'artboard': {
       const a = doc.artboards.find((x) => x.id === opts.artboardId) ?? doc.artboards[0];
       if (!a) return [];
-      return [{ rect: { x: a.x, y: a.y, width: a.width, height: a.height }, name: abName(a), artboardId: a.id, background: a.transparent ? null : a.background }];
+      return [artboardRegion(doc, a, abName(a), opts)];
     }
     case 'selection': {
       const ids = sortByPaintOrder(doc, topmostOf(doc, (opts.ids ?? []).filter((id) => !!doc.nodes[id])));
@@ -153,8 +183,17 @@ export function renderRegion(doc: Document, region: ExportRegion, opts: SvgExpor
     : [React.createElement(StaticDocument, { key: 'doc', doc: d, prefix, exportMode: true })];
   const children: React.ReactNode[] = [];
   if (opts.css) children.push(React.createElement('style', { key: 'style', dangerouslySetInnerHTML: { __html: opts.css } }));
-  if (bgColor) children.push(React.createElement('rect', { key: 'bg', x: rect.x, y: rect.y, width: rect.width, height: rect.height, fill: bgColor }));
-  children.push(...roots);
+  const bgRect = region.bleedBox ?? rect;
+  if (bgColor) children.push(React.createElement('rect', { key: 'bg', x: bgRect.x, y: bgRect.y, width: bgRect.width, height: bgRect.height, fill: bgColor }));
+  if (region.bleedBox && region.marks && anyMarks(region.marks)) {
+    // artwork must not run into the marks area: clip to the bleed box
+    const clipId = `${prefix}bleed-clip`;
+    children.push(
+      React.createElement('defs', { key: 'bleeddefs' }, React.createElement('clipPath', { id: clipId }, React.createElement('rect', { x: region.bleedBox.x, y: region.bleedBox.y, width: region.bleedBox.width, height: region.bleedBox.height }))),
+      React.createElement('g', { key: 'art', clipPath: `url(#${clipId})` }, ...roots),
+      React.createElement('g', { key: 'marks', dangerouslySetInnerHTML: { __html: printerMarksSvg(region.trim!, region.bleed!, region.marks) } }),
+    );
+  } else children.push(...roots);
   const rootProps: Record<string, unknown> = {
     xmlns: SVG_NS,
     xmlnsXlink: XLINK_NS,

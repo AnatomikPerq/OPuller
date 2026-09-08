@@ -457,7 +457,7 @@ server.registerTool(
 
 server.registerTool(
   'opuller_export_svg',
-  { title: 'Export SVG', description: 'Export the artboard, the selection, given ids or the whole document as SVG text; optionally write it to a file.', inputSchema: { scope: z.enum(['artboard', 'artboards', 'selection', 'document']).optional(), ids: z.array(z.string()).optional(), artboardId: z.string().optional(), file: z.string().optional(), pretty: z.boolean().optional(), margin: z.number().optional() } },
+  { title: 'Export SVG', description: 'Export the artboard, the selection, given ids or the whole document as SVG text; optionally write it to a file. bleed/marks add the document bleed and printer\'s marks (artboard scopes).', inputSchema: { scope: z.enum(['artboard', 'artboards', 'selection', 'document']).optional(), ids: z.array(z.string()).optional(), artboardId: z.string().optional(), file: z.string().optional(), pretty: z.boolean().optional(), margin: z.number().optional(), bleed: z.boolean().optional(), marks: z.union([z.boolean(), z.object({ trimMarks: z.boolean().optional(), registrationMarks: z.boolean().optional(), colorBars: z.boolean().optional(), pageInfo: z.boolean().optional() })]).optional() } },
   async (p) => {
     const r = await call<{ svg: string }>('exportSvg', p);
     if (p.file) {
@@ -472,7 +472,7 @@ server.registerTool(
 
 server.registerTool(
   'opuller_render_png',
-  { title: 'Render PNG', description: 'Rasterise the artboard / selection / document and return it as an image (optionally also written to a file). Use it to look at the result of your edits.', inputSchema: { scope: z.enum(['artboard', 'selection', 'document']).optional(), ids: z.array(z.string()).optional(), artboardId: z.string().optional(), scale: z.number().optional().describe('pixels per unit (default 1; keep the image below ~1500px)'), width: z.number().optional(), background: z.string().nullable().optional(), margin: z.number().optional(), file: z.string().optional() } },
+  { title: 'Render PNG', description: 'Rasterise the artboard / selection / document and return it as an image (optionally also written to a file). Use it to look at the result of your edits. bleed/marks include the document bleed and printer\'s marks.', inputSchema: { scope: z.enum(['artboard', 'selection', 'document']).optional(), ids: z.array(z.string()).optional(), artboardId: z.string().optional(), scale: z.number().optional().describe('pixels per unit (default 1; keep the image below ~1500px)'), width: z.number().optional(), background: z.string().nullable().optional(), margin: z.number().optional(), file: z.string().optional(), bleed: z.boolean().optional(), marks: z.boolean().optional() } },
   async (p) => {
     const r = await call<{ dataUrl: string; width: number; height: number }>('renderPng', p);
     let note = `${r.width}×${r.height}px`;

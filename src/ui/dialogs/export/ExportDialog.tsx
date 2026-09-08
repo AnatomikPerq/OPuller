@@ -16,6 +16,7 @@ import { rasterizeRegion, canvasToBlob, canvasToDataUrl, pixelSize, dpiToScale, 
 import { exportPdf } from '@/io/pdf';
 import { fontFaceCss } from '@/io/fontEmbed';
 import { writeTextToClipboard } from '@/io/clipboard';
+import { bleedIsZero, type PrinterMarks } from '@/print/marks';
 
 export type ExportFormat = 'svg' | 'png' | 'jpeg' | 'webp' | 'pdf';
 type SizeMode = 'scale' | 'dpi' | 'width';
@@ -43,6 +44,14 @@ interface ExportSettings {
   embedFonts: boolean;
   margin: number;
   fileName: string;
+  /** include the document bleed around artboards */
+  bleed: boolean;
+  /** printer's marks */
+  marks: boolean;
+  trimMarks: boolean;
+  registrationMarks: boolean;
+  colorBars: boolean;
+  pageInfo: boolean;
 }
 
 const DEFAULTS: ExportSettings = {
@@ -63,7 +72,18 @@ const DEFAULTS: ExportSettings = {
   embedFonts: false,
   margin: 0,
   fileName: '',
+  bleed: false,
+  marks: false,
+  trimMarks: true,
+  registrationMarks: true,
+  colorBars: true,
+  pageInfo: true,
 };
+
+function marksFor(st: ExportSettings): PrinterMarks | undefined {
+  if (!st.marks) return undefined;
+  return { trimMarks: st.trimMarks, registrationMarks: st.registrationMarks, colorBars: st.colorBars, pageInfo: st.pageInfo };
+}
 
 /** Settings persist while the app is open (like Illustrator's export dialogs). */
 let lastSettings: ExportSettings = { ...DEFAULTS };
@@ -97,6 +117,8 @@ function svgOptions(st: ExportSettings, ids: ID[], artboardId: ID | null, region
     margin: st.scope === 'selection' || st.scope === 'document' ? st.margin : 0,
     backgroundColor: backgroundColor(st.background, st.customColor, region),
     xmlDeclaration: true,
+    bleed: st.bleed ? true : undefined,
+    marks: marksFor(st),
   };
 }
 
@@ -148,7 +170,13 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
 
   const ids = useMemo(() => selection, [selection]);
   const isRaster = st.format === 'png' || st.format === 'jpeg' || st.format === 'webp';
-  const regions = useMemo(() => exportRegions(doc, { scope: st.scope, ids, artboardId: activeArtboardId, margin: st.scope === 'selection' || st.scope === 'document' ? st.margin : 0 }), [doc, st.scope, ids, activeArtboardId, st.margin]);
+  const regions = useMemo(
+    () => exportRegions(doc, { scope: st.scope, ids, artboardId: activeArtboardId, margin: st.scope === 'selection' || st.scope === 'document' ? st.margin : 0, bleed: st.bleed ? true : undefined, marks: marksFor(st) }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [doc, st.scope, ids, activeArtboardId, st.margin, st.bleed, st.marks, st.trimMarks, st.registrationMarks, st.colorBars, st.pageInfo],
+  );
+  const artboardScope = st.scope === 'artboard' || st.scope === 'artboards';
+  const hasBleed = !bleedIsZero(doc.bleed);
   const region = regions[0] ?? null;
   const rasterOpts = useMemo(() => {
     if (st.sizeMode === 'scale') return { scale: st.scale };
@@ -172,7 +200,7 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
         const bg = backgroundColor(st.background, st.customColor, region);
         const fit = Math.min(240 / region.rect.width, 180 / region.rect.height, 2);
         const d = st.outlineText && (st.format === 'svg' || st.format === 'pdf') ? (await withTextOutlines(doc, st.scope === 'selection' ? ids : undefined)).doc : doc;
-        const r = await rasterizeRegion(d, region, { scale: fit, format: st.format === 'jpeg' ? 'jpeg' : 'png', backgroundColor: st.format === 'jpeg' && !bg ? '#ffffff' : bg, includeHidden: st.includeHidden, embedFonts: true });
+        const r = await rasterizeRegion(d, region, { scale: fit, format: st.format === 'jpeg' ? 'jpeg' : 'png', backgroundColor: st.format === 'jpeg' && !bg ? '#ffffff' : bg, includeHidden: st.includeHidden, embedFonts: true, bleed: st.bleed ? true : undefined, marks: marksFor(st) });
         if (seq !== previewSeq.current) return;
         setPreview({ url: canvasToDataUrl(r.canvas, 'png'), width: region.rect.width, height: region.rect.height, pixelW: px?.width ?? 0, pixelH: px?.height ?? 0, pages: regions.length });
       } catch (e: any) {
@@ -226,7 +254,7 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
             const out = renderRegion(d, rg, { ...svgOptions(st, ids, activeArtboardId, rg), css: css || undefined, prefix: i ? `a${i}-` : '' });
             blob = new Blob([out.svg], { type: 'image/svg+xml;charset=utf-8' });
           } else {
-            const r = await rasterizeRegion(d, rg, { ...rasterOpts, format: st.format as RasterFormat, quality: st.quality, backgroundColor: backgroundColor(st.background, st.customColor, rg), includeHidden: st.includeHidden });
+            const r = await rasterizeRegion(d, rg, { ...rasterOpts, format: st.format as RasterFormat, quality: st.quality, backgroundColor: backgroundColor(st.background, st.customColor, rg), includeHidden: st.includeHidden, bleed: st.bleed ? true : undefined, marks: marksFor(st) });
             blob = await canvasToBlob(r.canvas, st.format as RasterFormat, st.quality);
           }
           const name = fileNameFor(st, rg, regions, ext);
@@ -405,6 +433,23 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
             <div className="io-form-row">
               <span className="io-form-label" />
               <Checkbox checked={st.includeHidden} onChange={(v) => patch({ includeHidden: v })} label="Include hidden objects" />
+            </div>
+          )}
+          {artboardScope && (
+            <div className="io-form-row" style={{ alignItems: 'start' }}>
+              <span className="io-form-label">Print</span>
+              <div className="io-options io-marks-options">
+                <Checkbox checked={st.bleed} onChange={(v) => patch({ bleed: v })} label={hasBleed ? 'Use document bleed' : 'Use document bleed (none set — File > Document Setup)'} disabled={!hasBleed} title="Export the bleed area around the artboard" />
+                <Checkbox checked={st.marks} onChange={(v) => patch({ marks: v })} label="Printer's marks" title="Trim marks, registration marks, colour bars and page information outside the bleed" />
+                {st.marks && (
+                  <div className="io-marks-sub">
+                    <Checkbox checked={st.trimMarks} onChange={(v) => patch({ trimMarks: v })} label="Trim marks" />
+                    <Checkbox checked={st.registrationMarks} onChange={(v) => patch({ registrationMarks: v })} label="Registration marks" />
+                    <Checkbox checked={st.colorBars} onChange={(v) => patch({ colorBars: v })} label="Color bars" />
+                    <Checkbox checked={st.pageInfo} onChange={(v) => patch({ pageInfo: v })} label="Page information" />
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <div className="io-form-row">

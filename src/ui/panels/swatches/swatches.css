@@ -207,3 +207,58 @@
   justify-content: flex-end;
   gap: 6px;
 }
+
+/* global / spot indicators (Illustrator: white corner triangle; spot adds a dot) */
+.sw-cell.global::before,
+.sw-cell.spot::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-bottom: 7px solid #ffffff;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+  z-index: 1;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  left: auto;
+  top: auto;
+}
+.sw-cell.spot::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #000;
+  border: none;
+  z-index: 2;
+  filter: none;
+}
+.sw-kind-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cmyk-fields {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 4px 6px;
+  align-items: center;
+}
+.cmyk-fields .cmyk-preview {
+  grid-column: 1 / -1;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+}
+.cmyk-fields input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent-strong);
+}

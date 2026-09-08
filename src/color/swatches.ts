@@ -2,7 +2,8 @@
  * Swatch helpers: naming, usage queries, replacing paints across the document,
  * JSON import/export.
  */
-import type { Document, ID, Paint, Swatch, GradientStop } from '@/model/types';
+import type { Document, ID, Paint, Swatch, GradientStop, ColorMode } from '@/model/types';
+import { plainPaint, colorNameFor } from './globals';
 import { newId } from '@/model/nodes';
 import { selectableNodes, descendants } from '@/model/document';
 import { normalizeHex, isValidHex } from '@/util/color';
@@ -22,10 +23,10 @@ export function uniqueSwatchName(swatches: Swatch[], base: string): string {
   return base;
 }
 
-export function defaultSwatchName(paint: Paint): string {
+export function defaultSwatchName(paint: Paint, mode: ColorMode = 'rgb'): string {
   switch (paint.type) {
     case 'solid':
-      return paint.color.toUpperCase();
+      return mode === 'cmyk' ? colorNameFor(paint.color, 'cmyk') : paint.color.toUpperCase();
     case 'linear':
       return 'Linear Gradient';
     case 'radial':
@@ -37,19 +38,25 @@ export function defaultSwatchName(paint: Paint): string {
   }
 }
 
-/** Swatch whose paint equals the given paint exactly. */
+/** Swatch whose paint equals the given paint (links to global swatches count as matches). */
 export function findSwatchByPaint(swatches: Swatch[], paint: Paint): Swatch | undefined {
-  return swatches.find((s) => paintEquals(s.paint, paint));
+  if (paint.type === 'solid' && paint.swatchId) {
+    const linked = swatches.find((s) => s.id === paint.swatchId);
+    if (linked) return linked;
+  }
+  const plain = plainPaint(paint);
+  return swatches.find((s) => paintEquals(s.paint, plain));
 }
 
 /** Leaf objects (path/text) whose fill or stroke uses the paint. */
 export function nodesUsingPaint(doc: Document, paint: Paint): ID[] {
   const out: ID[] = [];
+  const plain = plainPaint(paint);
   for (const top of selectableNodes(doc, true)) {
     for (const id of descendants(doc, top, true)) {
       const n = doc.nodes[id];
       if (!n || (n.type !== 'path' && n.type !== 'text')) continue;
-      if (paintEquals(n.fill, paint) || paintEquals(n.stroke.paint, paint)) out.push(id);
+      if (paintEquals(plainPaint(n.fill), plain) || paintEquals(plainPaint(n.stroke.paint), plain)) out.push(id);
     }
   }
   return Array.from(new Set(out));
@@ -58,13 +65,14 @@ export function nodesUsingPaint(doc: Document, paint: Paint): ID[] {
 /** Replace every fill/stroke equal to `from` with `to` (mutates a draft). Returns count. */
 export function replacePaintInDoc(doc: Document, from: Paint, to: Paint): number {
   let count = 0;
+  const f = plainPaint(from);
   for (const n of Object.values(doc.nodes)) {
     if (n.type !== 'path' && n.type !== 'text') continue;
-    if (paintEquals(n.fill, from)) {
+    if (paintEquals(plainPaint(n.fill), f)) {
       n.fill = clonePaintDeep(to);
       count++;
     }
-    if (paintEquals(n.stroke.paint, from)) {
+    if (paintEquals(plainPaint(n.stroke.paint), f)) {
       n.stroke = { ...n.stroke, paint: clonePaintDeep(to) };
       count++;
     }
@@ -79,7 +87,7 @@ export function replacePaintInDoc(doc: Document, from: Paint, to: Paint): number
 export const SWATCH_JSON_FORMAT = 'opuller-swatches';
 
 export function exportSwatchesJson(swatches: Swatch[]): string {
-  return JSON.stringify({ format: SWATCH_JSON_FORMAT, version: 1, swatches: swatches.map((s) => ({ name: s.name, paint: s.paint })) }, null, 2);
+  return JSON.stringify({ format: SWATCH_JSON_FORMAT, version: 1, swatches: swatches.map((s) => ({ name: s.name, paint: s.paint, kind: s.kind, cmyk: s.cmyk })) }, null, 2);
 }
 
 function validStop(s: unknown): s is GradientStop {
@@ -144,7 +152,10 @@ export function parseSwatchesJson(text: string): Swatch[] {
     else if (typeof o.hex === 'string' && isValidHex(o.hex)) paint = { type: 'solid', color: normalizeHex(o.hex), opacity: 1 };
     if (!paint) return;
     const name = typeof o.name === 'string' && o.name.trim() ? o.name.trim() : defaultSwatchName(paint) || `Swatch ${i + 1}`;
-    out.push(makeSwatch(name, paint));
+    const sw = makeSwatch(name, paint);
+    if (o.kind === 'global' || o.kind === 'spot') sw.kind = o.kind;
+    if (o.cmyk && typeof o.cmyk === 'object' && ['c', 'm', 'y', 'k'].every((k) => typeof o.cmyk[k] === 'number')) sw.cmyk = { c: o.cmyk.c, m: o.cmyk.m, y: o.cmyk.y, k: o.cmyk.k };
+    out.push(sw);
   });
   if (!out.length) throw new Error('No swatches found in the file');
   return out;

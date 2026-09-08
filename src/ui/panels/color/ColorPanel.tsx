@@ -14,8 +14,10 @@ import { NumberField, Row, Select, TextField, PopoverButton, IconButton, Tooltip
 import { isValidHex, normalizeHex } from '@/util/color';
 import { COLOR_MODES, CHANNELS, hexToChannels, channelsToHex, channelTrackCss, clampChannels, spectrumColorAt, SPECTRUM_CSS, invertHex, complementHex, type ColorMode } from '@/color/models';
 import { activeSolid, withActiveColor, isGradient, paintTypeLabel } from '@/color/paint';
-import { addSwatch } from '@/color/actions';
+import { addSwatch, setActiveTint } from '@/color/actions';
 import { findSwatchByPaint } from '@/color/swatches';
+import { isGlobalSwatch, tintColor, swatchBaseColor } from '@/color/globals';
+import { Slider } from '@/ui/widgets';
 import { PaintTargets } from './shared';
 import './color.css';
 
@@ -37,7 +39,11 @@ export function ColorPanel() {
   const setTarget = useStore((s) => s.setActivePaintTarget);
   const stopIndex = useStore((s) => s.activeGradientStop);
   const swatches = useStore((s) => s.doc.swatches);
+  const colorMode = useStore((s) => s.doc.colorMode);
   const paint = target === 'fill' ? app.fill : app.stroke.paint;
+  const linked = paint.type === 'solid' && paint.swatchId ? swatches.find((x) => x.id === paint.swatchId) ?? null : null;
+  const linkedSwatch = linked && isGlobalSwatch(linked) ? linked : null;
+  const tint = paint.type === 'solid' ? paint.tint ?? 100 : 100;
   const mixed = target === 'fill' ? app.mixedFill : app.mixedStroke;
   const solid = activeSolid(paint, stopIndex);
   const gradient = isGradient(paint);
@@ -65,6 +71,15 @@ export function ColorPanel() {
   useEffect(() => {
     setVals(hexToChannels(mode, lastHex.current));
   }, [mode]);
+  // follow the document colour mode: CMYK documents edit inks by default
+  const lastDocMode = useRef(colorMode);
+  useEffect(() => {
+    if (lastDocMode.current === colorMode) return;
+    lastDocMode.current = colorMode;
+    if (colorMode === 'cmyk' && mode !== 'cmyk') setMode('cmyk');
+    else if (colorMode === 'rgb' && mode === 'cmyk') setMode('hsb');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorMode]);
 
   const label = target === 'fill' ? 'Fill' : 'Stroke';
   const commit = useCallback(() => getState().commit(label), [label]);
@@ -205,7 +220,29 @@ export function ColorPanel() {
         </div>
       )}
 
-      {mode !== 'hex' && (
+      {linkedSwatch && !mixed && (
+        <div className="cp-tint" data-testid="color-tint">
+          <div className="cp-tint-head">
+            <span className={`cp-tint-swatch ${linkedSwatch.kind === 'spot' ? 'spot' : ''}`} style={{ background: swatchBaseColor(linkedSwatch) }} />
+            <span className="cp-tint-name" title={linkedSwatch.name}>
+              {linkedSwatch.name}
+            </span>
+            <span className="cp-tint-kind">{linkedSwatch.kind === 'spot' ? 'spot' : 'global'}</span>
+          </div>
+          <Slider
+            label="T"
+            value={Math.round(tint)}
+            min={0}
+            max={100}
+            unit="%"
+            onChange={(v) => setActiveTint(v, false)}
+            onCommit={() => commit()}
+            className="cp-tint-slider"
+          />
+          <div className="cp-tint-track" style={{ background: `linear-gradient(to right, #ffffff, ${tintColor(swatchBaseColor(linkedSwatch), 100)})` }} />
+        </div>
+      )}
+      {mode !== 'hex' && !linkedSwatch && (
         <div className={`cp-channels ${isNone || mixed ? 'disabled' : ''}`} data-testid="color-channels">
           {chans.map((ch, i) => (
             <div className="cp-channel" key={ch.key}>

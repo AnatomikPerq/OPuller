@@ -1,0 +1,93 @@
+/* Recolor Artwork dialog */
+.recolor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 320px;
+}
+.recolor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.recolor-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 4px;
+}
+.recolor-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-alt);
+}
+.recolor-chip {
+  width: 26px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+}
+.recolor-chip.to {
+  width: 34px;
+  cursor: pointer;
+}
+.recolor-chip.to:hover {
+  outline: 2px solid var(--selection);
+}
+.recolor-chip.base {
+  width: 26px;
+  height: 22px;
+  cursor: pointer;
+}
+.recolor-hex {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  width: 62px;
+  color: var(--text-muted);
+}
+.recolor-arrow {
+  color: var(--text-dim);
+}
+.recolor-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.recolor-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recolor-field .field-label {
+  width: 70px;
+}
+.recolor-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.recolor-slider .field-label {
+  width: 70px;
+}
+.recolor-options {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 6px 8px;
+  align-items: center;
+}
