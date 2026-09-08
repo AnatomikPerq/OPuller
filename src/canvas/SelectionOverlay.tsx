@@ -3,7 +3,7 @@
  * Bezier handles (direct selection), hover highlight.
  */
 import React, { memo } from 'react';
-import { useStore } from '@/store/store';
+import { useStore, getState } from '@/store/store';
 import type { EditorState } from '@/store/store';
 import type { ID, Node, Vec, AnchorRef } from '@/model/types';
 import { worldMatrix, layerOf, descendants, localBounds } from '@/model/document';
@@ -52,10 +52,28 @@ function layerColor(state: EditorState, id: ID): string {
   return layerOf(state.doc, id)?.color ?? '#3b82f6';
 }
 
+/** Subscribe narrowly to everything the overlay depends on, then read a snapshot. */
+function useOverlayState(): EditorState {
+  useStore((s) => s.docVersion);
+  useStore((s) => s.selection);
+  useStore((s) => s.selectedAnchors);
+  useStore((s) => s.zoom);
+  useStore((s) => s.pan.x);
+  useStore((s) => s.pan.y);
+  useStore((s) => s.hoverId);
+  useStore((s) => s.activeTool);
+  useStore((s) => s.temporaryTool);
+  useStore((s) => s.view.showAnchors);
+  useStore((s) => s.view.showBounds);
+  useStore((s) => s.prefs.handleSize);
+  useStore((s) => s.editingTextId);
+  return getState();
+}
+
 const HoverOutline = memo(function HoverOutline() {
   const hoverId = useStore((s) => s.hoverId);
   const selection = useStore((s) => s.selection);
-  const state = useStore((s) => s);
+  const state = useOverlayState();
   if (!hoverId || selection.includes(hoverId)) return null;
   const n = state.doc.nodes[hoverId];
   if (!n) return null;
@@ -116,7 +134,7 @@ function collectAnchors(state: EditorState, ids: ID[]): { dots: AnchorDot[]; han
 }
 
 export const SelectionOverlay = memo(function SelectionOverlay() {
-  const state = useStore((s) => s);
+  const state = useOverlayState();
   const { selection, editingTextId } = state;
   const toolId = state.temporaryTool ?? state.activeTool;
   const tool = getTool(toolId);

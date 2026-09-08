@@ -189,8 +189,9 @@ export function hitTestAnchors(
           const isSel = selectedSet.has(`${id}/${si}/${ai}`);
           const prevSel = selectedSet.has(`${id}/${si}/${(ai - 1 + sp.anchors.length) % sp.anchors.length}`);
           const nextSel = selectedSet.has(`${id}/${si}/${(ai + 1) % sp.anchors.length}`);
-          if (!(isSel || prevSel || nextSel) && selectedAnchors.length) return;
-          if (hasHandle(a.handleIn) && (isSel || nextSel === false || true)) {
+          // handles are only interactive on selected anchors and their neighbours
+          if (!(isSel || prevSel || nextSel)) return;
+          if (hasHandle(a.handleIn)) {
             const h = applyToPoint(wm, absHandleIn(a));
             const dh = Math.hypot(h.x - world.x, h.y - world.y);
             if (dh <= tolerance) consider({ id, target: id, kind: 'handle', point: h, handle: { nodeId: id, subpath: si, index: ai, side: 'in' }, distance: dh - 0.01 });

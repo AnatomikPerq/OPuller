@@ -101,7 +101,7 @@ export function hitHandle(frame: SelectionFrame | null, screen: Vec, handleSize 
     const dx = screen.x - h.x;
     const dy = screen.y - h.y;
     const d = Math.hypot(dx, dy);
-    if (d > half && d <= half + 14) {
+    if (d > half && d <= half + 18) {
       const outsideX = h.kind.includes('w') ? dx < 0 : dx > 0;
       const outsideY = h.kind.includes('n') ? dy < 0 : dy > 0;
       if (outsideX || outsideY) return { kind: h.kind, rotate: true };
