@@ -408,6 +408,53 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     const ids = placeSvgText(p.svg, { name: p.name, select: p.select !== false, at, fit: p.fit ?? !at });
     return ids.map((id) => summary(getState().doc, id, 1, true));
   },
+  async placeFile(p) {
+    // bytes arrive base64-encoded from the MCP server (PDF / AI / EPS / SVG / images)
+    const name = String(p.name ?? 'file');
+    const b64 = String(p.base64 ?? '');
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const ext = name.toLowerCase().split('.').pop() ?? '';
+    if (ext === 'svg') {
+      const ids = placeSvgText(new TextDecoder().decode(bytes), { name, select: true });
+      return { ids, kind: 'svg' };
+    }
+    if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].includes(ext)) {
+      const blob = new Blob([bytes], { type: `image/${ext === 'jpg' ? 'jpeg' : ext}` });
+      const ids = await placeImageBlob(blob, { name });
+      return { ids, kind: 'image' };
+    }
+    const mod = await import('@/io/vectorImport');
+    const r = await mod.applyVectorImport(bytes.buffer, name, { action: p.open ? 'open' : 'place', page: p.page, mode: p.mode === 'image' ? 'image' : 'objects', text: p.text !== false });
+    return { kind: r.kind, pages: r.pages, width: r.width, height: r.height, warnings: r.warnings, objects: r.items.reduce((n, it) => n + it.nodes.length, 0), selection: getState().selection };
+  },
+  async exportFile(p) {
+    const s = getState();
+    const format = String(p.format ?? 'svg');
+    const scope = p.scope ?? (p.ids?.length ? 'selection' : 'artboard');
+    const opts = { scope, ids: p.ids ?? (scope === 'selection' ? s.selection : undefined), artboardId: p.artboardId ?? s.activeArtboardId, bleed: p.bleed ? true : undefined, marks: p.marks ? { trimMarks: true, registrationMarks: true, colorBars: true, pageInfo: true } : undefined } as const;
+    if (format === 'eps') {
+      const eps = await import('@/io/epsExport');
+      const { withTextOutlines } = await import('@/io/svgExport');
+      const d = (await withTextOutlines(s.doc, opts.ids)).doc;
+      await eps.prepareEpsImages(d, opts.ids);
+      const r = eps.exportEps(d, { ...opts, cmyk: !!p.cmyk });
+      return { format, text: r.eps, name: r.name, width: r.width, height: r.height };
+    }
+    if (format === 'pdf') {
+      const { exportPdf } = await import('@/io/pdf');
+      const { withTextOutlines } = await import('@/io/svgExport');
+      const d = p.outlineText ? (await withTextOutlines(s.doc, opts.ids)).doc : s.doc;
+      const r = await exportPdf(d, { ...opts, pretty: false });
+      const buf = new Uint8Array(await r.blob.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      return { format, base64: btoa(bin), pages: r.pages, name: `${s.doc.name}.pdf` };
+    }
+    const r = exportSvg(s.doc, { ...opts, pretty: p.pretty ?? true });
+    return { format: 'svg', text: r.svg, name: r.name, width: r.width, height: r.height };
+  },
   async placeImage(p) {
     const s = getState();
     let src: string | undefined = p.dataUrl ?? p.src;

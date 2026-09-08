@@ -16,8 +16,8 @@ import { safeFileName } from './svgExport';
 import { addRecent } from './recent';
 import { clearAutosave } from './autosave';
 
-export const OPEN_ACCEPT = '.opuller,.json,.svg,image/*';
-export const PLACE_ACCEPT = '.svg,image/*';
+export const OPEN_ACCEPT = '.opuller,.json,.svg,.pdf,.ai,.eps,image/*';
+export const PLACE_ACCEPT = '.svg,.pdf,.ai,.eps,image/*';
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif', 'ico']);
 
 export function isImageFile(file: File): boolean {
@@ -26,6 +26,16 @@ export function isImageFile(file: File): boolean {
 
 export function isSvgFile(file: File): boolean {
   return file.type === 'image/svg+xml' || extensionOf(file.name) === 'svg';
+}
+
+function isVectorDocFile(file: File): boolean {
+  const ext = extensionOf(file.name);
+  return ext === 'pdf' || ext === 'ai' || ext === 'eps' || file.type === 'application/pdf' || file.type === 'application/postscript' || file.type === 'application/illustrator';
+}
+
+async function openVectorFile(file: File, action: 'open' | 'place'): Promise<void> {
+  const mod = await import('./vectorImport');
+  await mod.openVectorFile(file, action);
 }
 
 export function isProjectFile(file: File): boolean {
@@ -126,6 +136,10 @@ export async function openDocumentFromFile(file: File, handle: FileSystemFileHan
   if (isImageFile(file)) {
     const doc = await documentFromImage(file, name);
     loadDocument(doc, { fileName: null, handle: null, dirty: true });
+    return;
+  }
+  if (isVectorDocFile(file)) {
+    await openVectorFile(file, 'open');
     return;
   }
   // unknown extension: sniff the content
@@ -359,6 +373,8 @@ export async function placeFiles(files: File[], opts: PlaceOptions = {}): Promis
         ids.push(...placeSvgText(text, { ...opts, at, name: baseName(file.name) }));
       } else if (isImageFile(file)) {
         ids.push(...(await placeImageBlob(file, { ...opts, at, name: baseName(file.name) })));
+      } else if (isVectorDocFile(file)) {
+        await openVectorFile(file, 'place');
       } else if (isProjectFile(file)) {
         const text = await readAsText(file);
         const doc = parseProject(text);

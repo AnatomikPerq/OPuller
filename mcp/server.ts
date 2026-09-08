@@ -567,6 +567,38 @@ server.registerTool(
 );
 
 server.registerTool(
+  'opuller_place_file',
+  {
+    title: 'Place / open a file',
+    description: 'Import a file from disk into the editor: PDF and PDF-compatible AI (editable objects or a rasterised page), classic AI / EPS (PostScript), SVG and raster images. open=true replaces the document with the file; otherwise the artwork is placed into the current document.',
+    inputSchema: { file: z.string(), open: z.boolean().optional(), page: z.number().optional(), mode: z.enum(['objects', 'image']).optional(), text: z.boolean().optional() },
+  },
+  async (p) => {
+    const abs = path.resolve(p.file);
+    const bytes = await fs.readFile(abs);
+    return text(await call('placeFile', { name: path.basename(abs), base64: bytes.toString('base64'), open: p.open, page: p.page, mode: p.mode, text: p.text }, 120_000));
+  },
+);
+
+server.registerTool(
+  'opuller_export_file',
+  {
+    title: 'Export to a file',
+    description: 'Write the artboard / selection / document to disk as SVG, PDF or EPS (format from the file extension or the format field). bleed/marks add the document bleed and printer marks; cmyk writes EPS colours as inks.',
+    inputSchema: { file: z.string(), format: z.enum(['svg', 'pdf', 'eps']).optional(), scope: z.enum(['artboard', 'artboards', 'selection', 'document']).optional(), ids: z.array(z.string()).optional(), artboardId: z.string().optional(), bleed: z.boolean().optional(), marks: z.boolean().optional(), cmyk: z.boolean().optional(), outlineText: z.boolean().optional() },
+  },
+  async (p) => {
+    const abs = path.resolve(p.file);
+    const format = p.format ?? (path.extname(abs).slice(1).toLowerCase() as 'svg' | 'pdf' | 'eps');
+    const r = await call<{ text?: string; base64?: string; pages?: number; name?: string }>('exportFile', { ...p, format }, 120_000);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    if (r.base64) await fs.writeFile(abs, Buffer.from(r.base64, 'base64'));
+    else await fs.writeFile(abs, r.text ?? '', 'utf8');
+    return text({ saved: abs, format, pages: r.pages, bytes: r.base64 ? Buffer.from(r.base64, 'base64').length : (r.text ?? '').length });
+  },
+);
+
+server.registerTool(
   'opuller_projects',
   {
     title: 'Project library',

@@ -15,6 +15,9 @@ import { serializeProject, parseProject, validateDocument, embedImages } from '.
 import { fontFaceCss } from './fontEmbed';
 import { placeSvgText, placeImageBlob, placeText, placeFiles, placeItems, documentFromSvg, documentFromImage, saveDocument, loadDocument, newDocument, openDocumentFromFile, confirmDiscard, revertDocument } from './fileOps';
 import { recentEntries, addRecent, loadRecent, clearRecent, removeRecent } from './recent';
+import { importVector, applyVectorImport, detectVectorKind } from './vectorImport';
+import { importAi } from './aiImport';
+import { exportEps, prepareEpsImages } from './epsExport';
 
 installClipboard();
 registerViewportSlot('html', 'io-drop', DropOverlay);
@@ -70,4 +73,10 @@ void checkRecovery();
   loadRecent,
   clearRecent,
   removeRecent,
+  importVector,
+  applyVectorImport,
+  detectVectorKind,
+  importAi,
+  exportEps,
+  prepareEpsImages,
 };

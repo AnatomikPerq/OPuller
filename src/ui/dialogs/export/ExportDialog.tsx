@@ -14,11 +14,12 @@ import { saveFile, hasFSAccess } from '@/util/files';
 import { exportRegions, renderRegion, withTextOutlines, safeFileName, type ExportScope, type ExportRegion, type SvgExportOptions } from '@/io/svgExport';
 import { rasterizeRegion, canvasToBlob, canvasToDataUrl, pixelSize, dpiToScale, MIME, EXT, type RasterFormat } from '@/io/raster';
 import { exportPdf } from '@/io/pdf';
+import { exportEps, prepareEpsImages } from '@/io/epsExport';
 import { fontFaceCss } from '@/io/fontEmbed';
 import { writeTextToClipboard } from '@/io/clipboard';
 import { bleedIsZero, type PrinterMarks } from '@/print/marks';
 
-export type ExportFormat = 'svg' | 'png' | 'jpeg' | 'webp' | 'pdf';
+export type ExportFormat = 'svg' | 'png' | 'jpeg' | 'webp' | 'pdf' | 'eps';
 type SizeMode = 'scale' | 'dpi' | 'width';
 type Background = 'transparent' | 'white' | 'artboard' | 'custom';
 
@@ -46,6 +47,8 @@ interface ExportSettings {
   fileName: string;
   /** include the document bleed around artboards */
   bleed: boolean;
+  /** EPS colours as CMYK */
+  epsCmyk: boolean;
   /** printer's marks */
   marks: boolean;
   trimMarks: boolean;
@@ -73,6 +76,7 @@ const DEFAULTS: ExportSettings = {
   margin: 0,
   fileName: '',
   bleed: false,
+  epsCmyk: false,
   marks: false,
   trimMarks: true,
   registrationMarks: true,
@@ -123,8 +127,9 @@ function svgOptions(st: ExportSettings, ids: ID[], artboardId: ID | null, region
 }
 
 async function documentForExport(doc: Document, st: ExportSettings, ids: ID[]): Promise<{ doc: Document; failed: string[] }> {
-  if (st.format !== 'svg' && st.format !== 'pdf') return { doc, failed: [] };
-  if (!st.outlineText) return { doc, failed: [] };
+  if (st.format !== 'svg' && st.format !== 'pdf' && st.format !== 'eps') return { doc, failed: [] };
+  if (!st.outlineText && st.format !== 'eps') return { doc, failed: [] };
+  // EPS has no font embedding: text is always outlined
   return withTextOutlines(doc, st.scope === 'selection' ? ids : undefined);
 }
 
@@ -140,12 +145,14 @@ function fileNameFor(st: ExportSettings, region: ExportRegion, regions: ExportRe
 function extFor(format: ExportFormat): string {
   if (format === 'svg') return '.svg';
   if (format === 'pdf') return '.pdf';
+  if (format === 'eps') return '.eps';
   return EXT[format];
 }
 
 function mimeFor(format: ExportFormat): string {
   if (format === 'svg') return 'image/svg+xml';
   if (format === 'pdf') return 'application/pdf';
+  if (format === 'eps') return 'application/postscript';
   return MIME[format];
 }
 
@@ -239,7 +246,14 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
       const ext = extFor(st.format);
       const mime = mimeFor(st.format);
       let count = 0;
-      if (st.format === 'pdf') {
+      if (st.format === 'eps') {
+        await prepareEpsImages(d, st.scope === 'selection' ? ids : undefined);
+        const res = exportEps(d, { ...svgOptions(st, ids, activeArtboardId, region), cmyk: st.epsCmyk });
+        const blob = new Blob([res.eps], { type: 'application/postscript' });
+        const name = fileNameFor(st, region, [region], ext);
+        const handle = await saveFile(blob, { suggestedName: name, mime, extension: ext, description: 'EPS (PostScript)' });
+        if (handle || !hasFSAccess) count = 1;
+      } else if (st.format === 'pdf') {
         const res = await exportPdf(d, { ...svgOptions(st, ids, activeArtboardId, region), pretty: false });
         const name = fileNameFor(st, region, [region], ext);
         const handle = await saveFile(res.blob, { suggestedName: name, mime, extension: ext, description: 'PDF document' });
@@ -304,6 +318,7 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
     { id: 'jpeg', label: 'JPEG' },
     { id: 'webp', label: 'WebP' },
     { id: 'pdf', label: 'PDF' },
+    { id: 'eps', label: 'EPS' },
   ];
 
   const ext = extFor(st.format);
@@ -417,6 +432,16 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
                 <Checkbox checked={st.embedFonts} onChange={(v) => patch({ embedFonts: v })} label="Embed fonts" title="Embed the used web fonts as @font-face data URLs" />
                 <Checkbox checked={st.outlineText} onChange={(v) => patch({ outlineText: v })} label="Convert text to outlines" disabled={!hasText} />
                 <NumberField label="Precision" value={st.precision} min={0} max={8} decimals={0} onChange={(v) => patch({ precision: Math.round(v) })} width={110} title="Decimal places for coordinates" />
+              </div>
+            </div>
+          )}
+          {st.format === 'eps' && (
+            <div className="io-form-row" style={{ alignItems: 'start' }}>
+              <span className="io-form-label">EPS options</span>
+              <div className="io-options">
+                <Checkbox checked={st.epsCmyk} onChange={(v) => patch({ epsCmyk: v })} label="CMYK colours (setcmykcolor)" title="Write colours as process inks for print workflows" />
+                <Checkbox checked={st.includeHidden} onChange={(v) => patch({ includeHidden: v })} label="Include hidden objects" />
+                <span className="io-hint">PostScript Level 3: paths, clipping, gradients (shfill), images; text is converted to outlines.</span>
               </div>
             </div>
           )}

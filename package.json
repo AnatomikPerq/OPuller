@@ -38,6 +38,7 @@
     "opentype.js": "^2.0.0",
     "paper": "^0.12.18",
     "paperjs-offset": "^2.2.1",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "svg2pdf.js": "^2.8.1",
