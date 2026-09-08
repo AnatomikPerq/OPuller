@@ -29,8 +29,26 @@ src/
                 panels/registry.ts, dialogs/registry.ts, DialogHost.tsx (DialogFrame)
   text/         layout.ts (text measurement / line layout)
   util/         units.ts (units, expressions), color.ts, keys.ts, files.ts
-  io/           (import/export — owned by the IO module)
+  io/           import/export: SVG, raster, project files, clipboard, autosave,
+                PDF export (jsPDF) and import (pdf.js), AI/EPS PostScript import
+                (aiImport.ts), EPS export, pure export regions (regions.ts)
   samples/      sample documents
+  appearance/   expand.ts — Expand Appearance + `registerExpander` registry
+  color/        globals.ts (global/spot swatches, tints, CMYK), editColors.ts,
+                libraries.ts, Edit > Edit Colors commands, Recolor dialog
+  print/        colour mode, bleed, printer marks (marks.ts), bleed overlay
+  symbols/      symbol definitions, instances, panel, library, sprayer helpers
+  patterns/     pattern tiles (tile.ts), pattern editing, library, refresh/render
+  brushes/      calligraphic/scatter/art/pattern brushes: spine.ts, geometry.ts,
+                library, panel, Brush Options
+  gradients/    mesh.ts (Coons-patch mesh), freeform.ts, raster.ts (tile renderer)
+  distort/      warp.ts, envelope.ts (free distort, mesh, Coons), map.ts;
+                registers geometry effects + Envelope Distort commands
+  effects3d/    extrude / revolve / rotate geometry, shading, 3D dialog
+  livepaint/    Live Paint groups (faces/edges), bucket + selection tools live in tools/
+  graphs/       build.ts (9 graph types), ops.ts, data/type dialogs
+  perspective/  grid.ts (1/2/3-point maths), ops.ts (attach/move/release),
+                store.ts (UI state), overlay + plane widget + Define Grid dialog
 tests/
   unit/         vitest (jsdom)          -> `npm test`
   e2e/          Playwright (Chromium)   -> `npm run test:e2e`, helpers in helpers.ts
@@ -101,8 +119,10 @@ It is registered automatically (glob import). Fields:
 * Toolbar groups (flyouts) by `group`; ordering by `order` (hundreds = separators):
   `select` 10-99 (select, direct, lasso, wand), `pen` 100-199, `draw` 200-299 (pencil,
   brush, smooth...), `shapes` 300-399, `text` 400-499, `transform` 500-599,
-  `edit` 600-699 (scissors, knife, eraser, shape builder, width, blend, gradient,
-  eyedropper, measure...), `artboard` 800, `navigate` 900.
+  `edit` 600-699 (scissors, knife, eraser, shape builder, live paint 612-613,
+  width, mesh 621, blend, gradient, symbol sprayer 640, eyedropper, measure...),
+  `text` also holds the Graph tool (450), `perspective` 780-781 (grid, selection),
+  `artboard` 800, `navigate` 900.
 * `ToolContext` (`ctx`): `ctx.state` (fresh snapshot), `ctx.doc`, `ctx.zoom`,
   `ctx.hitTest(world, opts)`, `ctx.hitTestAnchors(world, ids)`, `ctx.beginSnap(opts)` →
   `SnapSession.snap(p)` / `snapRect(r)`, `ctx.setSnapGuides(result)`,
@@ -253,9 +273,27 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 | Samples | `src/samples` | File > Open Sample; the bird is built with boolean ops at load |
 | Help & preferences | `src/help` | Preferences (Ctrl+K), Keyboard Shortcuts, About, Welcome screen |
 | AI bridge / MCP | `src/mcp` (page side: `api.ts` methods, `bridge.ts` WebSocket client), `mcp/server.ts` (MCP stdio server), `.mcp.json` | `window.__opuller.mcp` exposes the same methods |
+| Colour management | `src/color/{globals,editColors,libraries,actions}.ts`, `src/color/register.tsx`, `src/ui/dialogs/recolor` | global swatches link paints via `swatchId` + `tint`; spot swatches have `kind: 'spot'`; CMYK values live on swatches (`cmyk`) and the document (`colorMode`) |
+| Print | `src/print` (`marks.ts`, `store.ts`, `BleedFields.tsx`), `src/io/regions.ts` | `Document.bleed`; export regions add bleed + printer marks for SVG/PDF/EPS |
+| Symbols | `src/symbols` (`ops.ts`, `library.ts`, `SymbolsPanel.tsx`), `src/tools/symbolSprayer` | `Document.symbols`; instances are groups with `data.symbol {id, version}`, sets carry `data.symbolSet`; editing = isolation of a temporary copy, redefine on exit |
+| Patterns | `src/patterns` (`tile.ts`, `ops.ts`, `render.ts`, `refresh.ts`, `library.ts`) | `PatternDef` may hold editable `nodes/root`; tile editing group has `data.patternEdit`; renderer draws `<pattern>` cells sized by `patternCell` |
+| Brushes | `src/brushes` (`spine.ts`, `geometry.ts`, `ops.ts`, `library.ts`, `BrushesPanel.tsx`) | `StrokeStyle.brush` references `Document.brushes`; the renderer draws `brushItems` instead of the stroke; expander `'brush'` bakes them |
+| Gradients (mesh / freeform) | `src/gradients` (`mesh.ts`, `freeform.ts`, `raster.ts`), `src/tools/mesh`, `src/tools/gradient/freeform.tsx`, `src/ui/panels/gradient/FreeformFields.tsx` | `Paint` types `'mesh'` and `'freeform'` are rasterised into a `<pattern><image>` tile (`rasterGradientTile`) |
+| Distort & Warp | `src/distort` (`warp.ts`, `envelope.ts`, `map.ts`, `register.tsx`), `src/tools/mesh` (drags envelope points) | effects `warp`, `freeDistort`, `meshDistort`, `coonsDistort` are geometry effects (`registerGeometryEffect`); envelope groups carry `data.envelope` |
+| 3D | `src/effects3d` (`geometry.ts`, `register.tsx`) | `extrude` / `revolve` render faces (`FacesView`), `rotate3d` is a geometry effect; expander `'3d'` bakes faces into paths |
+| Live Paint | `src/livepaint` (`ops.ts`, `register.tsx`), `src/tools/livepaint` | group with `data.livePaint`; children are faces/edges (`data.lpKind`) computed with `computeFaceSet` + `splitAtIntersections` |
+| Graphs | `src/graphs` (`build.ts`, `ops.ts`, `register.tsx`), `src/tools/graph` | group with `data.graph` (spec) + `data.frame`; regenerated from the spec, never edited by hand |
+| Perspective | `src/perspective` (`grid.ts`, `ops.ts`, `store.ts`, `register.tsx`), `src/tools/{perspectiveGrid,perspectiveSelect}` | `Document.perspective` (grid geometry; visibility/active plane in `usePerspectiveStore`); attached nodes carry `data.perspective {plane, rect}` + a `freeDistort` effect recomputed from the flat rect |
+| Vector IO | `src/io/{pdfImport,aiImport,epsExport,vectorImport}.ts(x)` | pdf.js operator list → nodes; PostScript tokenizer/interpreter for AI 8 / EPS; EPS Level 3 writer; `window.__opullerIO` exposes them for tests |
 
 ### Extension points added later
 
+* `registerGeometryEffect(type, (subpaths, effect, frame) => subpaths)` (`src/canvas/effectiveGeometry.ts`) — effects that change geometry (warp, envelopes, 3D rotate, perspective). `effectiveSubPaths(node)` / `applyGeometryEffects` are what the renderer, bounds and hit testing use; on groups the renderer folds child transforms into the group frame (`GeomCtx`).
+* `registerExpander(name, (doc, id) => ID[] | null)` (`src/appearance/expand.ts`) — Object > Expand Appearance asks every expander in turn (brush strokes, geometry effects, 3D faces, pattern fills, symbol sets…).
+* `setPatternRenderer(fn)` (`src/patterns/refresh.ts`) — pure modules refresh pattern SVG without importing the renderer (paper.js/canvas free).
+* Viewport slot `'html'` (`registerViewportSlot('html', id, Component)`) — HTML positioned over the canvas (inline text editor, perspective plane widget). Stop pointer propagation inside such widgets or the viewport starts a tool gesture.
+* `window.__opuller.<module>` namespaces (`color`, `print`, `symbols`, `patterns`, `brushes`, `gradients`, `distort`, `effects3d`, `livepaint`, `graphs`, `perspective`, `io` as `__opullerIO`) — pure helpers + commands exposed for Playwright and scripting; tests never dynamic-import source files.
+* Node markers in `data`: `blend`/`blendStep`, `symbol`/`symbolSet`, `patternEdit`, `envelope`, `livePaint`/`lpKind`, `graph`/`frame`, `perspective`. Check them with the module's `isX(doc, id)` helpers, not by hand.
 * `registerStatusItem(id, Component)` (`src/ui/statusItems.ts`) — small components at the right end of the status bar.
 * `Tool.getCursor(ctx)` — dynamic cursors that survive Space/hand pans.
 * Synthetic pointer events (`PointerEvent` dispatched on `[data-testid="viewport"]`) drive tools exactly like real input; the viewport tolerates unknown pointer ids.

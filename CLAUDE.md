@@ -50,6 +50,10 @@ and Read the file instead.
 * The AI bridge: `src/mcp/api.ts` holds the scripting methods (also `window.__opuller.mcp`);
   `mcp/server.ts` maps them to MCP tools. Add a method there when a feature should be
   scriptable, then a `registerTool` in the server.
+* Geometry-changing effects register with `registerGeometryEffect` (`src/canvas/effectiveGeometry.ts`)
+  and Expand Appearance with `registerExpander` (`src/appearance/expand.ts`); feature state that
+  lives on nodes goes into `node.data.<marker>` with an `isX(doc, id)` helper in the module.
+  Pure maths stays in files that import neither React nor paper.js so vitest can cover it.
 
 ## Conventions
 
@@ -73,6 +77,9 @@ and Read the file instead.
 * Do not launch multi-agent Workflow orchestration here (the user finds it too expensive) —
   implement directly.
 * Do not edit `src/model/types.ts` shape of existing fields without updating
-  `src/io/project.ts` (file format) and `src/io/svgExport.ts` / `svgImport.ts`.
+  `src/io/project.ts` (file format) and `src/io/svgExport.ts` / `svgImport.ts`; new document
+  or node fields need validation in `project.ts` too.
+* Do not use `require()` or dynamic `import()` of source files inside browser code paths that
+  must work synchronously; use static imports (Vite may serve a second module instance).
 * Do not start a second Vite server or kill the running one.
 * Do not commit `dist/`, `test-results/` or `playwright-report/`.
