@@ -19,6 +19,10 @@ import { applySwatchPaint, applySwatch, deleteSwatches, duplicateSwatch, reorder
 import { findSwatchByPaint } from '@/color/swatches';
 import { isGlobalSwatch, colorValuesLabel, hexToCmyk } from '@/color/globals';
 import { PaintPreview, CmykFields } from '../color/shared';
+import { PATTERN_LIBRARY } from '@/patterns/library';
+import { addPatternLibraryCommand, editPatternCommand } from '@/patterns/register';
+import { patternCell } from '@/patterns/tile';
+import { renderPatternCell } from '@/patterns/render';
 import './swatches.css';
 
 type View = 'grid' | 'list';
@@ -96,6 +100,20 @@ export function SwatchesPanel() {
   const menuFor = (sw: Swatch, anchor: HTMLElement): ContextMenuItem[] => {
     const s = getState();
     const solid = sw.paint.type === 'solid';
+    if (sw.paint.type === 'pattern') {
+      const pid = sw.paint.patternId;
+      return [
+        { label: 'Apply to Fill', onSelect: () => applySwatch(sw, 'fill') },
+        { label: 'Apply to Stroke', onSelect: () => applySwatch(sw, 'stroke') },
+        { separator: true },
+        { label: 'Pattern Options…', onSelect: () => s.openDialog('pattern.options', { id: pid }) },
+        { label: 'Edit Pattern', onSelect: () => editPatternCommand(pid) },
+        { label: 'Rename…', onSelect: () => s.openDialog('swatch.rename', { id: sw.id, name: sw.name }) },
+        { label: 'Delete', onSelect: () => deleteSwatches([sw.id]) },
+        { separator: true },
+        { label: 'Select All Objects Using This Swatch', onSelect: () => selectObjectsUsing(sw.paint, sw.id) },
+      ];
+    }
     return [
       { label: 'Apply to Fill', onSelect: () => applySwatch(sw, 'fill') },
       { label: 'Apply to Stroke', onSelect: () => applySwatch(sw, 'stroke') },
@@ -229,6 +247,25 @@ export function SwatchesPanel() {
           {(close) => (
             <div className="sw-libraries" data-testid="swatches-libraries-menu">
               <div className="section-title">Add library</div>
+              <div className="section-title">Patterns</div>
+              <div className="sw-pattern-lib" data-testid="swatches-pattern-lib">
+                {PATTERN_LIBRARY.map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    title={e.name}
+                    data-testid={`swatches-pattern-${e.id}`}
+                    onClick={() => {
+                      addPatternLibraryCommand(e.id);
+                      close();
+                    }}
+                  >
+                    <PatternLibThumb id={e.id} />
+                    <span>{e.name}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="section-title">Colours</div>
               {SWATCH_LIBRARIES.map((lib) => (
                 <button
                   key={lib.id}
@@ -314,6 +351,31 @@ export function SwatchesPanel() {
 
       {editing && <SwatchEditor id={editing.id} anchor={editing.anchor} onClose={() => setEditing(null)} />}
     </div>
+  );
+}
+
+const patternLibCache = new Map<string, { svg: string; w: number; h: number }>();
+function PatternLibThumb({ id }: { id: string }) {
+  let c = patternLibCache.get(id);
+  if (!c) {
+    const e = PATTERN_LIBRARY.find((x) => x.id === id);
+    if (!e) return null;
+    const def = e.build();
+    const cell = patternCell(def);
+    c = { svg: renderPatternCell(getState().doc, def), w: cell.width, h: cell.height };
+    patternLibCache.set(id, c);
+  }
+  const pid = `swpl-${id}`;
+  return (
+    <span className="cpaint">
+      <svg className="cpaint-fill" viewBox={`0 0 ${c.w * 2} ${c.h * 2}`} preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <pattern id={pid} patternUnits="userSpaceOnUse" width={c.w} height={c.h} dangerouslySetInnerHTML={{ __html: c.svg }} />
+        </defs>
+        <rect width={c.w * 2} height={c.h * 2} fill="#fff" />
+        <rect width={c.w * 2} height={c.h * 2} fill={`url(#${pid})`} />
+      </svg>
+    </span>
   );
 }
 

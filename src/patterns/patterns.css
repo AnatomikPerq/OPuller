@@ -1,0 +1,45 @@
+/* Patterns: dialogs and previews */
+.pattern-options {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: start;
+}
+.pattern-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pattern-preview {
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: #fff;
+}
+.sw-pattern-lib {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  width: 260px;
+}
+.sw-pattern-lib button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 10px;
+}
+.sw-pattern-lib button:hover {
+  background: var(--bg-hover);
+}
+.sw-pattern-lib .cpaint {
+  width: 34px;
+  height: 34px;
+  position: relative;
+  display: inline-block;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  overflow: hidden;
+}

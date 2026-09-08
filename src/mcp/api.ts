@@ -829,6 +829,62 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     getState().toast(String(p.message ?? ''), p.kind ?? 'info');
     return { ok: true };
   },
+  async patterns(p) {
+    const ops = await import('@/patterns/ops');
+    const reg = await import('@/patterns/register');
+    const op = p.op ?? 'list';
+    const s = getState();
+    if (op === 'list') return s.doc.patterns.map((d) => ({ id: d.id, name: d.name, width: d.width, height: d.height, layout: d.layout ?? 'grid', editable: !!d.nodes, users: ops.nodesUsingPattern(s.doc, d.id).length }));
+    if (op === 'make') {
+      if (p.ids?.length) s.setSelection(p.ids);
+      let def: import('@/model/types').PatternDef | null = null;
+      s.updateDoc((d) => {
+        def = ops.makePattern(d, getState().selection, { name: p.name, layout: p.layout, offset: p.offset, spacing: p.spacingX !== undefined || p.spacingY !== undefined ? { x: Number(p.spacingX ?? 0), y: Number(p.spacingY ?? 0) } : undefined, background: p.background ?? undefined, width: p.width, height: p.height, consume: p.consume })?.def ?? null;
+      }, 'Make Pattern');
+      return def ? { id: (def as import('@/model/types').PatternDef).id, name: (def as import('@/model/types').PatternDef).name } : { id: null };
+    }
+    if (op === 'apply') {
+      const def = ops.getPattern(s.doc, String(p.id));
+      if (!def) throw new Error('Unknown pattern id');
+      if (p.ids?.length) s.setSelection(p.ids);
+      const paint: import('@/model/types').Paint = { type: 'pattern', patternId: def.id, scale: p.scale ?? 1, angle: p.angle ?? 0, x: p.x, y: p.y };
+      const { setFillPaint, setStrokePaint } = await import('@/commands/appearance');
+      if (p.target === 'stroke') setStrokePaint(paint, true);
+      else setFillPaint(paint, true);
+      return { ok: true, selection: getState().selection };
+    }
+    if (op === 'options') {
+      s.updateDoc((d) => {
+        ops.updatePatternOptions(d, String(p.id), { name: p.name, layout: p.layout, offset: p.offset, width: p.width, height: p.height, spacing: p.spacingX !== undefined || p.spacingY !== undefined ? { x: Number(p.spacingX ?? 0), y: Number(p.spacingY ?? 0) } : undefined, background: p.background === undefined ? undefined : p.background });
+      }, 'Pattern Options');
+      return { ok: true };
+    }
+    if (op === 'edit') return { ok: reg.editPatternCommand(p.id ? String(p.id) : undefined) };
+    if (op === 'finishEdit') {
+      getState().setIsolation(null);
+      return { ok: true };
+    }
+    if (op === 'expand') {
+      if (p.ids?.length) s.setSelection(p.ids);
+      return { count: reg.expandPatternFillCommand(), selection: getState().selection };
+    }
+    if (op === 'delete') {
+      s.updateDoc((d) => ops.deletePattern(d, String(p.id)), 'Delete Pattern');
+      return { ok: true };
+    }
+    if (op === 'library') {
+      const lib = (await import('@/patterns/library')).PATTERN_LIBRARY;
+      if (p.name) {
+        const entry = lib.find((e) => e.id === p.name || e.name === p.name);
+        if (!entry) throw new Error(`Unknown library pattern "${p.name}"`);
+        reg.addPatternLibraryCommand(entry.id);
+        const st = getState();
+        return { id: st.doc.patterns[st.doc.patterns.length - 1]?.id ?? null };
+      }
+      return { added: reg.addPatternLibraryCommand(), available: lib.map((e) => e.id) };
+    }
+    throw new Error(`Unknown patterns op "${op}"`);
+  },
   async symbols(p) {
     const sym = await import('@/symbols/ops');
     const act = await import('@/symbols/actions');

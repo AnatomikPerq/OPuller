@@ -527,6 +527,16 @@ server.registerTool(
 server.registerTool('opuller_toast', { title: 'Toast', description: 'Show a message to the user in the editor.', inputSchema: { message: z.string(), kind: z.enum(['info', 'success', 'error']).optional() } }, async (p) => text(await call('toast', p)));
 
 server.registerTool(
+  'opuller_patterns',
+  {
+    title: 'Patterns',
+    description: 'Pattern swatches: list, make a pattern from the selection / ids (tile = artwork bounds; layout grid | brick-row | brick-col | hex-row | hex-col), apply a pattern to the selection (fill or stroke, with scale/angle/x/y), change tiling options, edit the tile artwork on the canvas (edit / finishEdit), expand a pattern fill into real tiles, delete, or add built-in library patterns (op "library" with name, or without name for all).',
+    inputSchema: { op: z.enum(['list', 'make', 'apply', 'options', 'edit', 'finishEdit', 'expand', 'delete', 'library']).optional(), id: z.string().optional(), ids: z.array(z.string()).optional(), name: z.string().optional(), layout: z.enum(['grid', 'brick-row', 'brick-col', 'hex-row', 'hex-col']).optional(), offset: z.number().optional(), width: z.number().optional(), height: z.number().optional(), spacingX: z.number().optional(), spacingY: z.number().optional(), background: z.string().nullable().optional(), consume: z.boolean().optional(), target: z.enum(['fill', 'stroke']).optional(), scale: z.number().optional(), angle: z.number().optional(), x: z.number().optional(), y: z.number().optional() },
+  },
+  async (p) => text(await call('patterns', p)),
+);
+
+server.registerTool(
   'opuller_symbols',
   {
     title: 'Symbols',

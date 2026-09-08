@@ -11,6 +11,7 @@ import { variableWidthOutlines } from '@/geometry/widthProfile';
 import { layoutText } from '@/text/layout';
 import { useStore } from '@/store/store';
 import { isContainer } from '@/model/types';
+import { patternCell } from '@/patterns/tile';
 
 export interface RenderOptions {
   /** outline (wireframe) view */
@@ -93,13 +94,15 @@ function PatternDef({ paint, id, doc }: { paint: Paint; id: string; doc: Documen
   if (paint.type !== 'pattern') return null;
   const def = doc.patterns.find((p) => p.id === paint.patternId);
   if (!def) return null;
+  const cell = patternCell(def);
+  const t = `${paint.x || paint.y ? `translate(${paint.x ?? 0} ${paint.y ?? 0}) ` : ''}rotate(${paint.angle}) scale(${paint.scale})`;
   return (
     <pattern
       id={id}
       patternUnits="userSpaceOnUse"
-      width={def.width}
-      height={def.height}
-      patternTransform={`rotate(${paint.angle}) scale(${paint.scale})`}
+      width={cell.width}
+      height={cell.height}
+      patternTransform={t}
       dangerouslySetInnerHTML={{ __html: def.svg }}
     />
   );

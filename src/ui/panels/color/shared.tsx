@@ -7,6 +7,7 @@ import type { Paint, SolidPaint, Document, CMYK } from '@/model/types';
 import { paintCss, ColorPicker } from '@/ui/ColorPicker';
 import { Popover, NumberField } from '@/ui/widgets';
 import { cmykToHex } from '@/color/globals';
+import { patternCell } from '@/patterns/tile';
 import { useStore } from '@/store/store';
 import './color.css';
 
@@ -23,8 +24,15 @@ export function PaintPreview({ paint, className, style, stroke, title }: { paint
 function PatternThumb({ paint, doc }: { paint: Extract<Paint, { type: 'pattern' }>; doc: Document }) {
   const def = doc.patterns.find((p) => p.id === paint.patternId);
   if (!def) return <span className="cpaint-fill" style={{ background: paintCss(paint) }} />;
+  const cell = patternCell(def);
+  const pid = `pth-${def.id}`;
   return (
-    <svg className="cpaint-fill" viewBox={`0 0 ${def.width} ${def.height}`} preserveAspectRatio="xMidYMid slice" dangerouslySetInnerHTML={{ __html: def.svg }} />
+    <svg className="cpaint-fill" viewBox={`0 0 ${Math.max(cell.width * 2, 1)} ${Math.max(cell.height * 2, 1)}`} preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <pattern id={pid} patternUnits="userSpaceOnUse" width={cell.width} height={cell.height} dangerouslySetInnerHTML={{ __html: def.svg }} />
+      </defs>
+      <rect width={cell.width * 2} height={cell.height * 2} fill={`url(#${pid})`} />
+    </svg>
   );
 }
 
