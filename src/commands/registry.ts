@@ -16,7 +16,7 @@ export interface Command {
   order?: number;
   /** separator before this item in menus */
   separatorBefore?: boolean;
-  run: (arg?: unknown) => void | Promise<void>;
+  run: (arg?: unknown) => unknown;
   enabled?: (s: EditorState) => boolean;
   checked?: (s: EditorState) => boolean;
   /** hide from menus */

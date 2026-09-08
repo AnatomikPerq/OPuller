@@ -102,6 +102,12 @@ export interface Tool {
   /** whether an in-progress gesture exists (Escape cancels it) */
   isBusy?(): boolean;
   cancel?(ctx: ToolContext): void;
+  /**
+   * Dynamic cursor (e.g. a size circle scaled by zoom). Consulted whenever the
+   * viewport restores the tool cursor (activation, after Space/hand, after pans).
+   * Falls back to `cursor`.
+   */
+  getCursor?(ctx: ToolContext): string | undefined;
 }
 
 export type { HitResult, HitOptions, SnapResult, SnapOptions, SnapSession, AnchorRef, HandleRef };

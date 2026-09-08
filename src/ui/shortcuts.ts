@@ -117,7 +117,7 @@ export function installShortcuts(): () => void {
       if (s.temporaryTool === 'hand') {
         s.setTemporaryTool(null);
         const t = getTool(s.activeTool);
-        s.setCursor(t?.cursor ?? 'default');
+        s.setCursor(t?.getCursor?.(toolContext) ?? t?.cursor ?? 'default');
       }
       return;
     }

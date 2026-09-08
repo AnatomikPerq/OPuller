@@ -1,0 +1,76 @@
+/* History panel ------------------------------------------------------------ */
+
+.history-panel {
+  margin: -8px -10px;
+  display: flex;
+  flex-direction: column;
+}
+.history-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  background: var(--bg-panel-alt);
+}
+.history-header .grow {
+  flex: 1;
+}
+.history-list {
+  max-height: calc(60vh - 70px);
+  min-height: 80px;
+  overflow-y: auto;
+}
+.hist-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--text);
+}
+.hist-row:hover {
+  background: var(--bg-hover);
+}
+.hist-row .hist-index {
+  width: 22px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-align: right;
+  flex: 0 0 auto;
+}
+.hist-row .hist-icon {
+  color: var(--text-muted);
+  display: flex;
+  flex: 0 0 auto;
+}
+.hist-row .hist-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hist-row.current {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.hist-row.current .hist-icon {
+  color: var(--text);
+}
+.hist-row.future {
+  color: var(--text-dim);
+}
+.hist-row.future .hist-icon {
+  color: var(--text-dim);
+}
+.hist-row.pending {
+  font-style: italic;
+  color: var(--text-muted);
+  cursor: default;
+}

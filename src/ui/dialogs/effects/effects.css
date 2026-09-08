@@ -1,0 +1,78 @@
+/* Effect dialogs ------------------------------------------------------------ */
+
+.effect-dialog .ed-intro {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.effect-dialog .ed-intro .ed-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.effect-dialog .ed-grid {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 76px;
+  gap: 8px 10px;
+  align-items: center;
+}
+.effect-dialog .ed-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+.effect-dialog .ed-slider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 24px;
+}
+.effect-dialog .ed-slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent-strong);
+  height: 18px;
+  margin: 0;
+}
+.effect-dialog .ed-slider .ed-tick {
+  position: absolute;
+  top: 2px;
+  width: 1px;
+  height: 6px;
+  background: var(--text-dim);
+  pointer-events: none;
+}
+.effect-dialog .ed-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.effect-dialog .ed-color .swatch-btn {
+  width: 28px;
+  height: 22px;
+}
+.effect-dialog .ed-color .ed-hex {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.effect-dialog .ed-footer-left {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.effect-dialog .ed-note {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding-top: 4px;
+}

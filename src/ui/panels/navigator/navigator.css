@@ -1,0 +1,53 @@
+/* Navigator panel ------------------------------------------------------------ */
+
+.navigator-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nav-thumb {
+  position: relative;
+  height: 170px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+}
+.nav-thumb svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.nav-thumb .nav-view {
+  fill: rgba(229, 72, 77, 0.08);
+  stroke: #e5484d;
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  cursor: grab;
+}
+.nav-thumb.dragging .nav-view {
+  cursor: grabbing;
+}
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.nav-controls input[type='range'] {
+  flex: 1;
+  min-width: 40px;
+  accent-color: var(--accent-strong);
+  height: 18px;
+}
+.nav-controls .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+.nav-info {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-dim);
+  font-size: 10px;
+}

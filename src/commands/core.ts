@@ -26,7 +26,7 @@ import {
 } from '@/model/document';
 import { makeGroup, createDocument } from '@/model/nodes';
 import { translate, multiply, invert } from '@/geometry/matrix';
-import { registerCommands, when } from './registry';
+import { registerCommands, when, getCommand, runCommand } from './registry';
 import { insertionParent } from '@/tools/shapes/tool';
 
 // ---------------------------------------------------------------------------
@@ -137,12 +137,13 @@ export function pasteClipboard(opts: PasteOptions = {}): ID[] {
 
 export function deleteSelection(): void {
   const s = getState();
-  const ids = topmostOf(s.doc, s.selection);
-  if (!ids.length) return;
-  if (s.selectedAnchors.length && s.activeTool === 'direct') {
-    // handled by the direct selection tool (delete anchors)
+  if (s.selectedAnchors.length && getCommand('path.deleteAnchors')) {
+    // anchors are selected: delete those instead of whole objects
+    runCommand('path.deleteAnchors');
     return;
   }
+  const ids = topmostOf(s.doc, s.selection);
+  if (!ids.length) return;
   s.updateDoc((d) => {
     for (const id of ids) {
       if (d.nodes[id]?.type === 'layer' && d.layers.length <= 1) continue;

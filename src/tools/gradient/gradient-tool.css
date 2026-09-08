@@ -1,0 +1,60 @@
+/* Gradient tool annotator + stop popover anchor */
+
+.gradient-annotator {
+  pointer-events: none;
+}
+.gradient-annotator .ga-line-shadow {
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 3;
+  fill: none;
+}
+.gradient-annotator .ga-line {
+  stroke: #ffffff;
+  stroke-width: 1.5;
+  fill: none;
+}
+.gradient-annotator .ga-ellipse {
+  stroke: #ffffff;
+  stroke-width: 1;
+  fill: none;
+  stroke-dasharray: 4 3;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+}
+.gradient-annotator .ga-handle {
+  fill: #ffffff;
+  stroke: #333;
+  stroke-width: 1;
+}
+.gradient-annotator .ga-handle.hover {
+  stroke: var(--selection);
+  stroke-width: 2;
+}
+.gradient-annotator .ga-focal {
+  fill: #ffffff;
+  stroke: #333;
+  stroke-width: 1;
+}
+.gradient-annotator .ga-stop {
+  stroke: #ffffff;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+.gradient-annotator .ga-stop.active {
+  stroke: var(--selection);
+  stroke-width: 2;
+}
+.gradient-annotator .ga-stop.removing {
+  opacity: 0.35;
+}
+.gradient-annotator .ga-outline {
+  fill: none;
+  stroke: var(--selection);
+  stroke-width: 1;
+  opacity: 0.7;
+}
+.gradient-stop-anchor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}

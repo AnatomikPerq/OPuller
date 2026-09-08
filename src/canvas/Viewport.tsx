@@ -84,7 +84,7 @@ export function Viewport() {
   // --- tool activation / cursor -------------------------------------------
   useEffect(() => {
     const tool = getTool(activeToolId);
-    getState().setCursor(tool?.cursor ?? 'default');
+    getState().setCursor(tool?.getCursor?.(toolContext) ?? tool?.cursor ?? 'default');
     tool?.activate?.(toolContext);
     return () => {
       tool?.deactivate?.(toolContext);
@@ -223,7 +223,7 @@ export function Viewport() {
     if (d && d.kind === 'pan') {
       drag.current = null;
       const tool = getTool(s.temporaryTool ?? s.activeTool);
-      s.setCursor(s.temporaryTool === 'hand' ? 'grab' : (tool?.cursor ?? 'default'));
+      s.setCursor(s.temporaryTool === 'hand' ? 'grab' : (tool?.getCursor?.(toolContext) ?? tool?.cursor ?? 'default'));
       return;
     }
     if (d && d.kind === 'guide') {

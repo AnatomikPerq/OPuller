@@ -7,6 +7,13 @@
 import { expect, type Page, type Locator } from '@playwright/test';
 
 export async function openApp(page: Page): Promise<void> {
+  // Block Vite's HMR websocket so edits by other people in the tree do not trigger
+  // full reloads that destroy the page mid-test.
+  try {
+    await page.routeWebSocket(/.*/, () => {});
+  } catch {
+    /* older Playwright */
+  }
   await page.goto('/');
   await page.waitForSelector('[data-testid="viewport"]');
   // make sure the store is exposed and tools are registered

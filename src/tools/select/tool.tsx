@@ -290,9 +290,8 @@ export const selectTool: Tool = {
       // click without drag
       if (e.shift && g.wasSelected && !g.toggled && g.hitId) {
         s.removeFromSelection([g.hitId]);
-      } else if (!e.shift && g.hitId && g.wasSelected && s.selection.length > 1) {
-        s.setSelection([g.hitId]);
       }
+      // a plain click on an already selected object keeps the multi-selection (Illustrator)
       return;
     }
     if (g.kind === 'marquee') {
@@ -334,6 +333,14 @@ export const selectTool: Tool = {
     }
     const target = s.doc.nodes[hit.target];
     if (!target) return;
+    const leaf = s.doc.nodes[hit.id];
+    if (leaf && leaf.type === 'text') {
+      // text (even inside a group): edit it in place
+      s.setSelection([leaf.id]);
+      s.setTool('text');
+      s.setEditingText(leaf.id);
+      return;
+    }
     if (target.type === 'group') {
       s.setIsolation(target.id);
       s.setSelection([hit.id]);

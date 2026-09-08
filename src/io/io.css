@@ -1,0 +1,175 @@
+/* ---------------------------------------------------------------------------
+   IO module: drop zone, export dialog, new document / document setup dialogs
+--------------------------------------------------------------------------- */
+
+.io-dropzone {
+  z-index: 60;
+}
+.io-dropzone-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 28px;
+  border-radius: 10px;
+  background: rgba(20, 20, 22, 0.85);
+  border: 1px solid var(--accent-strong);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+.io-dropzone-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* --- export dialog --------------------------------------------------------- */
+
+.io-export {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 14px;
+  min-height: 360px;
+}
+.io-export-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.io-export-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.io-preview-box {
+  position: relative;
+  width: 240px;
+  height: 180px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background-color: #bbb;
+  background-image: linear-gradient(45deg, #999 25%, transparent 25%), linear-gradient(-45deg, #999 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #999 75%), linear-gradient(-45deg, transparent 75%, #999 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+}
+.io-preview-box img {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  image-rendering: auto;
+}
+.io-preview-box .io-preview-msg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #222;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.io-preview-info {
+  color: var(--text-muted);
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.io-form-row {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.io-form-row > .io-form-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.io-form-row .row {
+  min-width: 0;
+}
+.io-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+}
+.io-warning {
+  color: #e9b949;
+  font-size: 11px;
+}
+.io-hint {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* --- new document dialog ---------------------------------------------------- */
+
+.io-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.io-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-alt);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.io-preset:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.io-preset.active {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.io-preset-shape {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.io-preset-shape > span {
+  display: block;
+  background: var(--text-dim);
+  border-radius: 2px;
+}
+.io-preset.active .io-preset-shape > span {
+  background: var(--accent-strong);
+}
+.io-preset-size {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.io-color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.io-recent-time {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.io-tabs-fill .tab {
+  flex: 1;
+  text-align: center;
+}

@@ -225,7 +225,11 @@ export function outlineStroke(
   return out;
 }
 
-/** Simplify (fit) a path with the given tolerance (paper.js Path#simplify). */
+/**
+ * Simplify (fit) a path with the given tolerance (paper.js Path#simplify).
+ * NOTE: paper.js compares the tolerance against *squared* distances, so a value of
+ * t allows roughly sqrt(t) px of deviation (pass px*px for pixel semantics).
+ */
 export function simplifyPath(subpaths: SubPath[], tolerance = 2.5): SubPath[] {
   ensurePaper();
   return subpaths.map((sp) => {
@@ -262,7 +266,7 @@ export function flattenPath(subpaths: SubPath[], flatness = 0.25): SubPath[] {
   });
 }
 
-/** Fit a Bezier path through freehand points. */
+/** Fit a Bezier path through freehand points (tolerance has paper.js squared-distance semantics, see simplifyPath). */
 export function fitPoints(points: Vec[], tolerance = 2.5, closed = false): SubPath | null {
   ensurePaper();
   if (points.length < 2) return null;

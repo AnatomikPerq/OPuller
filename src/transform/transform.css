@@ -1,0 +1,248 @@
+/* ---------------------------------------------------------------------------
+   Transform module: reference point grid, Transform & Align panels, dialogs
+--------------------------------------------------------------------------- */
+
+:root {
+  --cursor-rotate-nw: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'><path d='M5 13a6 6 0 1 1 12 0' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/><path d='M5 13a6 6 0 1 1 12 0' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/><path d='M14 10l3 3 3-3' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/><path d='M14 10l3 3 3-3' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>") 11 11, grab;
+  --cursor-rotate-ne: var(--cursor-rotate-nw);
+  --cursor-rotate-se: var(--cursor-rotate-nw);
+  --cursor-rotate-sw: var(--cursor-rotate-nw);
+}
+
+.ref-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 10px);
+  grid-template-rows: repeat(3, 10px);
+  gap: 1px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+.ref-grid.large {
+  grid-template-columns: repeat(3, 14px);
+  grid-template-rows: repeat(3, 14px);
+  width: 44px;
+  height: 44px;
+}
+.ref-grid.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.ref-grid-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.ref-cell {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.ref-grid.large .ref-cell {
+  width: 14px;
+  height: 14px;
+}
+.ref-cell::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--text-muted);
+  background: var(--bg-input);
+  border-radius: 1px;
+  transition: transform 0.08s;
+}
+.ref-grid.large .ref-cell::before {
+  width: 8px;
+  height: 8px;
+}
+.ref-cell:hover::before {
+  border-color: var(--text);
+  transform: scale(1.15);
+}
+.ref-cell.active::before {
+  background: var(--accent-strong);
+  border-color: #fff;
+  transform: scale(1.2);
+}
+
+/* Transform panel ------------------------------------------------------------ */
+
+.transform-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.transform-panel .tp-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 4px 6px;
+  align-items: center;
+}
+.transform-panel .tp-ref {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+}
+.transform-panel .tp-lock {
+  grid-column: 4;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 46px;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  position: relative;
+}
+.transform-panel .tp-lock::before,
+.transform-panel .tp-lock::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  width: 6px;
+  height: 12px;
+  border: 1px solid var(--border-strong);
+  border-left: none;
+}
+.transform-panel .tp-lock::before {
+  top: 4px;
+  border-bottom: none;
+}
+.transform-panel .tp-lock::after {
+  bottom: 4px;
+  border-top: none;
+}
+.transform-panel .tp-lock.active {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+.transform-panel .tp-lock:hover {
+  color: var(--text);
+}
+.transform-panel .tp-angles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 6px;
+}
+.transform-panel .tp-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.transform-panel .tp-actions .sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.transform-panel .field-label {
+  min-width: 12px;
+}
+
+/* Align panel ---------------------------------------------------------------- */
+
+.align-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.align-panel .align-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.align-panel .align-row .sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.align-panel .align-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.align-panel .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+.align-panel .align-hint {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* Dialogs -------------------------------------------------------------------- */
+
+.transform-dialog .td-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+}
+.transform-dialog .td-grid .plain-label {
+  text-align: right;
+}
+.transform-dialog .td-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.transform-dialog .td-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.transform-dialog .td-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+.transform-dialog .td-radio input {
+  accent-color: var(--accent-strong);
+  margin: 0;
+}
+.transform-dialog .td-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.transform-dialog .td-footer-left {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.transform-dialog .td-note {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* Tool options ------------------------------------------------------------- */
+
+.transform-tool-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.transform-tool-options .hint {
+  color: var(--text-muted);
+}

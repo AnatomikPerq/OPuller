@@ -482,7 +482,25 @@ export function textElement(n: TextNode, doc: Document, paintAttrs: Record<strin
         </defs>
         <text {...base} textAnchor={s.textAlign === 'center' ? 'middle' : s.textAlign === 'right' ? 'end' : 'start'} dy={s.baselineShift ? -s.baselineShift : undefined}>
           <textPath href={`#${tpId}`} startOffset={`${((n.pathOffset ?? 0) * 100).toFixed(2)}%`}>
-            {applyTransformText(n.text.replace(/\n/g, ' '), s.textTransform)}
+            {(n.runs && n.runs.length ? n.runs : [{ text: n.text }]).map((r, ri) => {
+              const st = { ...s, ...(r.style ?? {}) };
+              const override: Record<string, unknown> = {};
+              if (st.fontFamily !== s.fontFamily) override.fontFamily = st.fontFamily;
+              if (st.fontSize !== s.fontSize) override.fontSize = st.fontSize;
+              if (st.fontWeight !== s.fontWeight) override.fontWeight = st.fontWeight;
+              if (st.fontStyle !== s.fontStyle) override.fontStyle = st.fontStyle;
+              if (st.letterSpacing !== s.letterSpacing) override.letterSpacing = st.letterSpacing;
+              if (st.textDecoration !== s.textDecoration) override.textDecoration = st.textDecoration === 'none' ? 'none' : st.textDecoration;
+              if (st.baselineShift !== s.baselineShift) override.dy = -(st.baselineShift - s.baselineShift);
+              const txt = applyTransformText(r.text.replace(/\n/g, ' '), st.textTransform);
+              return Object.keys(override).length ? (
+                <tspan key={ri} {...override}>
+                  {txt}
+                </tspan>
+              ) : (
+                <React.Fragment key={ri}>{txt}</React.Fragment>
+              );
+            })}
           </textPath>
         </text>
       </>

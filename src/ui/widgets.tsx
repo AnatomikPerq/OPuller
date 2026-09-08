@@ -76,11 +76,15 @@ export function NumberField(props: NumberFieldProps) {
     }
     if (v !== null && Number.isFinite(v)) {
       const c = clamp(v);
-      onChange(c);
-      onCommit?.(c);
+      // unchanged value (e.g. blur without edits): do not emit, avoids phantom undo steps
+      const unchanged = !mixed && value !== null && value !== undefined && Math.abs(c - value) < 1e-9;
+      if (!unchanged) {
+        onChange(c);
+        onCommit?.(c);
+      }
       setText(display(c));
     } else setText(display(value));
-    if (viaEnter) inputRef.current?.select();
+    if (viaEnter) inputRef.current?.blur();
   };
 
   const nudge = (dir: number, big: boolean) => {

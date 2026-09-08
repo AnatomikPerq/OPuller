@@ -4,7 +4,7 @@
 import type { Document, ID, Vec, AnchorRef, HandleRef, PathNode } from '@/model/types';
 import { isContainer } from '@/model/types';
 import { worldMatrix, visualBounds, ancestors, isEffectivelyLocked, isEffectivelyVisible } from '@/model/document';
-import { invert, applyToPoint, scaleFactor } from '@/geometry/matrix';
+import { invert, applyToPoint, scaleFactor, multiply } from '@/geometry/matrix';
 import { nearestPointOnPath, pointInPath, absHandleIn, absHandleOut, hasHandle } from '@/geometry/path';
 import { layoutText } from '@/text/layout';
 import { rectContainsPoint } from '@/geometry/vec';
@@ -140,12 +140,18 @@ function hitNode(doc: Document, id: ID, world: Vec, opts: HitOptions, target: ID
 
   if (n.type === 'text') {
     if (!opts.bounds) return null;
-    const b = n.kind === 'path' && n.pathId ? null : layoutText(n).bounds;
-    if (b) {
-      if (rectContainsPoint(b, local, tolLocal)) return { id, target, kind: 'bounds', point: world, distance: 0 };
+    if (n.kind === 'path' && n.pathId && doc.nodes[n.pathId]?.type === 'path') {
+      // type on a path: hit when close to the path (within the font size)
+      const pathNode = doc.nodes[n.pathId] as PathNode;
+      const rel = multiply(invert(n.transform), pathNode.transform);
+      const localOnPath = applyToPoint(invert(rel), local);
+      const loc = nearestPointOnPath(pathNode.subpaths, localOnPath);
+      if (loc && loc.distance <= n.style.fontSize + tolLocal) return { id, target, kind: 'bounds', point: world, distance: loc.distance * s };
       return null;
     }
-    return { id, target, kind: 'bounds', point: world, distance: 0 };
+    const b = layoutText(n).bounds;
+    if (rectContainsPoint(b, local, tolLocal)) return { id, target, kind: 'bounds', point: world, distance: 0 };
+    return null;
   }
 
   if (n.type === 'image') {

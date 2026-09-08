@@ -1,0 +1,121 @@
+/* Stroke panel */
+
+.stroke-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.stroke-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.stroke-row .stroke-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  min-width: 52px;
+}
+.stroke-row .segmented .segment {
+  min-width: 28px;
+  padding: 0 5px;
+}
+.stroke-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  min-width: 190px;
+}
+.stroke-presets button {
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px;
+}
+.stroke-presets button:hover {
+  background: var(--bg-hover);
+}
+.stroke-presets button.active {
+  background: var(--accent-soft);
+}
+.stroke-dash-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px 6px;
+}
+.stroke-dash-grid.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.stroke-dash-grid .field-label {
+  font-size: 10px;
+  min-width: 24px;
+}
+.stroke-dash-preview {
+  height: 10px;
+  display: block;
+  width: 100%;
+}
+.stroke-picker-btn {
+  height: 24px;
+  min-width: 0;
+  flex: 1;
+  padding: 0 20px 0 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  text-align: left;
+}
+.stroke-picker-btn:hover {
+  border-color: var(--border-strong);
+}
+.stroke-picker-btn .stroke-picker-chevron {
+  position: absolute;
+  right: 5px;
+  color: var(--text-muted);
+}
+.stroke-picker-btn .stroke-picker-name {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stroke-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 170px;
+}
+.stroke-picker-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
+}
+.stroke-picker-list button:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.stroke-picker-list button.active {
+  background: var(--accent-soft);
+}
+.stroke-picker-list button.active:hover {
+  background: var(--accent);
+}
+.stroke-arrow-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 4px;
+  align-items: center;
+}

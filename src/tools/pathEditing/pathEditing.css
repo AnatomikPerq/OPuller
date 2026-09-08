@@ -1,0 +1,34 @@
+/* Anchor editing tools: control bar bits */
+.pe-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.pe-options .pe-status {
+  color: var(--text-muted);
+  min-width: 120px;
+  white-space: nowrap;
+}
+.pe-options .pe-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pe-options .pe-group-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-right: 2px;
+}
+.pe-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 2px;
+  flex: 0 0 auto;
+}
+.pe-kbd-hint {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}

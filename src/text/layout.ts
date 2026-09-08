@@ -4,6 +4,14 @@
  *
  * Point text: origin (0,0) is the start of the first baseline (before alignment).
  * Area text: origin (0,0) is the top-left corner of the box; text is wrapped to box.width.
+ * Path text: laid out like a single-line point text; the tool/outline code maps the
+ * x offsets onto the path.
+ *
+ * Runs keep their trailing whitespace (so carets can be placed after a space) but a
+ * line's `width` excludes trailing whitespace for alignment purposes. Words that span
+ * several runs (style boundaries inside a word) are wrapped as a unit; tabs advance to
+ * the next tab stop; text-transform is applied per character so that character indices
+ * stay stable.
  */
 import type { TextNode, TextStyle, TextRun, Rect } from '@/model/types';
 
@@ -23,6 +31,7 @@ export interface LaidLine {
   x: number;
   /** baseline y */
   y: number;
+  /** width excluding trailing whitespace */
   width: number;
   ascent: number;
   descent: number;
@@ -30,7 +39,7 @@ export interface LaidLine {
   start: number;
   /** index after the last character (excluding the newline) */
   end: number;
-  /** whether this line ends a paragraph */
+  /** whether this line ends a paragraph (hard return / end of text) */
   paragraphEnd: boolean;
 }
 
@@ -48,8 +57,12 @@ let measureCtx: CanvasRenderingContext2D | null = null;
 function ctx(): CanvasRenderingContext2D | null {
   if (measureCtx) return measureCtx;
   if (typeof document === 'undefined') return null;
-  const c = document.createElement('canvas');
-  measureCtx = c.getContext('2d');
+  try {
+    const c = document.createElement('canvas');
+    measureCtx = c.getContext('2d');
+  } catch {
+    measureCtx = null;
+  }
   return measureCtx;
 }
 
@@ -73,7 +86,7 @@ export function measure(text: string, style: TextStyle): Metrics {
   const c = ctx();
   let m: Metrics;
   if (!c) {
-    m = { width: text.length * style.fontSize * 0.55, ascent: style.fontSize * 0.8, descent: style.fontSize * 0.2 };
+    m = { width: text.length * style.fontSize * 0.55 + style.letterSpacing * text.length, ascent: style.fontSize * 0.8, descent: style.fontSize * 0.2 };
   } else {
     c.font = fontString(style);
     try {
@@ -110,6 +123,29 @@ export function applyTransform(text: string, style: TextStyle): string {
   }
 }
 
+/**
+ * Apply the text transform to a piece of text while keeping its length (characters
+ * whose case mapping changes the length, e.g. "ß" → "SS", are left untouched).
+ * `wordStart` tells whether the piece begins a word (for capitalize).
+ */
+export function transformPiece(text: string, style: TextStyle, wordStart = true): string {
+  const mode = style.textTransform;
+  if (mode === 'none' || !text) return text;
+  if (mode === 'capitalize') {
+    if (!wordStart) return text;
+    const first = text[0].toUpperCase();
+    return (first.length === 1 ? first : text[0]) + text.slice(1);
+  }
+  const t = mode === 'uppercase' ? text.toUpperCase() : text.toLowerCase();
+  if (t.length === text.length) return t;
+  let out = '';
+  for (const ch of text) {
+    const u = mode === 'uppercase' ? ch.toUpperCase() : ch.toLowerCase();
+    out += u.length === ch.length ? u : ch;
+  }
+  return out;
+}
+
 /** Resolve runs into an array of {text, style} with the base style merged in. */
 export function resolveRuns(node: TextNode): Array<{ text: string; style: TextStyle }> {
   const runs: TextRun[] = node.runs && node.runs.length ? node.runs : [{ text: node.text }];
@@ -120,28 +156,49 @@ interface Piece {
   text: string;
   style: TextStyle;
   start: number;
-  /** true if this piece is whitespace (breakable) */
-  space: boolean;
-  newline: boolean;
+  kind: 'word' | 'space' | 'tab' | 'newline';
 }
 
-/** Split runs into word/space/newline pieces. */
+/** Split runs into word/space/tab/newline pieces. */
 function pieces(node: TextNode): Piece[] {
   const out: Piece[] = [];
   let index = 0;
   for (const run of resolveRuns(node)) {
-    const re = /(\n)|(\s+)|([^\s]+)/g;
+    const re = /(\n)|(\t)|([^\S\n\t]+)|([^\s]+)/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(run.text))) {
       const text = m[0];
-      out.push({ text, style: run.style, start: index, space: !!m[2], newline: !!m[1] });
+      out.push({ text, style: run.style, start: index, kind: m[1] ? 'newline' : m[2] ? 'tab' : m[3] ? 'space' : 'word' });
       index += text.length;
     }
   }
   return out;
 }
 
-const layoutCache = new WeakMap<TextNode, TextLayout>();
+/** A word possibly made of several styled pieces (no whitespace inside). */
+interface Word {
+  parts: Array<{ text: string; style: TextStyle; start: number; width: number; metrics: Metrics }>;
+  width: number;
+  start: number;
+}
+
+export function isWhitespace(text: string): boolean {
+  return /^\s+$/.test(text);
+}
+
+let layoutCache = new WeakMap<TextNode, TextLayout>();
+let generation = 0;
+
+/** Drop all cached layouts (e.g. after a web font finished loading). */
+export function invalidateLayouts(): void {
+  layoutCache = new WeakMap();
+  generation++;
+}
+
+/** Bumps whenever layouts were invalidated; handy for memo keys. */
+export function layoutGeneration(): number {
+  return generation;
+}
 
 export function layoutText(node: TextNode): TextLayout {
   const cached = layoutCache.get(node);
@@ -151,12 +208,15 @@ export function layoutText(node: TextNode): TextLayout {
   return l;
 }
 
+const EPS = 1e-6;
+
 function computeLayout(node: TextNode): TextLayout {
   const base = node.style;
-  const isArea = node.kind === 'area' && node.box;
-  const maxWidth = isArea ? node.box!.width : Infinity;
+  const isArea = node.kind === 'area' && !!node.box;
+  const maxWidth = isArea ? Math.max(0, node.box!.width) : Infinity;
   const ps = pieces(node);
   const lines: LaidLine[] = [];
+  const baseMetrics = measure('Hg', base);
 
   let cur: LaidRun[] = [];
   let curWidth = 0;
@@ -171,21 +231,18 @@ function computeLayout(node: TextNode): TextLayout {
   const pushLine = (end: number, paragraphEnd: boolean) => {
     const size = curMaxSize || base.fontSize;
     const lh = (curLineHeight || base.lineHeight) * size;
-    const asc = curAscent || measure('Hg', base).ascent;
-    const desc = curDescent || measure('Hg', base).descent;
+    const asc = curAscent || baseMetrics.ascent;
+    const desc = curDescent || baseMetrics.descent;
     if (first) {
       y = isArea ? asc : 0;
       first = false;
     } else {
       y += lh;
     }
-    // trim trailing whitespace width for alignment purposes
+    // width for alignment excludes trailing whitespace (runs are kept for carets)
     let width = curWidth;
-    while (cur.length && /^\s+$/.test(cur[cur.length - 1].text)) {
-      width -= cur[cur.length - 1].width;
-      cur.pop();
-    }
-    lines.push({ runs: cur, x: 0, y, width, ascent: asc, descent: desc, start: curStart, end, paragraphEnd });
+    for (let i = cur.length - 1; i >= 0 && isWhitespace(cur[i].text); i--) width -= cur[i].width;
+    lines.push({ runs: cur, x: 0, y, width: Math.max(0, width), ascent: asc, descent: desc, start: curStart, end, paragraphEnd });
     if (paragraphEnd) y += base.paragraphSpacing;
     cur = [];
     curWidth = 0;
@@ -195,49 +252,81 @@ function computeLayout(node: TextNode): TextLayout {
     curLineHeight = 0;
   };
 
-  const addPiece = (p: Piece, text: string) => {
-    const m = measure(text, p.style);
-    cur.push({ text, style: p.style, x: curWidth, width: m.width, start: p.start });
-    curWidth += m.width;
+  const addRun = (text: string, style: TextStyle, start: number, width: number, m: Metrics) => {
+    cur.push({ text, style, x: curWidth, width, start });
+    curWidth += width;
     curAscent = Math.max(curAscent, m.ascent);
     curDescent = Math.max(curDescent, m.descent);
-    curMaxSize = Math.max(curMaxSize, p.style.fontSize);
-    curLineHeight = Math.max(curLineHeight, p.style.lineHeight);
+    curMaxSize = Math.max(curMaxSize, style.fontSize);
+    curLineHeight = Math.max(curLineHeight, style.lineHeight);
   };
 
-  for (let i = 0; i < ps.length; i++) {
+  // group consecutive word pieces into words
+  let i = 0;
+  while (i < ps.length) {
     const p = ps[i];
-    if (p.newline) {
+    if (p.kind === 'newline') {
       pushLine(p.start, true);
       curStart = p.start + 1;
+      i++;
       continue;
     }
-    const text = applyTransform(p.text, p.style);
-    const m = measure(text, p.style);
-    if (isArea && !p.space && curWidth > 0 && curWidth + m.width > maxWidth) {
+    if (p.kind === 'tab') {
+      const tabW = Math.max(1, p.style.fontSize * 2);
+      const rem = curWidth % tabW;
+      const w = rem < EPS ? tabW : tabW - rem;
+      addRun(p.text, p.style, p.start, w, measure(' ', p.style));
+      i++;
+      continue;
+    }
+    if (p.kind === 'space') {
+      const m = measure(p.text, p.style);
+      addRun(p.text, p.style, p.start, m.width, m);
+      i++;
+      continue;
+    }
+    // word: collect all consecutive word pieces
+    const word: Word = { parts: [], width: 0, start: p.start };
+    let k = i;
+    while (k < ps.length && ps[k].kind === 'word') {
+      const q = ps[k];
+      const text = transformPiece(q.text, q.style, k === i);
+      const m = measure(text, q.style);
+      word.parts.push({ text, style: q.style, start: q.start, width: m.width, metrics: m });
+      word.width += m.width;
+      k++;
+    }
+    i = k;
+    if (isArea && cur.length > 0 && curWidth + word.width > maxWidth + EPS) {
       // wrap before this word
-      pushLine(p.start, false);
-      curStart = p.start;
+      pushLine(word.start, false);
+      curStart = word.start;
     }
-    if (isArea && !p.space && m.width > maxWidth && maxWidth > 0) {
+    if (isArea && word.width > maxWidth + EPS && maxWidth > 0) {
       // break a very long word by characters
-      let chunk = '';
-      let chunkStart = p.start;
-      for (const ch of text) {
-        const w = measure(chunk + ch, p.style).width;
-        if (chunk && curWidth + w > maxWidth) {
-          addPiece({ ...p, start: chunkStart }, chunk);
-          pushLine(chunkStart + chunk.length, false);
-          curStart = chunkStart + chunk.length;
-          chunkStart += chunk.length;
-          chunk = '';
+      for (const part of word.parts) {
+        let chunk = '';
+        let chunkStart = part.start;
+        for (const ch of part.text) {
+          const w = measure(chunk + ch, part.style).width;
+          if (chunk && curWidth + w > maxWidth + EPS) {
+            const cm = measure(chunk, part.style);
+            addRun(chunk, part.style, chunkStart, cm.width, cm);
+            pushLine(chunkStart + chunk.length, false);
+            curStart = chunkStart + chunk.length;
+            chunkStart += chunk.length;
+            chunk = '';
+          }
+          chunk += ch;
         }
-        chunk += ch;
+        if (chunk) {
+          const cm = measure(chunk, part.style);
+          addRun(chunk, part.style, chunkStart, cm.width, cm);
+        }
       }
-      if (chunk) addPiece({ ...p, start: chunkStart }, chunk);
       continue;
     }
-    addPiece(p, text);
+    for (const part of word.parts) addRun(part.text, part.style, part.start, part.width, part.metrics);
   }
   // final line (always, so empty text still has a caret line)
   pushLine(node.text.length, true);
@@ -250,14 +339,18 @@ function computeLayout(node: TextNode): TextLayout {
     if (align === 'center') line.x = isArea ? (ref - line.width) / 2 : -line.width / 2;
     else if (align === 'right') line.x = isArea ? ref - line.width : -line.width;
     else if (align === 'justify' && isArea && !line.paragraphEnd && line.runs.length > 1) {
-      const spaces = line.runs.filter((r) => /^\s+$/.test(r.text));
+      // stretch the spaces between words (not the trailing ones)
+      let lastWord = -1;
+      for (let r = 0; r < line.runs.length; r++) if (!isWhitespace(line.runs[r].text)) lastWord = r;
+      const spaces = line.runs.slice(0, Math.max(0, lastWord)).filter((r) => isWhitespace(r.text));
       if (spaces.length) {
         const extra = (boxWidth - line.width) / spaces.length;
         let shift = 0;
-        for (const r of line.runs) {
-          r.x += shift;
-          if (/^\s+$/.test(r.text)) {
-            r.width += extra;
+        for (let r = 0; r < line.runs.length; r++) {
+          const run = line.runs[r];
+          run.x += shift;
+          if (r < lastWord && isWhitespace(run.text)) {
+            run.width += extra;
             shift += extra;
           }
         }
@@ -265,7 +358,6 @@ function computeLayout(node: TextNode): TextLayout {
       }
       line.x = 0;
     } else line.x = 0;
-    line.x += 0;
   }
 
   // bounds
@@ -294,32 +386,56 @@ function computeLayout(node: TextNode): TextLayout {
   return { lines, bounds, overflow, width: maxX - minX, height: maxY - minY };
 }
 
-/** Caret position (x, top, height) for a character index. */
-export function caretAt(layout: TextLayout, index: number, style: TextStyle): { x: number; y: number; height: number; line: number } {
+/** Index of the line that holds the caret for a character index. */
+export function lineIndexAt(layout: TextLayout, index: number): number {
   let li = layout.lines.length - 1;
   for (let i = 0; i < layout.lines.length; i++) {
     const l = layout.lines[i];
     if (index <= l.end) {
       // an index equal to l.end belongs to this line unless the next line starts here (wrapped)
       const next = layout.lines[i + 1];
-      if (index === l.end && next && next.start === index && !l.paragraphEnd) {
-        li = i + 1;
-      } else li = i;
+      if (index === l.end && next && next.start === index && !l.paragraphEnd) li = i + 1;
+      else li = i;
       break;
     }
   }
-  const line = layout.lines[li];
-  if (!line) return { x: 0, y: -style.fontSize, height: style.fontSize * 1.2, line: 0 };
+  return li;
+}
+
+/**
+ * The character index where a caret sits at the visual end of a line: for wrapped
+ * lines this excludes the trailing whitespace that belongs to this line.
+ */
+export function visualLineEnd(line: LaidLine): number {
+  if (line.paragraphEnd) return line.end;
+  let e = line.end;
+  for (let i = line.runs.length - 1; i >= 0 && isWhitespace(line.runs[i].text); i--) e = line.runs[i].start;
+  return Math.max(line.start, e);
+}
+
+/** x position (local) of a character index within a line. */
+export function xAtIndex(line: LaidLine, index: number): number {
   let x = line.x;
   for (const r of line.runs) {
     if (index >= r.start && index <= r.start + r.text.length) {
-      const sub = r.text.slice(0, index - r.start);
-      x = line.x + r.x + measure(sub, r.style).width;
-      break;
+      const k = index - r.start;
+      if (r.text === '\t') return line.x + r.x + (k > 0 ? r.width : 0);
+      const sub = r.text.slice(0, k);
+      // justified spaces may be wider than measured
+      if (isWhitespace(r.text) && r.text.length > 0) return line.x + r.x + (r.width * k) / r.text.length;
+      return line.x + r.x + measure(sub, r.style).width;
     }
     if (index > r.start + r.text.length) x = line.x + r.x + r.width;
   }
-  return { x, y: line.y - line.ascent, height: line.ascent + line.descent, line: li };
+  return x;
+}
+
+/** Caret position (x, top, height) for a character index. */
+export function caretAt(layout: TextLayout, index: number, style: TextStyle): { x: number; y: number; height: number; line: number } {
+  const li = lineIndexAt(layout, index);
+  const line = layout.lines[li];
+  if (!line) return { x: 0, y: -style.fontSize, height: style.fontSize * 1.2, line: 0 };
+  return { x: xAtIndex(line, index), y: line.y - line.ascent, height: line.ascent + line.descent, line: li };
 }
 
 /** Character index nearest to a local point. */
@@ -329,18 +445,40 @@ export function indexAtPoint(layout: TextLayout, p: { x: number; y: number }, te
   for (const l of layout.lines) {
     if (p.y >= l.y - l.ascent) line = l;
   }
-  if (p.x <= line.x) return line.start;
-  let best = line.end;
-  let bestD = Infinity;
+  return indexAtLineX(line, p.x, textLength);
+}
+
+/** Character index nearest to x on a given line. */
+export function indexAtLineX(line: LaidLine, x: number, textLength: number): number {
+  if (x <= line.x) return line.start;
+  const vEnd = visualLineEnd(line);
+  let best = vEnd;
+  let bestD = Math.abs(xAtIndex(line, vEnd) - x);
   for (const r of line.runs) {
     for (let k = 0; k <= r.text.length; k++) {
-      const x = line.x + r.x + measure(r.text.slice(0, k), r.style).width;
-      const d = Math.abs(x - p.x);
+      const idx = r.start + k;
+      if (idx > vEnd) break;
+      const rx = xAtIndex(line, idx);
+      const d = Math.abs(rx - x);
       if (d < bestD) {
         bestD = d;
-        best = r.start + k;
+        best = idx;
       }
     }
   }
   return Math.max(0, Math.min(textLength, best));
+}
+
+/** Resolved style of the character before `index` (or the first character). */
+export function styleAtIndex(node: TextNode, index: number): TextStyle {
+  const runs = resolveRuns(node);
+  let pos = 0;
+  for (let i = 0; i < runs.length; i++) {
+    const r = runs[i];
+    const end = pos + r.text.length;
+    if (index <= end && (index > pos || i === 0)) return r.style;
+    if (index > pos && index <= end) return r.style;
+    pos = end;
+  }
+  return runs.length ? runs[runs.length - 1].style : { ...node.style };
 }

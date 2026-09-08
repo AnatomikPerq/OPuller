@@ -1,0 +1,280 @@
+/* Colour module: shared previews, Color panel */
+
+/* --- paint preview ------------------------------------------------------- */
+.cpaint {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 2px;
+  background-image: linear-gradient(45deg, #777 25%, transparent 25%), linear-gradient(-45deg, #777 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #777 75%), linear-gradient(-45deg, transparent 75%, #777 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+  background-color: #bbb;
+}
+.cpaint.none {
+  background: #fff;
+}
+.cpaint.none::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  top: 50%;
+  height: 2px;
+  background: #e5484d;
+  transform: rotate(-45deg);
+}
+.cpaint-fill {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.cpaint.as-stroke .cpaint-fill,
+.cpaint.as-stroke::after {
+  -webkit-mask: radial-gradient(circle, transparent 34%, #000 35%);
+  mask: radial-gradient(circle, transparent 34%, #000 35%);
+}
+.cpaint.as-stroke.none {
+  background: transparent;
+}
+.cpaint.as-stroke.none::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  -webkit-mask: radial-gradient(circle, transparent 34%, #000 35%);
+  mask: radial-gradient(circle, transparent 34%, #000 35%);
+}
+
+/* --- fill / stroke targets ---------------------------------------------- */
+.ptargets {
+  position: relative;
+  flex: 0 0 auto;
+}
+.ptarget {
+  position: absolute;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--bg-input);
+  overflow: hidden;
+  cursor: pointer;
+}
+.ptarget.fill {
+  left: 0;
+  top: 0;
+  z-index: 2;
+}
+.ptarget.stroke {
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+.ptarget.active {
+  z-index: 3;
+  outline: 2px solid var(--selection);
+  outline-offset: 1px;
+}
+.ptarget-mixed {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 2px #000, 0 0 2px #000;
+}
+
+/* --- Color panel --------------------------------------------------------- */
+.color-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.color-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-panel-head .cp-target-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.cp-target-name {
+  font-weight: 600;
+}
+.cp-target-sub {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cp-channels {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cp-channels.disabled {
+  opacity: 0.55;
+}
+.cp-channel {
+  display: grid;
+  grid-template-columns: 14px 1fr 64px;
+  align-items: center;
+  gap: 6px;
+}
+.cp-channel-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+.cp-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  outline: none;
+  margin: 0;
+  cursor: pointer;
+  background-color: #888;
+}
+.cp-range.alpha {
+  background-image: linear-gradient(to right, transparent, #fff), repeating-conic-gradient(#888 0 25%, #ccc 0 50%);
+  background-size: 100% 100%, 8px 8px;
+}
+.cp-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #333;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5), 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.cp-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #333;
+}
+.cp-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--selection);
+}
+.cp-spectrum-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 18px;
+}
+.cp-spectrum {
+  flex: 1;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  cursor: crosshair;
+  position: relative;
+  touch-action: none;
+}
+.cp-spectrum-marker {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+.cp-quick {
+  width: 18px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.cp-quick.white {
+  background: #fff;
+}
+.cp-quick.black {
+  background: #000;
+}
+.cp-quick.none {
+  background: #fff;
+}
+.cp-quick.none::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  top: 50%;
+  height: 2px;
+  background: #e5484d;
+  transform: rotate(-45deg);
+}
+.cp-quick:hover {
+  outline: 1px solid var(--selection);
+}
+.cp-hex-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cp-hex-row .text-field {
+  flex: 1;
+}
+.cp-stop-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cp-stop-note .cp-stop-chip {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--border-strong);
+}
+.cp-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 170px;
+}
+.cp-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-align: left;
+}
+.cp-menu button:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+.cp-menu button.checked {
+  font-weight: 600;
+}
+.cp-menu .cp-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 3px 4px;
+}
+.solid-color-popover {
+  gap: 6px;
+}

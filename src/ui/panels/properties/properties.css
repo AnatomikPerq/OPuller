@@ -1,0 +1,222 @@
+/* Properties panel ------------------------------------------------------------ */
+
+.properties-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.properties-panel .pp-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+}
+.properties-panel .pp-header .pp-icon {
+  color: var(--text-muted);
+  display: flex;
+}
+.properties-panel .pp-header .pp-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.properties-panel .pp-header .pp-sub {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pp-grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 6px;
+  align-items: center;
+}
+.pp-grid-2 .field-label {
+  min-width: 14px;
+}
+.pp-transform {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 22px;
+  gap: 4px 6px;
+  align-items: center;
+}
+.pp-transform .pp-lock {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  width: 20px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  position: relative;
+}
+.pp-transform .pp-lock::before,
+.pp-transform .pp-lock::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  width: 6px;
+  height: 12px;
+  border: 1px solid var(--border-strong);
+  border-left: none;
+}
+.pp-transform .pp-lock::before {
+  top: 4px;
+  border-bottom: none;
+}
+.pp-transform .pp-lock::after {
+  bottom: 4px;
+  border-top: none;
+}
+.pp-transform .pp-lock.active {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+.pp-transform .pp-lock:hover {
+  color: var(--text);
+}
+
+.pp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.pp-row .grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.pp-link {
+  color: var(--accent-strong);
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  margin-left: auto;
+}
+.pp-link:hover {
+  text-decoration: underline;
+}
+
+.pp-radii {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 24px;
+  gap: 4px 6px;
+  align-items: center;
+}
+.pp-radii .pp-radius-link {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pp-corner {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 0;
+  box-sizing: border-box;
+}
+.pp-corner.tl {
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 5px;
+}
+.pp-corner.tr {
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 5px;
+}
+.pp-corner.br {
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 5px;
+}
+.pp-corner.bl {
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 5px;
+}
+
+.pp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pp-actions .pp-action {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.pp-actions .pp-action svg {
+  color: var(--text-muted);
+}
+.pp-actions .pp-action:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+.pp-actions .pp-action:hover:not(:disabled) svg {
+  color: var(--text);
+}
+.pp-actions .pp-action:disabled {
+  opacity: 0.4;
+}
+.pp-align-row {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+.pp-align-row .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+.pp-align-row .sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.pp-align-row .pp-align-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-right: 4px;
+}
+
+.pp-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.pp-toggles .icon-btn {
+  width: 28px;
+  height: 26px;
+}
+.pp-info {
+  color: var(--text-muted);
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pp-info b {
+  color: var(--text);
+  font-weight: 500;
+}

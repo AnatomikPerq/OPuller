@@ -1,0 +1,56 @@
+/* Type tool: inline editing overlay, hidden input proxy, options bar */
+
+.text-input-proxy {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+.text-input-proxy textarea {
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  resize: none;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  outline: none;
+  font-size: 16px; /* prevents mobile zoom */
+}
+
+@keyframes opuller-caret-blink {
+  0%,
+  49.9% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.text-caret {
+  animation: opuller-caret-blink 1.05s step-end infinite;
+}
+.text-caret.static {
+  animation: none;
+}
+
+.text-frame-overflow {
+  fill: #fff;
+  stroke: #e5484d;
+}
+
+.text-options-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 2px;
+  flex: 0 0 auto;
+}

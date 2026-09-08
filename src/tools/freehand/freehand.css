@@ -1,0 +1,28 @@
+/* Freehand tools (pencil, brush, blob, smooth, path eraser, eraser) */
+
+.fh-options {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.fh-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.fh-opt .slider-field input[type='range'] {
+  min-width: 70px;
+}
+
+.fh-opt .field-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.fh-options .divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+}
