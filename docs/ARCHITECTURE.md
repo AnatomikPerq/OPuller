@@ -52,6 +52,7 @@ src/
   liquify/      brush.ts (pure deformation maths), engine.ts (gesture sessions, Simplify),
                 register.tsx (options bar, Tool Options dialog, scripted applyLiquify)
   raster/       Image Trace: potrace.ts (curve fitting), quantize.ts (palettes, despeckle),
+                centerline.ts (Strokes: thinning, skeleton graph, Bézier fitting),
                 vectorize.ts (pipeline) run in traceWorker.ts via traceRunner.ts;
                 trace.ts (document side), rasterize.ts, register.tsx (dialogs, commands)
 tests/
@@ -181,7 +182,11 @@ Panels render inside `.panel-body` (padded, scrollable). Use widgets from
 registerDialog('offsetPath', ({ props, close }) => <DialogFrame title="Offset Path" onClose={close} footer={...}>...</DialogFrame>);
 getState().openDialog('offsetPath', { ... });
 ```
-`DialogFrame` is exported from `src/ui/DialogHost.tsx`.
+`DialogFrame` is exported from `src/ui/DialogHost.tsx`. For yes/no questions use the
+in-app confirmation instead of `window.confirm`:
+`confirmDialog('Delete "x"?', { title, detail, confirmLabel: 'Delete', danger: true })`
+(`src/ui/dialogs/confirm/register.tsx`) resolves to `true` when confirmed (Enter) and `false`
+on Cancel / Escape; it stays above app overlays such as the Home screen.
 
 ### Module auto-loading
 
@@ -275,7 +280,7 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 | Width tool | `src/tools/width` | writes `stroke.widthProfile`, rendered by `geometry/widthProfile.ts` |
 | Blend | `src/blend`, `src/tools/blend` | blend group = `data.blend`, steps carry `data.blendStep`; steps regenerate on commit |
 | Measure | `src/tools/measure` | |
-| Raster | `src/raster` (Image Trace: `potrace.ts`, `quantize.ts`, `vectorize.ts` in a Web Worker; Rasterize, Crop), `src/tools/pixelbrush` | the pure pipeline is unit tested; `scripts/trace-profile.mjs` times it on a picture |
+| Raster | `src/raster` (Image Trace: `potrace.ts`, `quantize.ts`, `centerline.ts`, `vectorize.ts` in a Web Worker; Rasterize, Crop), `src/tools/pixelbrush` | the pure pipeline is unit tested; `scripts/trace-profile.mjs` times it on a picture |
 | Liquify | `src/liquify` (`brush.ts`, `engine.ts`, `register.tsx`), `src/tools/liquify` | seven tools share one gesture engine (`LiquifySession`); brush dimensions are shared options; `applyLiquify` scripts a gesture |
 | Samples | `src/samples` | File > Open Sample; the bird is built with boolean ops at load |
 | Help & preferences | `src/help` | Preferences (Ctrl+K), Keyboard Shortcuts, About, Welcome screen |

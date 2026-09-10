@@ -90,9 +90,10 @@ Shortcuts / About.
   инструмент Graph (J).
 * Изображения: Place, **Image Trace** (собственный движок: квантование цветов median cut +
   k-means + слияние Уорда, кривые potrace, 10 пресетов, режимы ч/б / серый / цвет, Threshold /
-  Colors / Grays, Paths / Corners / Noise, Abutting / Overlapping, Snap curves to lines, Ignore
-  white, живое превью в Web Worker), Crop, сброс кадрирования, экспорт оригинала, Pixel Brush для
-  растровых слоёв.
+  Colors / Grays, Paths / Corners / Noise, Abutting / Overlapping, Fills / **Strokes** (тонкие
+  линии — обводками по центральной линии: скелетизация, Max Stroke Weight, Min Stroke Length),
+  Snap curves to lines, Ignore white, живое превью в Web Worker), Crop, сброс кадрирования,
+  экспорт оригинала, Pixel Brush для растровых слоёв.
 * Эффекты (живые, редактируемые): Drop Shadow, Inner Shadow, Outer/Inner Glow, Gaussian Blur,
   Round Corners, цветокоррекция, Warp, Free Distort, Envelope Mesh, 3D Extrude/Revolve/Rotate,
   режимы наложения, непрозрачность.
@@ -145,7 +146,7 @@ Image Trace. То же API — в консоли `window.__opuller.mcp`.
 | Blend | ✔ | ✔ | нет спайна по произвольному пути и ориентации к спайну |
 | Артборды | ✔ | ✔ | панель, инструмент, пресеты, экспорт по артбордам |
 | Слои | ✔ | ✔ | вложенность, DnD, миниатюры, блокировки |
-| Image Trace | ✔ | ✔ | пресеты, Paths / Corners / Noise, Abutting / Overlapping, Snap Curves, Ignore White, превью; нет режима Strokes (центральные линии обводками) и палитры из образцов документа |
+| Image Trace | ✔ | ✔ | пресеты, Paths / Corners / Noise, Abutting / Overlapping, Fills / Strokes (центральные линии), Snap Curves, Ignore White, превью; нет палитры из образцов документа |
 | Форматы | AI, EPS, PDF, SVG, PNG… | SVG, PDF, EPS, PNG, JPEG, WebP, .opuller; импорт AI (PDF-совместимые и классические), EPS, PDF | нет записи в формат .ai (пишется PDF/EPS, которые Illustrator открывает) |
 | Растр | Rasterize, Crop, эффекты | Rasterize, Crop, Pixel Brush, цветокоррекция | |
 | Домашний экран | Home (облачные документы) | Home (библиотека в браузере, превью, поиск) | |
@@ -170,7 +171,7 @@ Image Trace. То же API — в консоли `window.__opuller.mcp`.
 * Управление ИИ через MCP: ассистент видит документ, рисует, комбинирует и проверяет результат
   скриншотом; символы, кисти, узоры, диаграммы и перспектива тоже доступны через инструменты MCP.
 * Работает в браузере, ставится из репозитория, без подписки; данные остаются локально.
-* Тесты: 225 unit + 143 e2e сценариев покрывают инструменты, панели, экспорт/импорт и ИИ-мост.
+* Тесты: 230 unit + 144 e2e сценариев покрывают инструменты, панели, экспорт/импорт и ИИ-мост.
 
 ### Итоговая оценка покрытия
 

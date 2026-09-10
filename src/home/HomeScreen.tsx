@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Home, FolderKanban, Clock, Sparkles, GraduationCap, Bot, Search, LayoutGrid, List, Plus, FolderOpen, X, MoreHorizontal, Pencil, Copy, Trash2, Download, ArrowLeft, Settings } from 'lucide-react';
 import { useStore, getState } from '@/store/store';
+import { confirmDialog } from '@/ui/dialogs/confirm/register';
 import { runCommand } from '@/commands/registry';
 import { Button, Select, IconButton } from '@/ui/widgets';
 import { newDocument, loadDocument, confirmDiscard } from '@/io/fileOps';
@@ -142,7 +143,8 @@ function ProjectCard({ p, current, view, onOpen }: { p: ProjectMeta; current: bo
     if (json) downloadText(json, `${p.name.replace(/[\\/:*?"<>|]+/g, '-') || 'project'}.opuller`, 'application/json');
   };
   const del = async () => {
-    if (!confirm(`Delete "${p.name}" from the library? This cannot be undone.`)) return;
+    const ok = await confirmDialog(`Delete "${p.name}" from the library?`, { title: 'Delete Project', detail: 'The project is removed from the browser library. This cannot be undone.', confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
     await deleteProject(p.id);
   };
   return (

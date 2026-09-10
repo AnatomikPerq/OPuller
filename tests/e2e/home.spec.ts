@@ -70,9 +70,16 @@ test.describe('home screen and project library', () => {
     expect(Object.values(s.doc.nodes).filter((n: any) => n.type === 'path').length).toBe(1);
     // delete the original
     await runCommand(page, 'file.projects');
-    page.once('dialog', (d) => d.accept());
     await page.getByTestId(`home-project-menu-${docId}`).click();
     await page.getByTestId('home-project-delete').click();
+    // in-app confirmation instead of the browser's confirm()
+    await expect(page.getByTestId('confirm-ok')).toBeVisible();
+    await expect(page.getByTestId('confirm-message')).toContainText('Delete');
+    await page.getByTestId('confirm-cancel').click();
+    await expect.poll(async () => (await projects(page)).length).toBe(2);
+    await page.getByTestId(`home-project-menu-${docId}`).click();
+    await page.getByTestId('home-project-delete').click();
+    await page.getByTestId('confirm-ok').click();
     await expect.poll(async () => (await projects(page)).length).toBe(1);
     // search filters
     await page.getByTestId('home-search').fill('nothing-matches');

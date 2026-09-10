@@ -5,7 +5,7 @@
  */
 import type { Document, ID, ImageNode } from '@/model/types';
 import { makeGroup, makePath } from '@/model/nodes';
-import { noStroke } from '@/model/defaults';
+import { noStroke, defaultStroke } from '@/model/defaults';
 import { addNode, worldMatrix, parentWorldMatrix, indexInParent, removeNode, descendants } from '@/model/document';
 import { multiply, invert, scale as scaleM } from '@/geometry/matrix';
 import { pathToSvgD } from '@/geometry/path';
@@ -34,7 +34,8 @@ export const TRACE_PRESETS: Array<{ id: string; name: string; opts: Partial<Trac
   { id: 'logo', name: 'Black and White Logo', opts: { mode: 'bw', threshold: 128, paths: 50, corners: 75, noise: 25, ignoreWhite: true, snapLines: false } },
   { id: 'sketch', name: 'Sketched Art', opts: { mode: 'bw', threshold: 200, paths: 90, corners: 90, noise: 4, ignoreWhite: true, snapLines: false } },
   { id: 'silhouette', name: 'Silhouettes', opts: { mode: 'bw', threshold: 200, paths: 40, corners: 60, noise: 40, ignoreWhite: true, snapLines: false } },
-  { id: 'technical', name: 'Technical Drawing', opts: { mode: 'bw', threshold: 160, paths: 95, corners: 100, noise: 2, ignoreWhite: true, snapLines: true } },
+  { id: 'lineart', name: 'Line Art', opts: { mode: 'bw', threshold: 128, paths: 60, corners: 75, noise: 8, ignoreWhite: true, snapLines: false, fills: false, strokes: true, maxStrokeWeight: 100, minStrokeLength: 20 } },
+  { id: 'technical', name: 'Technical Drawing', opts: { mode: 'bw', threshold: 160, paths: 90, corners: 100, noise: 2, ignoreWhite: true, snapLines: true, fills: true, strokes: true, maxStrokeWeight: 5, minStrokeLength: 10 } },
 ];
 
 export interface TraceResult extends VectorizeResult {
@@ -66,10 +67,29 @@ export async function traceImage(node: ImageNode, opts: TraceOptions): Promise<T
   return { ...r, pixelScaleX: scaleX, pixelScaleY: scaleY };
 }
 
-/** SVG markup of a trace result (previews). */
+/** SVG markup of a trace result (previews): fills bottom to top, then strokes. */
 export function traceSvg(r: VectorizeResult): string {
-  const paths = r.layers.map((l) => `<path d="${pathToSvgD(l.subpaths)}" fill="${l.color}" fill-rule="nonzero"/>`).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${r.width} ${r.height}" width="${r.width}" height="${r.height}">${paths}</svg>`;
+  const fills = r.layers
+    .filter((l) => l.subpaths.length)
+    .map((l) => `<path d="${pathToSvgD(l.subpaths)}" fill="${l.color}" fill-rule="nonzero"/>`)
+    .join('');
+  const strokes = r.layers
+    .flatMap((l) => l.strokes.map((s) => `<path d="${pathToSvgD([s.subpath])}" fill="none" stroke="${l.color}" stroke-width="${s.width}" stroke-linecap="round" stroke-linejoin="round"/>`))
+    .join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${r.width} ${r.height}" width="${r.width}" height="${r.height}">${fills}${strokes}</svg>`;
+}
+
+/** Strokes of a layer grouped by width (one path node per width). */
+function strokeBuckets(layer: VectorizeResult['layers'][number]): Array<{ width: number; subpaths: import('@/model/types').SubPath[] }> {
+  const map = new Map<number, import('@/model/types').SubPath[]>();
+  for (const s of layer.strokes) {
+    const w = Math.round(s.width * 2) / 2;
+    if (!map.has(w)) map.set(w, []);
+    map.get(w)!.push(s.subpath);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([width, subpaths]) => ({ width, subpaths }));
 }
 
 /**
@@ -86,8 +106,21 @@ export function applyTrace(draft: Document, imageId: ID, traced: TraceResult, op
   const group = makeGroup([], { name: `${img.name} (traced)` });
   addNode(draft, group, parent, index + 1);
   for (const layer of traced.layers) {
+    if (!layer.subpaths.length) continue;
     const node = makePath(layer.subpaths, { fill: { type: 'solid', color: layer.color, opacity: 1 }, stroke: noStroke(), name: `Fill ${layer.color}`, fillRule: 'nonzero' });
     addNode(draft, node, group.id);
+  }
+  // strokes sit above every fill
+  for (const layer of traced.layers) {
+    for (const bucket of strokeBuckets(layer)) {
+      const node = makePath(bucket.subpaths, {
+        fill: { type: 'none' },
+        stroke: defaultStroke({ paint: { type: 'solid', color: layer.color, opacity: 1 }, width: bucket.width, cap: 'round', join: 'round' }),
+        name: `Stroke ${layer.color} ${bucket.width}px`,
+        fillRule: 'nonzero',
+      });
+      addNode(draft, node, group.id);
+    }
   }
   // map traced pixels (cropped bitmap) onto the displayed image rectangle
   const crop = img.crop ?? { x: 0, y: 0, width: img.naturalWidth, height: img.naturalHeight };

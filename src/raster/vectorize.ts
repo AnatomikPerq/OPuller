@@ -6,6 +6,9 @@
 import type { SubPath, HexColor } from '@/model/types';
 import { traceBitmap, type PotraceOptions } from './potrace';
 import { thresholdLabels, grayLabels, colorLabels, removeSmallRegions, rgbToHex, type LabelMap, type RasterImage, type RGB } from './quantize';
+import { traceStrokes, type TracedStroke } from './centerline';
+
+export type { TracedStroke };
 
 export type TraceMode = 'bw' | 'gray' | 'color';
 export type TraceMethod = 'abutting' | 'overlapping';
@@ -29,13 +32,24 @@ export interface VectorizeOptions {
   ignoreWhite: boolean;
   /** replace nearly straight curves with lines */
   snapLines: boolean;
+  /** trace filled regions */
+  fills: boolean;
+  /** trace thin features as stroked centerlines */
+  strokes: boolean;
+  /** features wider than this (px) are fills, thinner ones strokes */
+  maxStrokeWeight: number;
+  /** strokes shorter than this (px) are dropped */
+  minStrokeLength: number;
 }
 
 export interface TracedLayer {
   color: HexColor;
   /** pixels of this colour (before stacking) */
   pixels: number;
+  /** filled outlines */
   subpaths: SubPath[];
+  /** stroked centerlines (Strokes option) */
+  strokes: TracedStroke[];
 }
 
 export interface VectorizeResult {
@@ -46,7 +60,13 @@ export interface VectorizeResult {
   anchors: number;
 }
 
-export const DEFAULT_VECTORIZE: VectorizeOptions = { mode: 'color', threshold: 128, colors: 16, grays: 16, paths: 50, corners: 75, noise: 20, method: 'overlapping', ignoreWhite: false, snapLines: false };
+export const DEFAULT_VECTORIZE: VectorizeOptions = { mode: 'color', threshold: 128, colors: 16, grays: 16, paths: 50, corners: 75, noise: 20, method: 'overlapping', ignoreWhite: false, snapLines: false, fills: true, strokes: false, maxStrokeWeight: 10, minStrokeLength: 20 };
+
+/** Curve fitting tolerance (px) of the stroke tracer for the Paths slider. */
+export function strokeToleranceFor(paths: number): number {
+  const p = Math.max(0, Math.min(100, paths));
+  return 0.35 + ((100 - p) / 100) * 1.4;
+}
 
 /** potrace parameters for the Paths / Corners / Noise sliders. */
 export function potraceOptionsFor(o: VectorizeOptions): PotraceOptions {
@@ -121,24 +141,50 @@ export function vectorize(img: RasterImage, options: Partial<VectorizeOptions> =
   const layers: TracedLayer[] = [];
   let anchors = 0;
   const bitmap = new Uint8Array(n);
+  // Strokes: thin features of every colour are traced as centerlines and left out of the fills
+  const thinAll = new Uint8Array(o.strokes ? n : 0);
+  const strokesByLabel = new Map<number, TracedStroke[]>();
+  if (o.strokes) {
+    const own = new Uint8Array(n);
+    const strokeOpts = { maxWeight: Math.max(1, o.maxStrokeWeight), minLength: Math.max(0, o.minStrokeLength), tolerance: strokeToleranceFor(o.paths) };
+    for (const label of order) {
+      let any = false;
+      for (let i = 0; i < n; i++) {
+        const on = map.labels[i] === label;
+        own[i] = on ? 1 : 0;
+        if (on) any = true;
+      }
+      if (!any) continue;
+      const split = traceStrokes(own, w, h, strokeOpts);
+      for (let i = 0; i < n; i++) if (split.thin[i]) thinAll[i] = 1;
+      if (split.strokes.length) strokesByLabel.set(label, split.strokes);
+    }
+  }
   for (let li = 0; li < order.length; li++) {
     const label = order[li];
-    let any = false;
-    for (let i = 0; i < n; i++) {
-      const l = map.labels[i];
-      let on: boolean;
-      if (l < 0 || ignored[l]) on = false;
-      else if (o.method === 'overlapping') on = rank[l] >= li;
-      else on = l === label;
-      bitmap[i] = on ? 1 : 0;
-      if (on) any = true;
+    let sps: SubPath[] = [];
+    if (o.fills) {
+      let any = false;
+      for (let i = 0; i < n; i++) {
+        const l = map.labels[i];
+        let on: boolean;
+        if (l < 0 || ignored[l]) on = false;
+        else if (o.strokes && thinAll[i]) on = false;
+        else if (o.method === 'overlapping') on = rank[l] >= li;
+        else on = l === label;
+        bitmap[i] = on ? 1 : 0;
+        if (on) any = true;
+      }
+      if (any) {
+        sps = traceBitmap({ width: w, height: h, data: bitmap }, potraceOpts);
+        if (o.snapLines) sps = sps.map((sp) => snapCurvesToLines(sp));
+      }
     }
-    if (!any) continue;
-    let sps = traceBitmap({ width: w, height: h, data: bitmap }, potraceOpts);
-    if (o.snapLines) sps = sps.map((sp) => snapCurvesToLines(sp));
-    if (!sps.length) continue;
+    const strokes = strokesByLabel.get(label) ?? [];
+    if (!sps.length && !strokes.length) continue;
     for (const sp of sps) anchors += sp.anchors.length;
-    layers.push({ color: rgbToHex(map.palette[label]), pixels: map.counts[label], subpaths: sps });
+    for (const st of strokes) anchors += st.subpath.anchors.length;
+    layers.push({ color: rgbToHex(map.palette[label]), pixels: map.counts[label], subpaths: sps, strokes });
   }
   return { width: w, height: h, layers, palette: order.map((i) => rgbToHex(map.palette[i])), anchors };
 }

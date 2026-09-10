@@ -48,7 +48,8 @@ gradient meshes and freeform gradients, envelope distort (warp with 15 styles, m
 object, free distort), 3D extrude & bevel / revolve / rotate, perspective grid (attach to
 plane, move along planes), graphs (9 types with a data table), Image Trace (an in-house
 potrace engine with colour reduction: presets, Black & White / Grayscale / Color, Paths /
-Corners / Noise, abutting or overlapping shapes, live preview in a Web Worker), rasterize, crop
+Corners / Noise, abutting or overlapping shapes, Fills and Strokes — thin lines become
+stroked centerlines —, live preview in a Web Worker), rasterize, crop
 image, effects (drop / inner shadow, glows, blur, colour adjustments, round corners), Edit
 Colors (Recolor Artwork, saturate, balance, blend, grayscale, invert, CMYK ↔ RGB).
 

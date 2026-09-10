@@ -1,0 +1,19 @@
+/* Confirmation dialog: sits above every app overlay (Home screen, isolation bars) */
+
+.dialog-backdrop:has(.confirm-dialog) {
+  z-index: 960;
+}
+
+.confirm-dialog .confirm-message {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.confirm-dialog .confirm-detail {
+  margin-top: 6px;
+}
+
+.confirm-ok-wrap {
+  display: inline-flex;
+  outline: none;
+}

@@ -168,3 +168,126 @@ describe('vectorize', () => {
     expect(potraceOptionsFor({ ...DEFAULT_VECTORIZE, corners: 100 }).alphaMax).toBeCloseTo(0.5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Strokes (centerline tracing)
+// ---------------------------------------------------------------------------
+import { chamferDistance, thinZhangSuen, skeletonPolylines, simplifyPolyline, fitCurve, polylineToSubPath, traceStrokes } from '@/raster/centerline';
+
+describe('centerline tracing', () => {
+  it('measures distances to the background and splits thick from thin features', () => {
+    // a 40x40 block plus a 3 px wide horizontal line
+    const w = 120;
+    const h = 60;
+    const fg = new Uint8Array(w * h);
+    for (let y = 10; y < 50; y++) for (let x = 10; x < 50; x++) fg[y * w + x] = 1;
+    for (let y = 28; y < 31; y++) for (let x = 60; x < 110; x++) fg[y * w + x] = 1;
+    const bg = fg.map((v) => (v ? 0 : 1));
+    const dist = chamferDistance(bg, w, h);
+    expect(dist[30 * w + 30]).toBeGreaterThan(15); // block centre
+    expect(dist[29 * w + 80]).toBeCloseTo(2, 0); // line centre: 2 px to the background
+    expect(dist[5 * w + 5]).toBe(0);
+    // seeds with negative offsets give the union of discs
+    const seed = new Uint8Array(w * h);
+    const off = new Float32Array(w * h);
+    seed[30 * w + 30] = 1;
+    off[30 * w + 30] = -10;
+    const disc = chamferDistance(seed, w, h, off);
+    expect(disc[30 * w + 38]).toBeLessThanOrEqual(0);
+    expect(disc[30 * w + 42]).toBeGreaterThan(0);
+    const split = traceStrokes(fg, w, h, { maxWeight: 10, minLength: 20, tolerance: 0.6 });
+    expect(split.thick[30 * w + 30]).toBe(1);
+    expect(split.thin[30 * w + 30]).toBe(0);
+    expect(split.thin[29 * w + 80]).toBe(1);
+    expect(split.thick[29 * w + 80]).toBe(0);
+    // the block keeps its corners
+    expect(split.thick[10 * w + 10]).toBe(1);
+    expect(split.thick[49 * w + 49]).toBe(1);
+    // every foreground pixel is either thin or thick
+    for (let i = 0; i < w * h; i++) expect(split.thin[i] + split.thick[i]).toBe(fg[i]);
+    expect(split.strokes.length).toBe(1);
+  });
+
+  it('thins a line to a one pixel skeleton and walks it into one polyline', () => {
+    const w = 80;
+    const h = 20;
+    const mask = new Uint8Array(w * h);
+    for (let y = 8; y < 12; y++) for (let x = 5; x < 70; x++) mask[y * w + x] = 1;
+    const skel = thinZhangSuen(mask, w, h);
+    let count = 0;
+    for (let i = 0; i < skel.length; i++) count += skel[i];
+    expect(count).toBeGreaterThan(55);
+    expect(count).toBeLessThan(70);
+    const polys = skeletonPolylines(skel, w, h);
+    expect(polys.length).toBe(1);
+    expect(polys[0].closed).toBe(false);
+    expect(polys[0].pixels.length).toBe(count);
+    // a T junction: three polylines meeting at the junction
+    for (let y = 12; y < 18; y++) for (let x = 36; x < 40; x++) mask[y * w + x] = 1;
+    const polysT = skeletonPolylines(thinZhangSuen(mask, w, h), w, h);
+    expect(polysT.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('simplifies and fits polylines into smooth curves within the tolerance', () => {
+    const pts = [];
+    for (let i = 0; i <= 100; i++) pts.push({ x: i, y: Math.sin(i / 12) * 10 });
+    const simple = simplifyPolyline(pts, 0.5);
+    expect(simple.length).toBeLessThan(pts.length / 2);
+    expect(simple[0]).toEqual(pts[0]);
+    const cubics = fitCurve(pts, 0.5);
+    expect(cubics.length).toBeGreaterThan(1);
+    expect(cubics.length).toBeLessThan(12);
+    const sp = polylineToSubPath(pts, false, 0.5)!;
+    expect(sp.closed).toBe(false);
+    expect(sp.anchors[0].point).toEqual(pts[0]);
+    expect(sp.anchors[sp.anchors.length - 1].point).toEqual(pts[100]);
+    expect(sp.anchors.some((a) => a.handleIn && a.handleOut)).toBe(true);
+    // an L shape keeps its corner
+    const L = [];
+    for (let i = 0; i <= 40; i++) L.push({ x: i, y: 0 });
+    for (let i = 1; i <= 40; i++) L.push({ x: 40, y: i });
+    const lsp = polylineToSubPath(L, false, 0.5)!;
+    expect(lsp.anchors.some((a) => Math.abs(a.point.x - 40) < 1e-6 && Math.abs(a.point.y) < 1e-6)).toBe(true);
+  });
+
+  it('traces thin features as strokes with their measured width and drops short ones', () => {
+    const w = 120;
+    const h = 60;
+    const fg = new Uint8Array(w * h);
+    for (let y = 28; y < 31; y++) for (let x = 10; x < 110; x++) fg[y * w + x] = 1; // 100 px long, 3 px wide
+    for (let y = 5; y < 6; y++) for (let x = 50; x < 58; x++) fg[y * w + x] = 1; // 8 px speck line
+    const strokes = traceStrokes(fg, w, h, { maxWeight: 10, minLength: 20, tolerance: 0.6 }).strokes;
+    expect(strokes.length).toBe(1);
+    expect(strokes[0].width).toBeCloseTo(3, 0);
+    expect(strokes[0].length).toBeGreaterThan(90);
+    expect(strokes[0].subpath.closed).toBe(false);
+    const xs = strokes[0].subpath.anchors.map((a) => a.point.x);
+    expect(Math.min(...xs)).toBeLessThan(14);
+    expect(Math.max(...xs)).toBeGreaterThan(106);
+    for (const a of strokes[0].subpath.anchors) expect(Math.abs(a.point.y - 29.5)).toBeLessThan(1.2);
+  });
+
+  it('vectorize with Strokes turns thin lines into stroked paths and keeps thick shapes as fills', () => {
+    const img = image(140, 100, (x, y) => {
+      const block = x >= 10 && x < 60 && y >= 10 && y < 60;
+      const line = y >= 78 && y < 81 && x >= 10 && x < 130;
+      return block || line ? [0, 0, 0] : [255, 255, 255];
+    });
+    const r = vectorize(img, { mode: 'bw', threshold: 128, ignoreWhite: true, noise: 2, fills: true, strokes: true, maxStrokeWeight: 10, minStrokeLength: 20 });
+    expect(r.layers.length).toBe(1);
+    const layer = r.layers[0];
+    expect(layer.subpaths.length).toBe(1); // the block
+    expect(layer.strokes.length).toBe(1); // the line
+    expect(layer.strokes[0].width).toBeCloseTo(3, 0);
+    const b = pathBounds(layer.subpaths)!;
+    expect(b.width).toBeCloseTo(50, 0);
+    // strokes only: the block is ignored
+    const only = vectorize(img, { mode: 'bw', threshold: 128, ignoreWhite: true, noise: 2, fills: false, strokes: true, maxStrokeWeight: 10, minStrokeLength: 20 });
+    expect(only.layers[0].subpaths.length).toBe(0);
+    expect(only.layers[0].strokes.length).toBe(1);
+    // a large max weight still only turns elongated features into strokes (a solid block has no centerline)
+    const all = vectorize(img, { mode: 'bw', threshold: 128, ignoreWhite: true, noise: 2, fills: false, strokes: true, maxStrokeWeight: 100, minStrokeLength: 20 });
+    expect(all.layers[0].strokes.length).toBe(1);
+    expect(all.layers[0].subpaths.length).toBe(0);
+  });
+});

@@ -181,7 +181,7 @@ function usePreview(first: ImageNode | undefined, opts: TraceOptions): { preview
     traceImage(first, { ...o, maxSize: Math.min(o.maxSize, PREVIEW_SIZE) })
       .then((res) => {
         if (!alive.current) return;
-        setPreview({ svg: traceSvg(res), w: res.width, h: res.height, paths: res.layers.reduce((a, l) => a + l.subpaths.length, 0), anchors: res.anchors, colors: res.layers.length, ms: performance.now() - t0 });
+        setPreview({ svg: traceSvg(res), w: res.width, h: res.height, paths: res.layers.reduce((a, l) => a + l.subpaths.length + l.strokes.length, 0), anchors: res.anchors, colors: res.layers.length, ms: performance.now() - t0 });
         setError(null);
       })
       .catch((err) => {
@@ -206,7 +206,7 @@ function usePreview(first: ImageNode | undefined, opts: TraceOptions): { preview
     const t = setTimeout(() => run.current(opts), 120);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.mode, opts.threshold, opts.colors, opts.grays, opts.paths, opts.corners, opts.noise, opts.method, opts.ignoreWhite, opts.snapLines, opts.maxSize, first]);
+  }, [opts.mode, opts.threshold, opts.colors, opts.grays, opts.paths, opts.corners, opts.noise, opts.method, opts.ignoreWhite, opts.snapLines, opts.fills, opts.strokes, opts.maxStrokeWeight, opts.minStrokeLength, opts.maxSize, first]);
   return { preview, busy, error };
 }
 
@@ -220,6 +220,10 @@ function ImageTraceDialog({ close }: { close: () => void }) {
 
   const set = (patch: Partial<TraceOptions>) => setOpts((o) => ({ ...o, ...patch }));
   const ok = async () => {
+    if (!opts.fills && !opts.strokes) {
+      getState().toast('Enable Fills or Strokes to trace something.', 'info');
+      return;
+    }
     setBusy(true);
     lastTrace = { ...opts };
     try {
@@ -304,6 +308,16 @@ function ImageTraceDialog({ close }: { close: () => void }) {
                 onChange={(v) => set({ method: v })}
               />
             </Row>
+            <Row gap={14}>
+              <Checkbox checked={opts.fills} onChange={(v) => set({ fills: v })} label="Fills" title="Trace filled regions" />
+              <Checkbox checked={opts.strokes} onChange={(v) => set({ strokes: v })} label="Strokes" title="Trace thin features as stroked centerlines" />
+            </Row>
+            {opts.strokes && (
+              <Row gap={8}>
+                <NumberField label="Max stroke" value={opts.maxStrokeWeight} onChange={(v) => set({ maxStrokeWeight: Math.max(1, Math.min(200, v)) })} min={1} max={200} unit="px" width={130} title="Features wider than this become fills" data-testid="trace-max-stroke" />
+                <NumberField label="Min length" value={opts.minStrokeLength} onChange={(v) => set({ minStrokeLength: Math.max(0, Math.min(500, v)) })} min={0} max={500} unit="px" width={130} title="Shorter strokes are dropped" data-testid="trace-min-length" />
+              </Row>
+            )}
             <Checkbox checked={opts.snapLines} onChange={(v) => set({ snapLines: v })} label="Snap curves to lines" />
             <Checkbox checked={opts.ignoreWhite} onChange={(v) => set({ ignoreWhite: v })} label="Ignore white" />
           </Section>

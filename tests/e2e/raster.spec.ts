@@ -129,6 +129,63 @@ test.describe('raster module', () => {
     expect(presets.map((p: any) => p.id)).toContain('hifi');
   });
 
+  test('image trace Strokes mode turns thin lines into stroked centerlines', async ({ page }) => {
+    // a thick disc plus a thin curve on white
+    const img = await page.evaluate(async () => {
+      const c = document.createElement('canvas');
+      c.width = 200;
+      c.height = 120;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 200, 120);
+      g.fillStyle = '#000000';
+      g.beginPath();
+      g.arc(50, 60, 30, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#000000';
+      g.lineWidth = 3;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(100, 100);
+      g.quadraticCurveTo(140, 10, 190, 100);
+      g.stroke();
+      const r = await (window as any).__opuller.mcp.placeImage({ dataUrl: c.toDataURL('image/png'), x: 100, y: 100, width: 400 });
+      return r.id as string;
+    });
+    const res = await page.evaluate((id) => (window as any).__opuller.mcp.imageTrace({ ids: [id], preset: 'technical', options: { source: 'keep', noise: 2 } }), img);
+    expect(res.groups.length).toBe(1);
+    const s = await getState(page);
+    const nodes = s.doc.nodes[res.groups[0]].children.map((id: string) => s.doc.nodes[id]);
+    const fills = nodes.filter((n: any) => n.fill.type === 'solid');
+    const strokes = nodes.filter((n: any) => n.fill.type === 'none' && n.stroke.paint.type === 'solid');
+    expect(fills.length).toBe(1);
+    expect(strokes.length).toBeGreaterThanOrEqual(1);
+    const stroke = strokes[0];
+    expect(stroke.stroke.width).toBeGreaterThan(1.5);
+    expect(stroke.stroke.width).toBeLessThan(5);
+    expect(stroke.stroke.cap).toBe('round');
+    expect(stroke.subpaths[0].closed).toBe(false);
+    // the fill is the disc (roughly 60 image px = 120 world units wide)
+    const fb = (await worldBounds(page, fills[0].id))!;
+    expect(Math.abs(fb.width - 120)).toBeLessThan(8);
+    // the stroke spans the curve
+    const sb = (await worldBounds(page, stroke.id))!;
+    expect(sb.width).toBeGreaterThan(150);
+    // strokes only (Line Art): no fills at all
+    const only = await page.evaluate((id) => (window as any).__opuller.mcp.imageTrace({ ids: [id], preset: 'lineart', options: { source: 'keep', noise: 2 } }), img);
+    const s2 = await getState(page);
+    const nodes2 = s2.doc.nodes[only.groups[0]].children.map((id: string) => s2.doc.nodes[id]);
+    expect(nodes2.every((n: any) => n.fill.type === 'none')).toBe(true);
+    expect(nodes2.length).toBeGreaterThanOrEqual(1);
+    // the dialog exposes the Fills / Strokes switches
+    await withStore(page, (st) => st.setSelection([Object.keys(st.doc.nodes).find((k) => st.doc.nodes[k].type === 'image')!]));
+    await runCommand(page, 'image.trace');
+    await expect(page.getByTestId('trace-ok')).toBeVisible();
+    await page.getByText('Strokes', { exact: true }).click();
+    await expect(page.getByTestId('trace-max-stroke')).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
   test('rasterize replaces vector objects with an image; crop image to a rectangle', async ({ page }) => {
     const r = await drawRect(page, 100, 100, 200, 100);
     await runCommand(page, 'object.rasterize');

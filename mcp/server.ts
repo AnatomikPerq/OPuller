@@ -633,7 +633,7 @@ server.registerTool(
   {
     title: 'Image Trace (raster to vector)',
     description:
-      'Convert image nodes (default: the selected images) into filled vector paths — colour reduction plus potrace curve fitting, like Illustrator\'s Image Trace. Pick a preset (op "presets" lists them: hifi, lofi, c3, c6, c16, gray, logo, sketch, silhouette, technical) and/or override options: mode bw | gray | color, threshold 1..255, colors / grays 2..64, paths 0..100 (fidelity), corners 0..100, noise (min region px), method abutting | overlapping, ignoreWhite, snapLines, maxSize (trace resolution), source replace | keep | hide. Returns the traced group ids.',
+      'Convert image nodes (default: the selected images) into filled vector paths — colour reduction plus potrace curve fitting, like Illustrator\'s Image Trace. Pick a preset (op "presets" lists them: hifi, lofi, c3, c6, c16, gray, logo, sketch, silhouette, lineart, technical) and/or override options: mode bw | gray | color, threshold 1..255, colors / grays 2..64, paths 0..100 (fidelity), corners 0..100, noise (min region px), method abutting | overlapping, ignoreWhite, snapLines, fills (filled regions, default true), strokes (thin features as stroked centerlines, default false) with maxStrokeWeight px and minStrokeLength px, maxSize (trace resolution), source replace | keep | hide. Returns the traced group ids.',
     inputSchema: {
       op: z.enum(['trace', 'presets']).optional(),
       ids: z.array(z.string()).optional(),
