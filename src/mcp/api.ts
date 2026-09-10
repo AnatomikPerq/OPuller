@@ -1222,6 +1222,21 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     }
     throw new Error(`Unknown graphs op "${op}"`);
   },
+  async imageTrace(p) {
+    const reg = await import('@/raster/register');
+    const tr = await import('@/raster/trace');
+    const op = p.op ?? 'trace';
+    if (op === 'presets') return tr.TRACE_PRESETS.map((x) => ({ id: x.id, name: x.name, options: x.opts }));
+    const s = getState();
+    const ids: ID[] = (p.ids?.length ? p.ids : s.selection).filter((id: ID) => s.doc.nodes[id]?.type === 'image');
+    if (!ids.length) throw new Error('Select an image (or pass ids of image nodes)');
+    const preset = p.preset ? tr.TRACE_PRESETS.find((x) => x.id === p.preset || x.name === p.preset) : undefined;
+    if (p.preset && !preset) throw new Error(`Unknown preset "${p.preset}"`);
+    const opts = { ...tr.DEFAULT_TRACE, ...(preset?.opts ?? {}), ...(p.options ?? {}) } as import('@/raster/trace').TraceOptions;
+    const groups = await reg.traceImages(ids, opts);
+    const st = getState();
+    return { groups, paths: groups.reduce((a, g) => a + tr.countTraced(st.doc, g), 0), selection: st.selection, options: opts };
+  },
   async liquify(p) {
     const mod = await import('@/liquify/engine');
     const brush = await import('@/liquify/brush');

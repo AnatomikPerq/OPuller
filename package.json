@@ -30,7 +30,6 @@
     "@fontsource/roboto": "^5.3.0",
     "@fontsource/source-code-pro": "^5.3.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "imagetracerjs": "^1.2.6",
     "immer": "^11.1.18",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.42.0",

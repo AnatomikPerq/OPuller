@@ -2,12 +2,13 @@
 
 .trace-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 300px 1fr;
   gap: 14px;
   align-items: start;
 }
 .trace-preview {
-  height: 260px;
+  position: relative;
+  height: 340px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background-color: #fff;
@@ -33,6 +34,28 @@
   height: auto;
 }
 .trace-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.trace-preview.busy .trace-svg {
+  opacity: 0.55;
+}
+.trace-spinner {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  font-size: 11px;
+  color: #333;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.trace-footer-info {
+  flex: 1;
+  text-align: left;
+}
+.trace-controls .section-body {
   display: flex;
   flex-direction: column;
   gap: 8px;

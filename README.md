@@ -30,7 +30,8 @@ Rectangle, Ellipse (L), Polygon, Star, Line (\), Type (T), Graph (J), Rotate (R)
 Reflect (O), Shear, Free Transform (E), Shape Builder (Shift+M), Live Paint Bucket (K),
 Live Paint Selection (Shift+L), Eraser (Shift+E), Gradient (G, incl. freeform), Mesh (U),
 Symbol Sprayer (Shift+S), Eyedropper (I), Measure, Scissors (C), Knife, Width (Shift+W),
-Blend (W), Perspective Grid (Shift+P), Artboard (Shift+O), Hand (H), Zoom (Z).
+Blend (W), the liquify brushes Warp (Shift+R), Twirl, Pucker, Bloat, Scallop, Crystallize and
+Wrinkle, Perspective Grid (Shift+P), Artboard (Shift+O), Hand (H), Zoom (Z).
 
 **Panels**: Properties, Transform, Align, Pathfinder, Color (RGB / HSB / CMYK, tints),
 Swatches (process, global and spot colours, patterns, print libraries), Gradient (linear,
@@ -45,7 +46,9 @@ smooth colour, live update), transform each / again, arrange, group / isolation 
 (make, place, redefine, sprayer sets), patterns (make, edit tile, options, fill options),
 gradient meshes and freeform gradients, envelope distort (warp with 15 styles, mesh, top
 object, free distort), 3D extrude & bevel / revolve / rotate, perspective grid (attach to
-plane, move along planes), graphs (9 types with a data table), image trace, rasterize, crop
+plane, move along planes), graphs (9 types with a data table), Image Trace (an in-house
+potrace engine with colour reduction: presets, Black & White / Grayscale / Color, Paths /
+Corners / Noise, abutting or overlapping shapes, live preview in a Web Worker), rasterize, crop
 image, effects (drop / inner shadow, glows, blur, colour adjustments, round corners), Edit
 Colors (Recolor Artwork, saturate, balance, blend, grayscale, invert, CMYK ↔ RGB).
 
@@ -87,7 +90,8 @@ every command and tool, simulate mouse gestures and look at the result as an ima
    `opuller_export_svg`, `opuller_export_file` (SVG / PDF / EPS with bleed and marks),
    `opuller_place_file` (PDF / AI / EPS / SVG / images), `opuller_symbols`,
    `opuller_brushes`, `opuller_patterns`, `opuller_gradients`, `opuller_livepaint`,
-   `opuller_graphs`, `opuller_perspective`, `opuller_save_project` and more —
+   `opuller_graphs`, `opuller_perspective`, `opuller_liquify`, `opuller_image_trace`,
+   `opuller_save_project` and more —
    `opuller_status`, `opuller_list_tools` and `opuller_list_commands` describe the editor.
 
 Command-line helpers: `npm run mcp:smoke` (end-to-end check) and
@@ -99,6 +103,7 @@ browser console as `window.__opuller.mcp`.
 ```bash
 npm test             # unit tests (vitest)
 npm run test:e2e     # Playwright e2e (starts/reuses the dev server)
+node scripts/trace-profile.mjs photo.jpg 640 64   # time the Image Trace stages on a picture
 ```
 
 ## Architecture
@@ -109,5 +114,5 @@ panel registries, module layout and the contribution rules.
 ## Stack
 
 React 19, TypeScript, Vite, zustand + immer, paper.js (geometry kernel), opentype.js,
-jsPDF + svg2pdf.js, pdfjs-dist (PDF / AI import), imagetracerjs, lucide-react,
-@fontsource fonts, @modelcontextprotocol/sdk + ws (AI bridge).
+jsPDF + svg2pdf.js, pdfjs-dist (PDF / AI import), an in-house potrace port (Image Trace),
+lucide-react, @fontsource fonts, @modelcontextprotocol/sdk + ws (AI bridge).

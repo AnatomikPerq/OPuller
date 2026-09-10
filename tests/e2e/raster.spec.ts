@@ -35,7 +35,13 @@ test.describe('raster module', () => {
     await runCommand(page, 'image.trace');
     await expect(page.getByTestId('trace-ok')).toBeVisible();
     await page.getByTestId('trace-ok').click();
-    await expect.poll(async () => (await getState(page)).selection.length).toBe(1);
+    // tracing runs in a worker: wait until the traced group is selected
+    await expect
+      .poll(async () => {
+        const st = await getState(page);
+        return st.doc.nodes[st.selection[0]]?.type;
+      }, { timeout: 15000 })
+      .toBe('group');
     const s = await getState(page);
     const gid = s.selection[0];
     const g = s.doc.nodes[gid];
@@ -50,6 +56,68 @@ test.describe('raster module', () => {
     expect(Math.round(b!.x)).toBeGreaterThanOrEqual(99);
     expect(Math.round(b!.width)).toBeGreaterThan(140);
     expect(Math.round(b!.width)).toBeLessThan(170);
+  });
+
+  test('image trace dialog previews the result, presets and the scripting API trace directly', async ({ page }) => {
+    // a disc on white: black & white logo preset → one black path
+    const img = await page.evaluate(async () => {
+      const c = document.createElement('canvas');
+      c.width = 120;
+      c.height = 120;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 120, 120);
+      g.fillStyle = '#000000';
+      g.beginPath();
+      g.arc(60, 60, 40, 0, Math.PI * 2);
+      g.fill();
+      const r = await (window as any).__opuller.mcp.placeImage({ dataUrl: c.toDataURL('image/png'), x: 100, y: 100, width: 240 });
+      return r.id as string;
+    });
+    await withStore(page, (st) => st.setSelection(Object.keys(st.doc.nodes).filter((k) => st.doc.nodes[k].type === 'image')));
+    await runCommand(page, 'image.trace');
+    await expect(page.getByTestId('trace-ok')).toBeVisible();
+    // the live preview runs in a worker and reports its statistics
+    await expect(page.getByTestId('trace-info')).toContainText('paths', { timeout: 15000 });
+    await page.locator('#trace-preset').selectOption('logo');
+    await expect(page.getByTestId('trace-info')).toContainText('1 colour', { timeout: 15000 });
+    await expect(page.locator('[data-testid="trace-preview"] svg path')).toHaveCount(1);
+    await page.getByTestId('trace-ok').click();
+    await expect
+      .poll(async () => {
+        const st = await getState(page);
+        return st.doc.nodes[st.selection[0]]?.type;
+      }, { timeout: 15000 })
+      .toBe('group');
+    let s = await getState(page);
+    const gid = s.selection[0];
+    const paths = s.doc.nodes[gid].children.map((id: string) => s.doc.nodes[id]);
+    expect(paths.length).toBe(1);
+    expect(paths[0].fill.color).toBe('#000000');
+    expect(paths[0].subpaths[0].closed).toBe(true);
+    expect(paths[0].subpaths[0].anchors.length).toBeLessThan(20);
+    expect(paths[0].subpaths[0].anchors.some((a: any) => a.handleIn && a.handleOut)).toBe(true);
+    expect(s.doc.nodes[img]).toBeUndefined();
+    const b = (await worldBounds(page, gid))!;
+    expect(Math.abs(b.x - 140)).toBeLessThan(2.5);
+    expect(Math.abs(b.width - 160)).toBeLessThan(5);
+    expect(s.past[s.past.length - 1].label).toBe('Image Trace');
+
+    // scripting API with the 3 colour preset on a two colour image, keeping the source
+    const img2 = await placeTestImage(page, 400, 100);
+    const res = await page.evaluate((id) => (window as any).__opuller.mcp.imageTrace({ ids: [id], preset: 'c3', options: { source: 'keep', noise: 2 } }), img2);
+    expect(res.groups.length).toBe(1);
+    expect(res.paths).toBe(2);
+    s = await getState(page);
+    expect(s.doc.nodes[img2]).toBeTruthy();
+    const colors = s.doc.nodes[res.groups[0]].children.map((id: string) => s.doc.nodes[id].fill.color).sort();
+    expect(colors).toEqual(['#0000ff', '#ff0000']);
+    // the preset commands trace with the preset's settings
+    await withStore(page, (st) => st.setSelection(Object.keys(st.doc.nodes).filter((k) => st.doc.nodes[k].type === 'image')));
+    await runCommand(page, 'image.tracePreset.c6');
+    await expect.poll(async () => (await getState(page)).past[(await getState(page)).past.length - 1].label).toBe('Image Trace');
+    const presets = await page.evaluate(() => (window as any).__opuller.mcp.imageTrace({ op: 'presets' }));
+    expect(presets.map((p: any) => p.id)).toContain('hifi');
   });
 
   test('rasterize replaces vector objects with an image; crop image to a rectangle', async ({ page }) => {

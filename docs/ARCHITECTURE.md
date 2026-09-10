@@ -49,6 +49,11 @@ src/
   graphs/       build.ts (9 graph types), ops.ts, data/type dialogs
   perspective/  grid.ts (1/2/3-point maths), ops.ts (attach/move/release),
                 store.ts (UI state), overlay + plane widget + Define Grid dialog
+  liquify/      brush.ts (pure deformation maths), engine.ts (gesture sessions, Simplify),
+                register.tsx (options bar, Tool Options dialog, scripted applyLiquify)
+  raster/       Image Trace: potrace.ts (curve fitting), quantize.ts (palettes, despeckle),
+                vectorize.ts (pipeline) run in traceWorker.ts via traceRunner.ts;
+                trace.ts (document side), rasterize.ts, register.tsx (dialogs, commands)
 tests/
   unit/         vitest (jsdom)          -> `npm test`
   e2e/          Playwright (Chromium)   -> `npm run test:e2e`, helpers in helpers.ts
@@ -121,6 +126,7 @@ It is registered automatically (glob import). Fields:
   brush, smooth...), `shapes` 300-399, `text` 400-499, `transform` 500-599,
   `edit` 600-699 (scissors, knife, eraser, shape builder, live paint 612-613,
   width, mesh 621, blend, gradient, symbol sprayer 640, eyedropper, measure...),
+  `liquify` 650-656 (warp, twirl, pucker, bloat, scallop, crystallize, wrinkle),
   `text` also holds the Graph tool (450), `perspective` 780-781 (grid, selection),
   `artboard` 800, `navigate` 900.
 * `ToolContext` (`ctx`): `ctx.state` (fresh snapshot), `ctx.doc`, `ctx.zoom`,
@@ -269,7 +275,8 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 | Width tool | `src/tools/width` | writes `stroke.widthProfile`, rendered by `geometry/widthProfile.ts` |
 | Blend | `src/blend`, `src/tools/blend` | blend group = `data.blend`, steps carry `data.blendStep`; steps regenerate on commit |
 | Measure | `src/tools/measure` | |
-| Raster | `src/raster` (Image Trace via imagetracerjs, Rasterize, Crop), `src/tools/pixelbrush` | |
+| Raster | `src/raster` (Image Trace: `potrace.ts`, `quantize.ts`, `vectorize.ts` in a Web Worker; Rasterize, Crop), `src/tools/pixelbrush` | the pure pipeline is unit tested; `scripts/trace-profile.mjs` times it on a picture |
+| Liquify | `src/liquify` (`brush.ts`, `engine.ts`, `register.tsx`), `src/tools/liquify` | seven tools share one gesture engine (`LiquifySession`); brush dimensions are shared options; `applyLiquify` scripts a gesture |
 | Samples | `src/samples` | File > Open Sample; the bird is built with boolean ops at load |
 | Help & preferences | `src/help` | Preferences (Ctrl+K), Keyboard Shortcuts, About, Welcome screen |
 | AI bridge / MCP | `src/mcp` (page side: `api.ts` methods, `bridge.ts` WebSocket client), `mcp/server.ts` (MCP stdio server), `.mcp.json` | `window.__opuller.mcp` exposes the same methods |
@@ -292,7 +299,7 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 * `registerExpander(name, (doc, id) => ID[] | null)` (`src/appearance/expand.ts`) — Object > Expand Appearance asks every expander in turn (brush strokes, geometry effects, 3D faces, pattern fills, symbol sets…).
 * `setPatternRenderer(fn)` (`src/patterns/refresh.ts`) — pure modules refresh pattern SVG without importing the renderer (paper.js/canvas free).
 * Viewport slot `'html'` (`registerViewportSlot('html', id, Component)`) — HTML positioned over the canvas (inline text editor, perspective plane widget). Stop pointer propagation inside such widgets or the viewport starts a tool gesture.
-* `window.__opuller.<module>` namespaces (`color`, `print`, `symbols`, `patterns`, `brushes`, `gradients`, `distort`, `effects3d`, `livepaint`, `graphs`, `perspective`, `io` as `__opullerIO`) — pure helpers + commands exposed for Playwright and scripting; tests never dynamic-import source files.
+* `window.__opuller.<module>` namespaces (`color`, `print`, `symbols`, `patterns`, `brushes`, `gradients`, `distort`, `effects3d`, `livepaint`, `graphs`, `perspective`, `liquify`, `raster`, `io` as `__opullerIO`) — pure helpers + commands exposed for Playwright and scripting; tests never dynamic-import source files.
 * Node markers in `data`: `blend`/`blendStep`, `symbol`/`symbolSet`, `patternEdit`, `envelope`, `livePaint`/`lpKind`, `graph`/`frame`, `perspective`. Check them with the module's `isX(doc, id)` helpers, not by hand.
 * `registerStatusItem(id, Component)` (`src/ui/statusItems.ts`) — small components at the right end of the status bar.
 * `Tool.getCursor(ctx)` — dynamic cursors that survive Space/hand pans.

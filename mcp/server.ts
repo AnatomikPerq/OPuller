@@ -629,6 +629,22 @@ server.registerTool(
 );
 
 server.registerTool(
+  'opuller_image_trace',
+  {
+    title: 'Image Trace (raster to vector)',
+    description:
+      'Convert image nodes (default: the selected images) into filled vector paths — colour reduction plus potrace curve fitting, like Illustrator\'s Image Trace. Pick a preset (op "presets" lists them: hifi, lofi, c3, c6, c16, gray, logo, sketch, silhouette, technical) and/or override options: mode bw | gray | color, threshold 1..255, colors / grays 2..64, paths 0..100 (fidelity), corners 0..100, noise (min region px), method abutting | overlapping, ignoreWhite, snapLines, maxSize (trace resolution), source replace | keep | hide. Returns the traced group ids.',
+    inputSchema: {
+      op: z.enum(['trace', 'presets']).optional(),
+      ids: z.array(z.string()).optional(),
+      preset: z.string().optional(),
+      options: z.record(z.string(), z.unknown()).optional(),
+    },
+  },
+  async (p) => text(await call('imageTrace', p)),
+);
+
+server.registerTool(
   'opuller_liquify',
   {
     title: 'Liquify (reshape brushes)',

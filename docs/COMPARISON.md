@@ -1,11 +1,11 @@
 # OPuller и Adobe Illustrator: что есть, чего нет
 
-Документ описывает состояние OPuller на 2026-09-09 (версия 0.1.0) и честно сравнивает его
+Документ описывает состояние OPuller на 2026-09-11 (версия 0.1.0) и честно сравнивает его
 с Adobe Illustrator 2025.
 
 ## 1. Инвентарь OPuller
 
-### Инструменты (45)
+### Инструменты (52)
 
 | Группа | Инструменты (клавиша) |
 | --- | --- |
@@ -16,6 +16,7 @@
 | Текст | Type (T): точечный, блочный, по контуру |
 | Трансформация | Rotate (R), Scale (S), Reflect (O), Shear, Free Transform (E) |
 | Редактирование | Shape Builder (Shift+M), Live Paint Bucket (K), Live Paint Selection (Shift+L), Eraser (Shift+E), Scissors (C), Knife, Width (Shift+W), Blend (W), Gradient (G) с freeform-режимом, Mesh (U), Eyedropper (I), Measure |
+| Деформация (Liquify) | Warp (Shift+R), Twirl, Pucker, Bloat, Scallop, Crystallize, Wrinkle — эллиптическая кисть с общими размерами (Alt-drag меняет размер, Shift — пропорционально), Detail / Simplify, Intensity, Complexity, Options-диалог |
 | Символы, диаграммы, перспектива | Symbol Sprayer (Shift+S) с режимами shift/size/spin/screen, Graph (J), Perspective Grid (Shift+P) |
 | Документ | Artboard (Shift+O), Hand (H), Zoom (Z) |
 
@@ -87,8 +88,11 @@ Shortcuts / About.
 * **Graphs**: 9 типов (столбчатая, с накоплением, линейчатая, линейная, площади, точечная,
   круговая, лепестковая), таблица данных, тип, легенда/оси/подписи, перегенерация и Refit,
   инструмент Graph (J).
-* Изображения: Place, Image Trace (пресеты, ч/б, серый, цвет, превью), Crop, сброс кадрирования,
-  экспорт оригинала, Pixel Brush для растровых слоёв.
+* Изображения: Place, **Image Trace** (собственный движок: квантование цветов median cut +
+  k-means + слияние Уорда, кривые potrace, 10 пресетов, режимы ч/б / серый / цвет, Threshold /
+  Colors / Grays, Paths / Corners / Noise, Abutting / Overlapping, Snap curves to lines, Ignore
+  white, живое превью в Web Worker), Crop, сброс кадрирования, экспорт оригинала, Pixel Brush для
+  растровых слоёв.
 * Эффекты (живые, редактируемые): Drop Shadow, Inner Shadow, Outer/Inner Glow, Gaussian Blur,
   Round Corners, цветокоррекция, Warp, Free Distort, Envelope Mesh, 3D Extrude/Revolve/Rotate,
   режимы наложения, непрозрачность.
@@ -112,10 +116,10 @@ Shortcuts / About.
 
 ### ИИ
 
-Встроенный MCP-сервер (57 инструментов): чтение/изменение документа, любые команды и инструменты,
+Встроенный MCP-сервер (59 инструментов): чтение/изменение документа, любые команды и инструменты,
 жесты мыши, экспорт и импорт файлов (PDF/AI/EPS/SVG/растр), скриншоты, библиотека проектов,
-символы, кисти, узоры, градиенты (mesh/freeform), Live Paint, диаграммы, перспектива. То же API
-— в консоли `window.__opuller.mcp`.
+символы, кисти, узоры, градиенты (mesh/freeform), Live Paint, диаграммы, перспектива, liquify-кисти,
+Image Trace. То же API — в консоли `window.__opuller.mcp`.
 
 ## 2. Сравнение с Illustrator
 
@@ -133,7 +137,7 @@ Shortcuts / About.
 | Цвет | RGB/CMYK, spot, глобальные, Recolor Artwork | RGB/CMYK, spot, глобальные, Recolor Artwork | нет ICC-профилей и цветопробы (CMYK ↔ RGB — формульный, не профильный) |
 | Печать | вылеты, метки, разделения | вылеты, метки в SVG/PDF/EPS | нет цветоделения и overprint-превью |
 | Эффекты | большой набор (Stylize, Distort, 3D, SVG-фильтры…) | Stylize + Blur + цвет + Warp/Distort + 3D | 3D без материалов/текстур и raytracing |
-| Envelope / Warp | ✔ | ✔ | Warp, Mesh, Top Object; нет Puppet Warp |
+| Envelope / Warp / Liquify | ✔ | ✔ | Warp, Mesh, Top Object; семь liquify-кистей (Warp, Twirl, Pucker, Bloat, Scallop, Crystallize, Wrinkle); нет Puppet Warp |
 | Perspective Grid | ✔ | ✔ | 1/2/3-точечная сетка, привязка объектов, перемещение по плоскости; нет перпендикулярного перемещения и сеток-пресетов по имени |
 | Graphs | ✔ (9 типов) | ✔ (9 типов) | нет «дизайнов» столбцов из символов |
 | Текст | ✔ | ✔ (базовый набор) | точечный/блочный/по контуру, outlines; нет переносов, OpenType-фич, вертикального текста |
@@ -141,7 +145,7 @@ Shortcuts / About.
 | Blend | ✔ | ✔ | нет спайна по произвольному пути и ориентации к спайну |
 | Артборды | ✔ | ✔ | панель, инструмент, пресеты, экспорт по артбордам |
 | Слои | ✔ | ✔ | вложенность, DnD, миниатюры, блокировки |
-| Image Trace | ✔ (продвинутый) | ✔ (базовый) | нет режима «предустановок с палитрой из документа», нет углов/дуг |
+| Image Trace | ✔ | ✔ | пресеты, Paths / Corners / Noise, Abutting / Overlapping, Snap Curves, Ignore White, превью; нет режима Strokes (центральные линии обводками) и палитры из образцов документа |
 | Форматы | AI, EPS, PDF, SVG, PNG… | SVG, PDF, EPS, PNG, JPEG, WebP, .opuller; импорт AI (PDF-совместимые и классические), EPS, PDF | нет записи в формат .ai (пишется PDF/EPS, которые Illustrator открывает) |
 | Растр | Rasterize, Crop, эффекты | Rasterize, Crop, Pixel Brush, цветокоррекция | |
 | Домашний экран | Home (облачные документы) | Home (библиотека в браузере, превью, поиск) | |
@@ -153,7 +157,7 @@ Shortcuts / About.
 | --- | --- | --- |
 | ICC-профили, цветопроба, цветоделение, overprint | важно для серьёзной типографии | CMYK-документ + PDF/EPS с метками; профили применяет типография |
 | Запись `.ai` | средне | PDF (Illustrator открывает его как редактируемый) или EPS |
-| Puppet Warp, Repeat (radial/grid/mirror), Global Edit | низко | Envelope Mesh; Transform Each + Duplicate |
+| Puppet Warp, Repeat (radial/grid/mirror), Global Edit | низко | Liquify-кисти и Envelope Mesh; Transform Each + Duplicate |
 | 3D-материалы, текстуры, тени с трассировкой | низко | Extrude/Revolve/Rotate с затенением |
 | Продвинутый текст: переносы, OpenType-features, глифы, вертикальный набор, связанные блоки, стили абзацев/символов | средне | базовый rich-text |
 | Динамические символы, 9-slice | низко | Redefine символа |
@@ -166,7 +170,7 @@ Shortcuts / About.
 * Управление ИИ через MCP: ассистент видит документ, рисует, комбинирует и проверяет результат
   скриншотом; символы, кисти, узоры, диаграммы и перспектива тоже доступны через инструменты MCP.
 * Работает в браузере, ставится из репозитория, без подписки; данные остаются локально.
-* Тесты: 204 unit + 137 e2e сценариев покрывают инструменты, панели, экспорт/импорт и ИИ-мост.
+* Тесты: 225 unit + 143 e2e сценариев покрывают инструменты, панели, экспорт/импорт и ИИ-мост.
 
 ### Итоговая оценка покрытия
 

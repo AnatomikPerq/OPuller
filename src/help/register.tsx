@@ -282,7 +282,7 @@ function AboutDialog({ close }: { close: () => void }) {
         A full-featured vector graphics editor: live shapes, Bézier pens, Pathfinder and Shape Builder, gradients, variable-width strokes, effects, type, blends, artboards, image trace, SVG/PDF/PNG export — and an MCP server so an AI can drive every tool.
       </p>
       <div className="small muted">
-        {tools} tools · {commands} commands · React, paper.js, opentype.js, jsPDF, imagetracer. Made with ❤ and a burgundy OP.
+        {tools} tools · {commands} commands · React, paper.js, opentype.js, jsPDF, pdf.js, potrace. Made with ❤ and a burgundy OP.
       </div>
     </DialogFrame>
   );

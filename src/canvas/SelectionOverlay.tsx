@@ -91,6 +91,9 @@ interface AnchorDot {
   ref: AnchorRef;
 }
 
+/** Above this many anchors the overlay shows outlines and bounds only. */
+const MAX_ANCHOR_DOTS = 6000;
+
 function collectAnchors(state: EditorState, ids: ID[]): { dots: AnchorDot[]; handles: Array<{ key: string; from: Vec; to: Vec }> } {
   const doc = state.doc;
   const z = state.zoom;
@@ -110,6 +113,15 @@ function collectAnchors(state: EditorState, ids: ID[]): { dots: AnchorDot[]; han
     if (sp.closed || a.index < len - 1) showHandlesFor.add(`${a.nodeId}/${a.subpath}/${(a.index + 1) % len}`);
   }
   const single = ids.length === 1;
+  // huge selections (e.g. a traced photo with 100k anchors) would flood the DOM with dots
+  let total = 0;
+  for (const id of ids) {
+    for (const d of descendants(doc, id, true)) {
+      const n = doc.nodes[d];
+      if (n && n.type === 'path' && n.visible) for (const sp of n.subpaths) total += sp.anchors.length;
+      if (total > MAX_ANCHOR_DOTS) return { dots, handles };
+    }
+  }
   for (const id of ids) {
     for (const d of descendants(doc, id, true)) {
       const n = doc.nodes[d];

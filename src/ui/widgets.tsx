@@ -586,7 +586,17 @@ export function Tooltip({ text, children, shortcut }: { text: ReactNode; shortcu
       {children}
       {show &&
         createPortal(
-          <div className="tooltip" style={{ left: pos.left, top: pos.top }}>
+          <div
+            className="tooltip"
+            style={{ left: pos.left, top: pos.top }}
+            ref={(el) => {
+              // keep the tooltip inside the window (toolbar buttons sit at the left edge)
+              if (!el) return;
+              const half = el.offsetWidth / 2 + 6;
+              const left = Math.min(Math.max(pos.left, half), window.innerWidth - half);
+              if (left !== pos.left) el.style.left = `${left}px`;
+            }}
+          >
             {text}
             {shortcut && <span className="tooltip-shortcut">{shortcut}</span>}
           </div>,

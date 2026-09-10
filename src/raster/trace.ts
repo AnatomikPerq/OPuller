@@ -1,80 +1,46 @@
 /**
- * Image Trace: convert a raster image node into vector paths with imagetracerjs.
+ * Image Trace: convert a raster image node into vector paths. The tracing
+ * itself (colour reduction + potrace) is pure and runs in a Web Worker
+ * (vectorize.ts / traceRunner.ts); this file adapts it to the document.
  */
-import ImageTracer, { type ImageTracerOptions } from 'imagetracerjs';
-import type { Document, ID, ImageNode, Node, PathNode } from '@/model/types';
-import { makeGroup } from '@/model/nodes';
-import { addNode, addSubtree, worldMatrix, parentWorldMatrix, indexInParent, removeNode, descendants } from '@/model/document';
-import { multiply, invert, scale as scaleM, translate } from '@/geometry/matrix';
-import { importSvg } from '@/io/svgImport';
+import type { Document, ID, ImageNode } from '@/model/types';
+import { makeGroup, makePath } from '@/model/nodes';
+import { noStroke } from '@/model/defaults';
+import { addNode, worldMatrix, parentWorldMatrix, indexInParent, removeNode, descendants } from '@/model/document';
+import { multiply, invert, scale as scaleM } from '@/geometry/matrix';
+import { pathToSvgD } from '@/geometry/path';
 import { loadImage } from '@/util/files';
+import { vectorizeAsync } from './traceRunner';
+import { DEFAULT_VECTORIZE, type VectorizeOptions, type VectorizeResult, type TraceMode, type TraceMethod } from './vectorize';
 
-export type TraceMode = 'bw' | 'gray' | 'color';
+export type { TraceMode, TraceMethod };
 
-export interface TraceOptions {
-  mode: TraceMode;
-  /** number of colours (color / gray modes) */
-  colors: number;
-  /** path simplification 0..10 (higher = smoother, fewer anchors) */
-  smoothness: number;
-  /** ignore areas smaller than this many pixels */
-  minArea: number;
-  /** drop white (or the lightest) fills */
-  ignoreWhite: boolean;
-  /** blur radius before tracing (0..5) */
-  blur: number;
-  /** trace at most this many pixels on the longer side (performance) */
+export interface TraceOptions extends VectorizeOptions {
+  /** trace at most this many pixels on the longer side (speed vs detail) */
   maxSize: number;
   /** what to do with the source image */
   source: 'replace' | 'keep' | 'hide';
-  /** add a thin stroke of the fill colour to close gaps */
-  strokes: boolean;
 }
 
-export const DEFAULT_TRACE: TraceOptions = { mode: 'color', colors: 16, smoothness: 3, minArea: 8, ignoreWhite: false, blur: 0, maxSize: 1024, source: 'replace', strokes: false };
+export const DEFAULT_TRACE: TraceOptions = { ...DEFAULT_VECTORIZE, maxSize: 1024, source: 'replace' };
 
 export const TRACE_PRESETS: Array<{ id: string; name: string; opts: Partial<TraceOptions> }> = [
-  { id: 'logo', name: 'Black and White Logo', opts: { mode: 'bw', smoothness: 2, minArea: 12, ignoreWhite: true } },
-  { id: 'sketch', name: 'Sketched Art', opts: { mode: 'bw', smoothness: 1, minArea: 4, ignoreWhite: true } },
-  { id: 'gray', name: 'Shades of Gray', opts: { mode: 'gray', colors: 8, smoothness: 3, minArea: 8 } },
-  { id: 'c3', name: '3 Colors', opts: { mode: 'color', colors: 3, smoothness: 4, minArea: 16 } },
-  { id: 'c6', name: '6 Colors', opts: { mode: 'color', colors: 6, smoothness: 3, minArea: 12 } },
-  { id: 'c16', name: '16 Colors', opts: { mode: 'color', colors: 16, smoothness: 3, minArea: 8 } },
-  { id: 'hifi', name: 'High Fidelity Photo', opts: { mode: 'color', colors: 64, smoothness: 1, minArea: 2, maxSize: 1400 } },
-  { id: 'lofi', name: 'Low Fidelity Photo', opts: { mode: 'color', colors: 12, smoothness: 5, minArea: 24, blur: 1 } },
-  { id: 'silhouette', name: 'Silhouettes', opts: { mode: 'bw', smoothness: 5, minArea: 40, ignoreWhite: true } },
+  { id: 'hifi', name: 'High Fidelity Photo', opts: { mode: 'color', colors: 64, paths: 70, corners: 60, noise: 5, method: 'overlapping', ignoreWhite: false, snapLines: false, maxSize: 1200 } },
+  { id: 'lofi', name: 'Low Fidelity Photo', opts: { mode: 'color', colors: 16, paths: 45, corners: 50, noise: 12, method: 'overlapping', ignoreWhite: false, snapLines: false, maxSize: 1024 } },
+  { id: 'c3', name: '3 Colors', opts: { mode: 'color', colors: 3, paths: 50, corners: 75, noise: 25, method: 'overlapping', ignoreWhite: false, snapLines: false } },
+  { id: 'c6', name: '6 Colors', opts: { mode: 'color', colors: 6, paths: 50, corners: 75, noise: 25, method: 'overlapping', ignoreWhite: false, snapLines: false } },
+  { id: 'c16', name: '16 Colors', opts: { mode: 'color', colors: 16, paths: 50, corners: 75, noise: 25, method: 'overlapping', ignoreWhite: false, snapLines: false } },
+  { id: 'gray', name: 'Shades of Gray', opts: { mode: 'gray', grays: 16, paths: 50, corners: 75, noise: 25, method: 'overlapping', ignoreWhite: false, snapLines: false } },
+  { id: 'logo', name: 'Black and White Logo', opts: { mode: 'bw', threshold: 128, paths: 50, corners: 75, noise: 25, ignoreWhite: true, snapLines: false } },
+  { id: 'sketch', name: 'Sketched Art', opts: { mode: 'bw', threshold: 200, paths: 90, corners: 90, noise: 4, ignoreWhite: true, snapLines: false } },
+  { id: 'silhouette', name: 'Silhouettes', opts: { mode: 'bw', threshold: 200, paths: 40, corners: 60, noise: 40, ignoreWhite: true, snapLines: false } },
+  { id: 'technical', name: 'Technical Drawing', opts: { mode: 'bw', threshold: 160, paths: 95, corners: 100, noise: 2, ignoreWhite: true, snapLines: true } },
 ];
 
-function tracerOptions(o: TraceOptions): ImageTracerOptions {
-  const s = Math.max(0, Math.min(10, o.smoothness));
-  const base: ImageTracerOptions = {
-    ltres: 0.5 + s * 0.8,
-    qtres: 0.5 + s * 0.8,
-    pathomit: Math.max(0, Math.round(o.minArea)),
-    rightangleenhance: s < 2,
-    colorsampling: 2,
-    numberofcolors: o.mode === 'bw' ? 2 : Math.max(2, Math.min(256, Math.round(o.colors))),
-    mincolorratio: 0,
-    colorquantcycles: o.mode === 'bw' ? 1 : 3,
-    layering: 0,
-    strokewidth: o.strokes ? 1 : 0,
-    linefilter: false,
-    scale: 1,
-    roundcoords: 2,
-    viewbox: true,
-    desc: false,
-    blurradius: Math.max(0, Math.min(5, o.blur)),
-    blurdelta: 20,
-  };
-  if (o.mode === 'bw') base.pal = [{ r: 0, g: 0, b: 0, a: 255 }, { r: 255, g: 255, b: 255, a: 255 }];
-  if (o.mode === 'gray') {
-    const n = Math.max(2, Math.min(64, Math.round(o.colors)));
-    base.pal = Array.from({ length: n }, (_, i) => {
-      const v = Math.round((255 * i) / (n - 1));
-      return { r: v, g: v, b: v, a: 255 };
-    });
-  }
-  return base;
+export interface TraceResult extends VectorizeResult {
+  /** source pixels per traced pixel (the bitmap may be downscaled) */
+  pixelScaleX: number;
+  pixelScaleY: number;
 }
 
 /** Pixel data of an image node's source (cropped, downscaled to maxSize). */
@@ -93,64 +59,44 @@ export async function imageDataOf(node: ImageNode, maxSize: number): Promise<{ d
   return { data: ctx.getImageData(0, 0, w, h), scaleX: crop.width / w, scaleY: crop.height / h };
 }
 
-/** Trace to SVG markup (pixel coordinates of the traced bitmap). */
-export async function traceToSvg(node: ImageNode, opts: TraceOptions): Promise<{ svg: string; pixelScaleX: number; pixelScaleY: number; width: number; height: number }> {
+/** Trace an image node (subpaths in pixel coordinates of the traced bitmap). */
+export async function traceImage(node: ImageNode, opts: TraceOptions): Promise<TraceResult> {
   const { data, scaleX, scaleY } = await imageDataOf(node, opts.maxSize);
-  const svg = ImageTracer.imagedataToSVG(data, tracerOptions(opts));
-  return { svg, pixelScaleX: scaleX, pixelScaleY: scaleY, width: data.width, height: data.height };
+  const r = await vectorizeAsync({ width: data.width, height: data.height, data: data.data }, opts);
+  return { ...r, pixelScaleX: scaleX, pixelScaleY: scaleY };
 }
 
-function isWhite(n: Node): boolean {
-  if (n.type !== 'path') return false;
-  const f = n.fill;
-  if (f.type !== 'solid') return false;
-  const v = parseInt(f.color.slice(1), 16);
-  const r = (v >> 16) & 255;
-  const g = (v >> 8) & 255;
-  const b = v & 255;
-  return r >= 245 && g >= 245 && b >= 245;
+/** SVG markup of a trace result (previews). */
+export function traceSvg(r: VectorizeResult): string {
+  const paths = r.layers.map((l) => `<path d="${pathToSvgD(l.subpaths)}" fill="${l.color}" fill-rule="nonzero"/>`).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${r.width} ${r.height}" width="${r.width}" height="${r.height}">${paths}</svg>`;
 }
 
 /**
- * Trace an image node in the document. Returns the id of the resulting group
- * (or null when nothing was traced). Must be called inside updateDoc with a
- * pre-computed SVG (tracing itself is async).
+ * Put a trace result into the document as a group of filled paths placed over
+ * the image. Returns the group id (null when nothing was traced). Call inside
+ * updateDoc with a pre-computed result (tracing itself is async).
  */
-export function applyTrace(draft: Document, imageId: ID, traced: Awaited<ReturnType<typeof traceToSvg>>, opts: TraceOptions): ID | null {
+export function applyTrace(draft: Document, imageId: ID, traced: TraceResult, opts: TraceOptions): ID | null {
   const img = draft.nodes[imageId];
   if (!img || img.type !== 'image') return null;
-  const res = importSvg(traced.svg, { name: 'Traced' });
-  let items = res.items;
-  if (opts.ignoreWhite) {
-    items = items.filter((it) => !(it.root.type === 'path' && isWhite(it.root)));
-    for (const it of items) {
-      if (it.root.type !== 'group') continue;
-      // drop white paths inside groups
-      it.nodes = it.nodes.filter((n) => n === it.root || !isWhite(n));
-      const keep = new Set(it.nodes.map((n) => n.id));
-      for (const n of it.nodes) if (n.type === 'group' || n.type === 'layer') n.children = n.children.filter((c) => keep.has(c));
-    }
-  }
-  if (!items.length) return null;
+  if (!traced.layers.length) return null;
   const parent = img.parent;
   const index = indexInParent(draft, imageId);
   const group = makeGroup([], { name: `${img.name} (traced)` });
   addNode(draft, group, parent, index + 1);
-  for (const it of items) addSubtree(draft, it.root, it.nodes, group.id);
+  for (const layer of traced.layers) {
+    const node = makePath(layer.subpaths, { fill: { type: 'solid', color: layer.color, opacity: 1 }, stroke: noStroke(), name: `Fill ${layer.color}`, fillRule: 'nonzero' });
+    addNode(draft, node, group.id);
+  }
   // map traced pixels (cropped bitmap) onto the displayed image rectangle
   const crop = img.crop ?? { x: 0, y: 0, width: img.naturalWidth, height: img.naturalHeight };
   const sx = (img.width / crop.width) * traced.pixelScaleX;
   const sy = (img.height / crop.height) * traced.pixelScaleY;
   const world = multiply(worldMatrix(draft, imageId), scaleM(sx, sy));
   group.transform = multiply(invert(parentWorldMatrix(draft, group.id)), world);
-  // name the paths by colour for the layers panel
-  for (const id of descendants(draft, group.id)) {
-    const n = draft.nodes[id] as PathNode;
-    if (n.type === 'path' && n.fill.type === 'solid') n.name = `Fill ${n.fill.color}`;
-  }
   if (opts.source === 'replace') removeNode(draft, imageId);
   else if (opts.source === 'hide') (draft.nodes[imageId] as ImageNode).visible = false;
-  void translate;
   return group.id;
 }
 
