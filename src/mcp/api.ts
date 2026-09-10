@@ -1222,6 +1222,28 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     }
     throw new Error(`Unknown graphs op "${op}"`);
   },
+  async liquify(p) {
+    const mod = await import('@/liquify/engine');
+    const brush = await import('@/liquify/brush');
+    const op = p.op ?? 'apply';
+    if (op === 'options') {
+      const kind = brush.LIQUIFY_KINDS.includes(p.kind) ? (p.kind as import('@/liquify/brush').LiquifyKind) : 'warp';
+      if (p.options) {
+        const reg = await import('@/liquify/register');
+        const global: Record<string, unknown> = {};
+        const own: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(p.options as Record<string, unknown>)) ((brush.GLOBAL_KEYS as string[]).includes(k) ? global : own)[k] = v;
+        if (Object.keys(global).length) reg.setGlobalBrush(global);
+        if (Object.keys(own).length) getState().setToolOptions(kind, own);
+      }
+      return { kind, options: mod.currentOptions(kind) };
+    }
+    if (op === 'apply') {
+      const r = mod.applyLiquify({ kind: p.kind, points: p.points, x: p.x, y: p.y, steps: p.steps, ids: p.ids, options: p.options, pressure: p.pressure });
+      return { ...r, selection: getState().selection, history: getState().past.length };
+    }
+    throw new Error('op must be apply | options');
+  },
   async projects(p) {
     const lib = await import('@/home/projects');
     const op = p.op ?? 'list';

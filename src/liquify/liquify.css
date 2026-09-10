@@ -1,0 +1,30 @@
+/* Liquify tools (Warp, Twirl, Pucker, Bloat, Scallop, Crystallize, Wrinkle) */
+
+.liquify-options {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.liquify-options .field-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.liquify-dialog .liquify-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.liquify-dialog .liquify-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.liquify-dialog .section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

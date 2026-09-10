@@ -629,6 +629,27 @@ server.registerTool(
 );
 
 server.registerTool(
+  'opuller_liquify',
+  {
+    title: 'Liquify (reshape brushes)',
+    description:
+      'Illustrator-style liquify brushes applied without the mouse: kind = warp | twirl | pucker | bloat | scallop | crystallize | wrinkle. Warp pushes paths along the given points (the brush moves through them); the other tools are applied `steps` times at every point (≈ 25 steps per second of holding the button). Targets: ids, else the selection, else every path under the brush. options override the tool options (width, height, angle, intensity 1..100, detail 1..50, simplify 0..100, rate ±180 for twirl, complexity 1..15, horizontal / vertical 0..100 for wrinkle, affectAnchors / affectIn / affectOut). op "options" reads or patches the tool options (width / height / angle / intensity are shared by all liquify tools).',
+    inputSchema: {
+      op: z.enum(['apply', 'options']).optional(),
+      kind: z.enum(['warp', 'twirl', 'pucker', 'bloat', 'scallop', 'crystallize', 'wrinkle']).optional(),
+      points: z.array(z.object({ x: z.number(), y: z.number() })).optional(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      steps: z.number().optional(),
+      ids: z.array(z.string()).optional(),
+      pressure: z.number().optional(),
+      options: z.record(z.string(), z.unknown()).optional(),
+    },
+  },
+  async (p) => text(await call('liquify', p)),
+);
+
+server.registerTool(
   'opuller_projects',
   {
     title: 'Project library',
