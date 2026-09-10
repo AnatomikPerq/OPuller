@@ -114,8 +114,17 @@ test.describe('raster module', () => {
     expect(colors).toEqual(['#0000ff', '#ff0000']);
     // the preset commands trace with the preset's settings
     await withStore(page, (st) => st.setSelection(Object.keys(st.doc.nodes).filter((k) => st.doc.nodes[k].type === 'image')));
+    const historyBefore = (await getState(page)).past.length;
     await runCommand(page, 'image.tracePreset.c6');
-    await expect.poll(async () => (await getState(page)).past[(await getState(page)).past.length - 1].label).toBe('Image Trace');
+    await expect
+      .poll(
+        async () => {
+          const st = await getState(page);
+          return `${st.past.length > historyBefore ? 'traced' : 'pending'}: ${st.past.map((p: any) => p.label).slice(-2).join(', ')}`;
+        },
+        { timeout: 20000 },
+      )
+      .toBe('traced: Image Trace, Image Trace');
     const presets = await page.evaluate(() => (window as any).__opuller.mcp.imageTrace({ op: 'presets' }));
     expect(presets.map((p: any) => p.id)).toContain('hifi');
   });

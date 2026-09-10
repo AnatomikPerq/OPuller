@@ -120,15 +120,18 @@ test.describe('liquify tools', () => {
   test('scallop, crystallize and wrinkle add detail to an outline', async ({ page }) => {
     const c = await drawEllipse(page, 300, 300, 200, 200);
     await withStore(page, (st) => st.clearSelection());
+    const initial = await anchorCount(page, c);
     for (const kind of ['scallop', 'crystallize', 'wrinkle']) {
-      const before = await anchorCount(page, c);
+      const before = JSON.stringify((await nodeById(page, c)).subpaths);
       const res = await page.evaluate(
         ({ id, kind }) => (window as any).__opuller.liquify.applyLiquify({ kind, ids: [id], points: [{ x: 500, y: 400 }], steps: 15, options: { width: 160, height: 160, intensity: 100, complexity: 3 } }),
         { id: c, kind },
       );
       expect(res.changed).toBe(true);
-      expect(await anchorCount(page, c)).toBeGreaterThan(before);
+      // the outline moved (anchors are only added the first time the brush subdivides the edge)
+      expect(JSON.stringify((await nodeById(page, c)).subpaths)).not.toBe(before);
     }
+    expect(await anchorCount(page, c)).toBeGreaterThan(initial);
     const s = await getState(page);
     expect(s.past.slice(-3).map((p: any) => p.label)).toEqual(['Scallop Tool', 'Crystallize Tool', 'Wrinkle Tool']);
   });
