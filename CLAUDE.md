@@ -69,8 +69,9 @@ and Read the file instead.
   font, 24px controls, dark theme first.
 * Colours are lowercase `#rrggbb` + separate opacity; gradients in bounding-box units.
 * No new npm dependencies without a reason; note them in the commit message.
-* Commit checkpoints with descriptive messages; the repo is the user's own project — do not
-  push anywhere.
+* Commit checkpoints with descriptive messages and push them to `origin master`
+  (https://github.com/AnatomikPerq/OPuller, public). Never commit pictures or other test
+  material dropped into the project root.
 
 ## Do not
 
