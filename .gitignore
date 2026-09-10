@@ -4,3 +4,8 @@ test-results
 playwright-report
 .DS_Store
 *.log
+
+# stray pictures dropped into the project root (test material)
+/*.jpg
+/*.jpeg
+/*.png
