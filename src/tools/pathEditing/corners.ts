@@ -157,8 +157,27 @@ function rectCornerSelected(n: RectPath, corner: number, only: Map<number, Set<n
  * selected, otherwise every corner of the selected paths. Empty above MAX_WIDGETS.
  */
 export function selectionCornerWidgets(doc: Document, selection: ID[], selectedAnchors: AnchorRef[]): CornerWidget[] {
+  // computed on every pointer move of the Direct Selection tool: memoise on the store objects
+  if (memo && memo.doc === doc && memo.selection === selection && memo.anchors === selectedAnchors) return memo.widgets;
+  const widgets = computeSelectionCornerWidgets(doc, selection, selectedAnchors);
+  memo = { doc, selection, anchors: selectedAnchors, widgets };
+  return widgets;
+}
+
+let memo: { doc: Document; selection: ID[]; anchors: AnchorRef[]; widgets: CornerWidget[] } | null = null;
+
+/** Paths above this many anchors show no widgets (a traced photo would cost a full pass per pointer move). */
+const MAX_WIDGET_ANCHORS = 4000;
+
+function computeSelectionCornerWidgets(doc: Document, selection: ID[], selectedAnchors: AnchorRef[]): CornerWidget[] {
   const ids = editablePathIds(doc, selection);
   const out: CornerWidget[] = [];
+  let anchors = 0;
+  for (const id of ids) {
+    const n = doc.nodes[id];
+    if (n && n.type === 'path') for (const sp of n.subpaths) anchors += sp.anchors.length;
+    if (anchors > MAX_WIDGET_ANCHORS) return [];
+  }
   if (selectedAnchors.length) {
     const byNode = new Map<ID, Map<number, Set<number>>>();
     for (const r of selectedAnchors) {
