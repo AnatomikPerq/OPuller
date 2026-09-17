@@ -3,7 +3,7 @@
 A professional vector graphics editor for the web — an Adobe Illustrator alternative with a
 full toolset, panels, keyboard shortcuts, unlimited undo, RGB / CMYK documents with spot and
 global colours, symbols, brushes, patterns, mesh gradients, envelopes, 3D, Live Paint, graphs, a
-perspective grid, and SVG / PNG / JPEG / WebP / PDF / EPS export plus PDF / AI / EPS import.
+perspective grid, and SVG / PNG / JPEG / WebP / PDF / EPS / AI export plus PDF / AI / EPS import.
 Vector first, raster second. Burgundy **OP** icon, dark UI.
 
 ## Run
@@ -62,7 +62,8 @@ fonts, custom font upload, Create Outlines.
 
 **Files**: `.opuller` project files (JSON, images embedded), SVG import/export, PDF and
 PDF-compatible AI import (editable objects or a rasterised page), classic AI / EPS import
-(PostScript interpreter), PNG / JPEG / WebP / PDF / EPS export per artboard or selection,
+(PostScript interpreter), PNG / JPEG / WebP / PDF / EPS / AI (Illustrator 8 native with editable
+layers, text, gradients and spot colours, or PDF-compatible) export per artboard or selection,
 clipboard (SVG in/out), drag & drop placement, autosave with recovery, recent files, sample
 documents (File > Open Sample — including the bird built from 13 circles with Pathfinder).
 
@@ -88,7 +89,7 @@ every command and tool, simulate mouse gestures and look at the result as an ima
    `opuller_create_text`, `opuller_pathfinder`, `opuller_update_nodes`,
    `opuller_transform`, `opuller_gesture` (drive any tool with the mouse),
    `opuller_run_command`, `opuller_render_png`, `opuller_screenshot`,
-   `opuller_export_svg`, `opuller_export_file` (SVG / PDF / EPS with bleed and marks),
+   `opuller_export_svg`, `opuller_export_file` (SVG / PDF / EPS / AI with bleed and marks),
    `opuller_place_file` (PDF / AI / EPS / SVG / images), `opuller_symbols`,
    `opuller_brushes`, `opuller_patterns`, `opuller_gradients`, `opuller_livepaint`,
    `opuller_graphs`, `opuller_perspective`, `opuller_liquify`, `opuller_image_trace`,

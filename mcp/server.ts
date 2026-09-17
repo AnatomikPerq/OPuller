@@ -584,17 +584,17 @@ server.registerTool(
   'opuller_export_file',
   {
     title: 'Export to a file',
-    description: 'Write the artboard / selection / document to disk as SVG, PDF or EPS (format from the file extension or the format field). bleed/marks add the document bleed and printer marks; cmyk writes EPS colours as inks.',
-    inputSchema: { file: z.string(), format: z.enum(['svg', 'pdf', 'eps']).optional(), scope: z.enum(['artboard', 'artboards', 'selection', 'document']).optional(), ids: z.array(z.string()).optional(), artboardId: z.string().optional(), bleed: z.boolean().optional(), marks: z.boolean().optional(), cmyk: z.boolean().optional(), outlineText: z.boolean().optional() },
+    description: 'Write the artboard / selection / document to disk as SVG, PDF, EPS or AI (format from the file extension or the format field). AI files are Illustrator 8 native (editable layers, text, gradients, spot colours) unless aiFormat is "pdf" (PDF-compatible .ai, opened by Illustrator as PDF content). text picks how AI text is written: auto (ASCII text stays editable, the rest is outlined), editable (also Cyrillic via Windows-1251 when encoding is cp1251) or outlines. bleed/marks add the document bleed and printer marks; cmyk writes EPS / AI colours as inks.',
+    inputSchema: { file: z.string(), format: z.enum(['svg', 'pdf', 'eps', 'ai']).optional(), aiFormat: z.enum(['legacy', 'pdf']).optional(), text: z.enum(['auto', 'editable', 'outlines']).optional(), encoding: z.enum(['latin1', 'cp1251']).optional(), scope: z.enum(['artboard', 'artboards', 'selection', 'document']).optional(), ids: z.array(z.string()).optional(), artboardId: z.string().optional(), bleed: z.boolean().optional(), marks: z.boolean().optional(), cmyk: z.boolean().optional(), outlineText: z.boolean().optional() },
   },
   async (p) => {
     const abs = path.resolve(p.file);
-    const format = p.format ?? (path.extname(abs).slice(1).toLowerCase() as 'svg' | 'pdf' | 'eps');
-    const r = await call<{ text?: string; base64?: string; pages?: number; name?: string }>('exportFile', { ...p, format }, 120_000);
+    const format = p.format ?? (path.extname(abs).slice(1).toLowerCase() as 'svg' | 'pdf' | 'eps' | 'ai');
+    const r = await call<{ text?: string; base64?: string; pages?: number; name?: string; warnings?: string[]; failed?: string[] }>('exportFile', { ...p, format }, 120_000);
     await fs.mkdir(path.dirname(abs), { recursive: true });
     if (r.base64) await fs.writeFile(abs, Buffer.from(r.base64, 'base64'));
-    else await fs.writeFile(abs, r.text ?? '', 'utf8');
-    return text({ saved: abs, format, pages: r.pages, bytes: r.base64 ? Buffer.from(r.base64, 'base64').length : (r.text ?? '').length });
+    else await fs.writeFile(abs, r.text ?? '', format === 'ai' ? 'latin1' : 'utf8');
+    return text({ saved: abs, format, pages: r.pages, bytes: r.base64 ? Buffer.from(r.base64, 'base64').length : (r.text ?? '').length, warnings: r.warnings, failed: r.failed });
   },
 );
 

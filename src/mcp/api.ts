@@ -82,7 +82,13 @@ function toPaint(p: any, fallback: Paint): Paint {
   if (p === null || p === 'none') return { type: 'none' };
   if (typeof p === 'string') return { type: 'solid', color: normalizeHex(p), opacity: 1 };
   if (typeof p === 'object' && p.type) {
-    if (p.type === 'solid') return { type: 'solid', color: normalizeHex(p.color ?? '#000000'), opacity: p.opacity ?? 1 };
+    if (p.type === 'solid') {
+      const out: Paint = { type: 'solid', color: normalizeHex(p.color ?? '#000000'), opacity: p.opacity ?? 1 };
+      // links to global / spot swatches survive (the colour follows the swatch, tint 0..100)
+      if (typeof p.swatchId === 'string') out.swatchId = p.swatchId;
+      if (p.tint !== undefined) out.tint = Number(p.tint);
+      return out;
+    }
     if (p.type === 'linear')
       return { type: 'linear', x1: p.x1 ?? 0, y1: p.y1 ?? 0, x2: p.x2 ?? 1, y2: p.y2 ?? 0, stops: stops(p.stops), spread: p.spread ?? 'pad' };
     if (p.type === 'radial') return { type: 'radial', cx: p.cx ?? 0.5, cy: p.cy ?? 0.5, r: p.r ?? 0.5, fx: p.fx, fy: p.fy, stops: stops(p.stops), spread: p.spread ?? 'pad' };
@@ -442,7 +448,15 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       const r = eps.exportEps(d, { ...opts, cmyk: !!p.cmyk });
       return { format, text: r.eps, name: r.name, width: r.width, height: r.height };
     }
-    if (format === 'pdf') {
+    if (format === 'ai' && p.aiFormat !== 'pdf') {
+      // Illustrator 8 (legacy) native format: editable layers, text, gradients, spot colours
+      const { exportAi } = await import('@/io/aiExport');
+      const { prepareDocumentForAi } = await import('@/io/aiPrepare');
+      const prep = await prepareDocumentForAi(s.doc, { ids: opts.ids, textMode: p.outlineText ? 'outlines' : (p.text ?? 'auto'), encoding: p.encoding ?? 'latin1' });
+      const r = exportAi(prep.doc, { ...opts, cmyk: p.cmyk === undefined ? undefined : !!p.cmyk, encoding: p.encoding ?? 'latin1' });
+      return { format, text: r.ai, name: `${r.name}.ai`, width: r.width, height: r.height, warnings: [...prep.warnings, ...r.warnings], failed: prep.failed };
+    }
+    if (format === 'pdf' || format === 'ai') {
       const { exportPdf } = await import('@/io/pdf');
       const { withTextOutlines } = await import('@/io/svgExport');
       const d = p.outlineText ? (await withTextOutlines(s.doc, opts.ids)).doc : s.doc;
@@ -450,7 +464,7 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       const buf = new Uint8Array(await r.blob.arrayBuffer());
       let bin = '';
       for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-      return { format, base64: btoa(bin), pages: r.pages, name: `${s.doc.name}.pdf` };
+      return { format, base64: btoa(bin), pages: r.pages, name: `${s.doc.name}.${format}` };
     }
     const r = exportSvg(s.doc, { ...opts, pretty: p.pretty ?? true });
     return { format: 'svg', text: r.svg, name: r.name, width: r.width, height: r.height };

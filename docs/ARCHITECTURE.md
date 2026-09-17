@@ -31,7 +31,9 @@ src/
   util/         units.ts (units, expressions), color.ts, keys.ts, files.ts
   io/           import/export: SVG, raster, project files, clipboard, autosave,
                 PDF export (jsPDF) and import (pdf.js), AI/EPS PostScript import
-                (aiImport.ts), EPS export, pure export regions (regions.ts)
+                (aiImport.ts), EPS export, Illustrator 8 native export (aiExport.ts,
+                pure; aiPrepare.ts expands what the format lacks), pure export
+                regions (regions.ts)
   samples/      sample documents
   appearance/   expand.ts — Expand Appearance + `registerExpander` registry
   color/        globals.ts (global/spot swatches, tints, CMYK), editColors.ts,
@@ -296,7 +298,7 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 | Live Paint | `src/livepaint` (`ops.ts`, `register.tsx`), `src/tools/livepaint` | group with `data.livePaint`; children are faces/edges (`data.lpKind`) computed with `computeFaceSet` + `splitAtIntersections` |
 | Graphs | `src/graphs` (`build.ts`, `ops.ts`, `register.tsx`), `src/tools/graph` | group with `data.graph` (spec) + `data.frame`; regenerated from the spec, never edited by hand |
 | Perspective | `src/perspective` (`grid.ts`, `ops.ts`, `store.ts`, `register.tsx`), `src/tools/{perspectiveGrid,perspectiveSelect}` | `Document.perspective` (grid geometry; visibility/active plane in `usePerspectiveStore`); attached nodes carry `data.perspective {plane, rect}` + a `freeDistort` effect recomputed from the flat rect |
-| Vector IO | `src/io/{pdfImport,aiImport,epsExport,vectorImport}.ts(x)` | pdf.js operator list → nodes; PostScript tokenizer/interpreter for AI 8 / EPS; EPS Level 3 writer; `window.__opullerIO` exposes them for tests |
+| Vector IO | `src/io/{pdfImport,aiImport,epsExport,aiExport,aiPrepare,rasterHex,vectorImport}.ts(x)` | pdf.js operator list → nodes; PostScript tokenizer/interpreter for AI 8 / EPS (layers, gradients, XI rasters); EPS Level 3 writer; AI 7/8 native writer (`aiExport.ts`, no React/paper.js) fed by `aiPrepare.ts` (expands brushes / patterns / effects / width profiles, outlines unrepresentable text, decodes images into `rasterHex.ts`); `window.__opullerIO` exposes them for tests |
 
 ### Extension points added later
 

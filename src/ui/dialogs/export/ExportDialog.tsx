@@ -1,6 +1,6 @@
 /**
- * Export dialog: SVG / PNG / JPEG / WebP / PDF with scope, size, background and
- * format options, a live preview and Export / Copy SVG actions.
+ * Export dialog: SVG / PNG / JPEG / WebP / PDF / EPS / AI with scope, size,
+ * background and format options, a live preview and Export / Copy SVG actions.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Download } from 'lucide-react';
@@ -15,11 +15,14 @@ import { exportRegions, renderRegion, withTextOutlines, safeFileName, type Expor
 import { rasterizeRegion, canvasToBlob, canvasToDataUrl, pixelSize, dpiToScale, MIME, EXT, type RasterFormat } from '@/io/raster';
 import { exportPdf } from '@/io/pdf';
 import { exportEps, prepareEpsImages } from '@/io/epsExport';
+import { exportAiAll } from '@/io/aiExport';
+import { prepareDocumentForAi, type AiTextMode } from '@/io/aiPrepare';
 import { fontFaceCss } from '@/io/fontEmbed';
 import { writeTextToClipboard } from '@/io/clipboard';
 import { bleedIsZero, type PrinterMarks } from '@/print/marks';
 
-export type ExportFormat = 'svg' | 'png' | 'jpeg' | 'webp' | 'pdf' | 'eps';
+export type ExportFormat = 'svg' | 'png' | 'jpeg' | 'webp' | 'pdf' | 'eps' | 'ai';
+type AiFlavor = 'legacy' | 'pdf';
 type SizeMode = 'scale' | 'dpi' | 'width';
 type Background = 'transparent' | 'white' | 'artboard' | 'custom';
 
@@ -49,6 +52,13 @@ interface ExportSettings {
   bleed: boolean;
   /** EPS colours as CMYK */
   epsCmyk: boolean;
+  /** AI: Illustrator 8 native file or a PDF-compatible .ai */
+  aiFormat: AiFlavor;
+  /** AI: how text is written (see aiPrepare) */
+  aiText: AiTextMode;
+  aiEncoding: 'latin1' | 'cp1251';
+  /** AI: process colours as CMYK inks; null = follow the document colour mode */
+  aiCmyk: boolean | null;
   /** printer's marks */
   marks: boolean;
   trimMarks: boolean;
@@ -77,6 +87,10 @@ const DEFAULTS: ExportSettings = {
   fileName: '',
   bleed: false,
   epsCmyk: false,
+  aiFormat: 'legacy',
+  aiText: 'auto',
+  aiEncoding: 'latin1',
+  aiCmyk: null,
   marks: false,
   trimMarks: true,
   registrationMarks: true,
@@ -126,8 +140,12 @@ function svgOptions(st: ExportSettings, ids: ID[], artboardId: ID | null, region
   };
 }
 
-async function documentForExport(doc: Document, st: ExportSettings, ids: ID[]): Promise<{ doc: Document; failed: string[] }> {
-  if (st.format !== 'svg' && st.format !== 'pdf' && st.format !== 'eps') return { doc, failed: [] };
+async function documentForExport(doc: Document, st: ExportSettings, ids: ID[]): Promise<{ doc: Document; failed: string[]; warnings?: string[] }> {
+  if (st.format === 'ai' && st.aiFormat === 'legacy') {
+    const r = await prepareDocumentForAi(doc, { ids: st.scope === 'selection' ? ids : undefined, textMode: st.aiText, encoding: st.aiEncoding });
+    return { doc: r.doc, failed: r.failed, warnings: r.warnings };
+  }
+  if (st.format !== 'svg' && st.format !== 'pdf' && st.format !== 'eps' && st.format !== 'ai') return { doc, failed: [] };
   if (!st.outlineText && st.format !== 'eps') return { doc, failed: [] };
   // EPS has no font embedding: text is always outlined
   return withTextOutlines(doc, st.scope === 'selection' ? ids : undefined);
@@ -146,6 +164,7 @@ function extFor(format: ExportFormat): string {
   if (format === 'svg') return '.svg';
   if (format === 'pdf') return '.pdf';
   if (format === 'eps') return '.eps';
+  if (format === 'ai') return '.ai';
   return EXT[format];
 }
 
@@ -153,10 +172,18 @@ function mimeFor(format: ExportFormat): string {
   if (format === 'svg') return 'image/svg+xml';
   if (format === 'pdf') return 'application/pdf';
   if (format === 'eps') return 'application/postscript';
+  if (format === 'ai') return 'application/illustrator';
   return MIME[format];
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** AI files are byte strings (Latin-1 / Windows-1251): write one byte per character. */
+function latin1Bytes(text: string): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(new ArrayBuffer(text.length));
+  for (let i = 0; i < text.length; i++) out[i] = text.charCodeAt(i) & 0xff;
+  return out;
+}
 
 export function ExportDialog({ props, close }: { props: ExportDialogProps; close: () => void }) {
   const doc = useStore((s) => s.doc);
@@ -182,7 +209,7 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [doc, st.scope, ids, activeArtboardId, st.margin, st.bleed, st.marks, st.trimMarks, st.registrationMarks, st.colorBars, st.pageInfo],
   );
-  const artboardScope = st.scope === 'artboard' || st.scope === 'artboards';
+  const artboardScope = (st.scope === 'artboard' || st.scope === 'artboards') && !(st.format === 'ai' && st.aiFormat === 'legacy');
   const hasBleed = !bleedIsZero(doc.bleed);
   const region = regions[0] ?? null;
   const rasterOpts = useMemo(() => {
@@ -241,12 +268,33 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
     setBusy('Exporting…');
     const s = getState();
     try {
-      const { doc: d, failed } = await documentForExport(doc, st, ids);
+      const { doc: d, failed, warnings: prepWarnings } = await documentForExport(doc, st, ids);
       if (failed.length) s.toast(`Some text could not be outlined: ${failed[0]}`, 'info');
       const ext = extFor(st.format);
       const mime = mimeFor(st.format);
       let count = 0;
-      if (st.format === 'eps') {
+      const aiPdf = st.format === 'ai' && st.aiFormat === 'pdf';
+      if (st.format === 'ai' && !aiPdf) {
+        const results = exportAiAll(d, { ...svgOptions(st, ids, activeArtboardId, region), cmyk: st.aiCmyk ?? doc.colorMode === 'cmyk', encoding: st.aiEncoding });
+        const notes = Array.from(new Set([...(prepWarnings ?? []), ...results.flatMap((r) => r.warnings)]));
+        for (let i = 0; i < results.length; i++) {
+          const r = results[i];
+          const rg = regions[i] ?? region;
+          const blob = new Blob([latin1Bytes(r.ai)], { type: mime });
+          const name = fileNameFor(st, rg, regions, ext);
+          const handle = await saveFile(blob, { suggestedName: name, mime, extension: ext, description: 'Adobe Illustrator (legacy)' });
+          if (handle || !hasFSAccess) count++;
+          else break;
+          if (!hasFSAccess && i < results.length - 1) await sleep(400);
+        }
+        if (count && notes.length) s.toast(`AI export notes: ${notes[0]}${notes.length > 1 ? ` (+${notes.length - 1} more)` : ''}`, 'info');
+      } else if (aiPdf) {
+        const res = await exportPdf(d, { ...svgOptions(st, ids, activeArtboardId, region), pretty: false });
+        const name = fileNameFor(st, region, [region], ext);
+        const handle = await saveFile(res.blob, { suggestedName: name, mime, extension: ext, description: 'Adobe Illustrator (PDF compatible)' });
+        if (handle || !hasFSAccess) count = 1;
+        if (res.rasterPages.length) s.toast(`Page${res.rasterPages.length > 1 ? 's' : ''} ${res.rasterPages.join(', ')} embedded as raster (vector conversion failed).`, 'info');
+      } else if (st.format === 'eps') {
         await prepareEpsImages(d, st.scope === 'selection' ? ids : undefined);
         const res = exportEps(d, { ...svgOptions(st, ids, activeArtboardId, region), cmyk: st.epsCmyk });
         const blob = new Blob([res.eps], { type: 'application/postscript' });
@@ -319,6 +367,7 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
     { id: 'webp', label: 'WebP' },
     { id: 'pdf', label: 'PDF' },
     { id: 'eps', label: 'EPS' },
+    { id: 'ai', label: 'AI' },
   ];
 
   const ext = extFor(st.format);
@@ -338,7 +387,7 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
           <div style={{ flex: 1 }} />
           <Button onClick={close}>Cancel</Button>
           <Button primary onClick={doExport} disabled={!region || !!busy} data-testid="export-run">
-            <Download size={13} /> {busy ?? (regions.length > 1 && st.format !== 'pdf' ? `Export ${regions.length} files` : 'Export')}
+            <Download size={13} /> {busy ?? (regions.length > 1 && st.format !== 'pdf' && !(st.format === 'ai' && st.aiFormat === 'pdf') ? `Export ${regions.length} files` : 'Export')}
           </Button>
         </>
       }
@@ -445,6 +494,48 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
               </div>
             </div>
           )}
+          {st.format === 'ai' && (
+            <div className="io-form-row" style={{ alignItems: 'start' }}>
+              <span className="io-form-label">AI options</span>
+              <div className="io-options">
+                <Segmented
+                  value={st.aiFormat}
+                  onChange={(v) => patch({ aiFormat: v })}
+                  options={[
+                    { value: 'legacy', label: 'Illustrator 8 (editable)', title: 'Native Illustrator format: layers, groups, compound paths, text, gradients and spot colours stay editable in Illustrator and CorelDRAW' },
+                    { value: 'pdf', label: 'PDF compatible', title: 'A PDF with the .ai extension: transparency and embedded fonts, opened by Illustrator as PDF content (layers are flattened)' },
+                  ]}
+                />
+                {st.aiFormat === 'legacy' ? (
+                  <>
+                    <Row gap={6}>
+                      <span className="io-hint">Text</span>
+                      <Select
+                        value={st.aiText}
+                        onChange={(v) => patch({ aiText: v })}
+                        width={250}
+                        options={[
+                          { value: 'auto', label: 'Editable (Latin), outline the rest' },
+                          { value: 'editable', label: 'Editable (all, Windows-1251 for Cyrillic)' },
+                          { value: 'outlines', label: 'Convert all text to outlines' },
+                        ]}
+                        id="export-ai-text"
+                      />
+                    </Row>
+                    <Checkbox checked={st.aiCmyk ?? doc.colorMode === 'cmyk'} onChange={(v) => patch({ aiCmyk: v })} label="CMYK colours (k / K)" title="Write process colours as inks; spot swatches are always written as named custom colours" />
+                    <Checkbox checked={st.includeHidden} onChange={(v) => patch({ includeHidden: v })} label="Include hidden objects" />
+                    <span className="io-hint">Brushes, patterns, effects and variable-width strokes are expanded; opacity and blend modes are not part of the format. One file per artboard.</span>
+                  </>
+                ) : (
+                  <>
+                    <Checkbox checked={st.outlineText} onChange={(v) => patch({ outlineText: v })} label="Convert text to outlines" disabled={!hasText} />
+                    <Checkbox checked={st.includeHidden} onChange={(v) => patch({ includeHidden: v })} label="Include hidden objects" />
+                    <span className="io-hint">Illustrator opens the file as PDF content: appearance is preserved, layers are flattened.</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           {st.format === 'pdf' && (
             <div className="io-form-row" style={{ alignItems: 'start' }}>
               <span className="io-form-label">PDF options</span>
@@ -485,7 +576,7 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
             </Row>
           </div>
           {fontWarning.length > 0 && (st.format === 'svg' || st.format === 'pdf') && !st.outlineText && <div className="io-warning">Fonts not embeddable (system fonts): {fontWarning.join(', ')}. Convert text to outlines for identical output.</div>}
-          {st.format === 'pdf' && regions.length > 1 && <div className="io-hint">{regions.length} pages, one per artboard.</div>}
+          {(st.format === 'pdf' || (st.format === 'ai' && st.aiFormat === 'pdf')) && regions.length > 1 && <div className="io-hint">{regions.length} pages, one per artboard.</div>}
         </div>
         <div className="io-export-preview">
           <div className="io-preview-box" data-testid="export-preview">
@@ -507,7 +598,7 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
                   {(region.rect.width * 0.75).toFixed(1)} × {(region.rect.height * 0.75).toFixed(1)} pt · {regions.length} page{regions.length > 1 ? 's' : ''}
                 </span>
               )}
-              {regions.length > 1 && st.format !== 'pdf' && <span>{regions.length} files</span>}
+              {regions.length > 1 && st.format !== 'pdf' && !(st.format === 'ai' && st.aiFormat === 'pdf') && <span>{regions.length} files</span>}
               <span title={namePreview}>{namePreview}</span>
             </div>
           )}

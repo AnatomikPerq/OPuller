@@ -223,6 +223,23 @@ async function fontFor(cache: Map<string, Promise<OutlineFont | null>>, st: Text
     cache.set(key, p);
   }
   const f = await p;
+  if (f) {
+    // subset web fonts: the first request may have fetched only the subset of its own characters
+    // (e.g. Cyrillic); make sure every character of this text has a glyph before outlining
+    const has = (ch: string) =>
+      f.subsets.some((s) => {
+        try {
+          return s.font.hasChar(ch);
+        } catch {
+          return false;
+        }
+      });
+    const missing = Array.from(new Set(Array.from(text).filter((ch) => !/\s/.test(ch) && !has(ch))));
+    if (missing.length) {
+      const more = await getOpentypeFont(st.fontFamily, st.fontWeight, st.fontStyle, missing.join(''));
+      if (more) for (const s of more.subsets) if (!f.subsets.some((x) => x.font === s.font)) f.subsets.push(s);
+    }
+  }
   if (!f) {
     const woff2Upload = uploadedFonts().some((u) => sameFamily(u.family, st.fontFamily) && !u.parsable);
     const hint = woff2Upload

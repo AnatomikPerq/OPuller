@@ -9,15 +9,18 @@ import { installClipboard, handleDataTransfer, pasteTextContent, selectionSvg, s
 import { startAutosave, checkRecovery, saveAutosaveNow, loadAutosave, clearAutosave } from './autosave';
 import { exportSvg, exportSvgAll, exportRegions, renderRegion, withTextOutlines, prettyPrintSvg, roundNumbers } from './svgExport';
 import { importSvg, itemsToLayers, parseSvgLength } from './svgImport';
-import { renderToCanvas, renderToDataUrl, renderToBlob, rasterizeAll, pixelSize } from './raster';
+import { renderToCanvas, renderToDataUrl, renderToBlob, rasterizeAll, rasterizeRegion, pixelSize } from './raster';
 import { exportPdf } from './pdf';
 import { serializeProject, parseProject, validateDocument, embedImages } from './project';
 import { fontFaceCss } from './fontEmbed';
 import { placeSvgText, placeImageBlob, placeText, placeFiles, placeItems, documentFromSvg, documentFromImage, saveDocument, loadDocument, newDocument, openDocumentFromFile, confirmDiscard, revertDocument } from './fileOps';
 import { recentEntries, addRecent, loadRecent, clearRecent, removeRecent } from './recent';
 import { importVector, applyVectorImport, detectVectorKind } from './vectorImport';
-import { importAi } from './aiImport';
+import { importAi, rgbToBmpDataUrl } from './aiImport';
 import { exportEps, prepareEpsImages } from './epsExport';
+import { exportAi, exportAiAll, exportAiRegion, psString, isEncodable, postScriptFontName } from './aiExport';
+import { prepareDocumentForAi } from './aiPrepare';
+import { prepareRasterImages, preparedRaster, setPreparedRaster } from './rasterHex';
 
 installClipboard();
 registerViewportSlot('html', 'io-drop', DropOverlay);
@@ -40,6 +43,7 @@ void checkRecovery();
   renderToDataUrl,
   renderToBlob,
   rasterizeAll,
+  rasterizeRegion,
   pixelSize,
   exportPdf,
   serializeProject,
@@ -77,6 +81,17 @@ void checkRecovery();
   applyVectorImport,
   detectVectorKind,
   importAi,
+  rgbToBmpDataUrl,
   exportEps,
   prepareEpsImages,
+  exportAi,
+  exportAiAll,
+  exportAiRegion,
+  psString,
+  isEncodable,
+  postScriptFontName,
+  prepareDocumentForAi,
+  prepareRasterImages,
+  preparedRaster,
+  setPreparedRaster,
 };

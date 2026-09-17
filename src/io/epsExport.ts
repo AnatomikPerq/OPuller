@@ -12,6 +12,7 @@ import { effectiveSubPaths } from '@/canvas/effectiveGeometry';
 import { hexToRgb } from '@/util/color';
 import { rgbToCmyk } from '@/color/models';
 import { exportRegions, type SvgExportOptions, type ExportRegion } from './regions';
+import { preparedRaster, prepareRasterImages } from './rasterHex';
 
 export interface EpsOptions extends SvgExportOptions {
   /** write CMYK colours (setcmykcolor) instead of RGB */
@@ -162,7 +163,7 @@ export function exportEpsRegion(doc: Document, region: ExportRegion, opts: EpsOp
       return;
     }
     if (node.type === 'image') {
-      const img = imageCache.get(node.src);
+      const img = preparedRaster(node.src);
       if (!img) return;
       imageCount++;
       const wm = worldMatrix(doc, id);
@@ -196,55 +197,8 @@ function multiply3(m: { a: number; b: number; c: number; d: number; e: number; f
   return { a: m.a * k.a + m.c * k.b, b: m.b * k.a + m.d * k.b, c: m.a * k.c + m.c * k.d, d: m.b * k.c + m.d * k.d, e: m.a * k.e + m.c * k.f + m.e, f: m.b * k.e + m.d * k.f + m.f };
 }
 
-/** Decoded image pixels (hex RGB) cached per source for the exporter. */
-const imageCache = new Map<string, { width: number; height: number; hex: string }>();
-
 /** Prepare the raster images of the document as ASCII hex RGB (browser only, async). */
-export async function prepareEpsImages(doc: Document, ids?: ID[], maxSize = 1024): Promise<number> {
-  const nodes = Object.values(doc.nodes).filter((nd): nd is Extract<Node, { type: 'image' }> => nd.type === 'image' && (!ids || ids.includes(nd.id)));
-  let count = 0;
-  for (const nd of nodes) {
-    if (imageCache.has(nd.src)) continue;
-    try {
-      const img = await loadImage(nd.src);
-      const k = Math.min(1, maxSize / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * k));
-      const h = Math.max(1, Math.round(img.height * k));
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(img, 0, 0, w, h);
-      const data = ctx.getImageData(0, 0, w, h).data;
-      const parts: string[] = [];
-      let line = '';
-      for (let i = 0; i < data.length; i += 4) {
-        line += data[i].toString(16).padStart(2, '0') + data[i + 1].toString(16).padStart(2, '0') + data[i + 2].toString(16).padStart(2, '0');
-        if (line.length >= 72) {
-          parts.push(line);
-          line = '';
-        }
-      }
-      if (line) parts.push(line);
-      imageCache.set(nd.src, { width: w, height: h, hex: parts.join('\n') });
-      count++;
-    } catch {
-      /* skip */
-    }
-  }
-  return count;
-}
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('image failed to load'));
-    img.src = src;
-  });
-}
+export const prepareEpsImages = prepareRasterImages;
 
 /** Export the first region of a scope as EPS (images must be prepared first). */
 export function exportEps(doc: Document, opts: EpsOptions = {}): { eps: string; name: string; width: number; height: number } {
