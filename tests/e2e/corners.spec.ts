@@ -159,6 +159,9 @@ test.describe('live corners', () => {
     // double-click a widget: the Corners dialog; typing a radius previews and OK commits
     await page.mouse.dblclick(w0.x + 14, w0.y - 14);
     await expect(page.getByTestId('corners-radius')).toBeVisible();
+    // the dialog previews on mount: let the field settle on the widget's radius before typing
+    await expect(page.getByTestId('corners-radius')).not.toHaveValue('');
+    await page.waitForTimeout(100);
     await page.getByTestId('corners-radius').fill('25');
     await page.getByTestId('corners-radius').press('Tab');
     await expect.poll(async () => (await nodeById(page, id)).subpaths[0].anchors[0].cornerRadius).toBeCloseTo(25, 3);
@@ -167,6 +170,8 @@ test.describe('live corners', () => {
     expect(n.subpaths[0].anchors[0].cornerRadius).toBeCloseTo(25, 3);
     // Escape in the dialog reverts the preview
     await runCommand(page, 'path.corners');
+    await expect(page.getByTestId('corners-radius')).not.toHaveValue('');
+    await page.waitForTimeout(100);
     await page.getByTestId('corners-radius').fill('3');
     await page.getByTestId('corners-radius').press('Tab');
     await expect.poll(async () => (await nodeById(page, id)).subpaths[0].anchors[0].cornerRadius).toBeCloseTo(3, 3);
