@@ -39,6 +39,41 @@ test.describe('core editor', () => {
     expect(Math.round(b!.x)).toBe(160);
   });
 
+  test('rulers span the whole viewport edge and draw ticks along it', async ({ page }) => {
+    await openApp(page);
+    const r = await page.evaluate(() => {
+      const vp = document.querySelector('[data-testid="viewport"]') as HTMLElement;
+      const h = document.querySelector('canvas.ruler-h') as HTMLCanvasElement;
+      const v = document.querySelector('canvas.ruler-v') as HTMLCanvasElement;
+      const box = vp.getBoundingClientRect();
+      // count tick columns / rows: pixels darker or lighter than the ruler background along the inner edge
+      const ticks = (c: HTMLCanvasElement, vertical: boolean) => {
+        const ctx = c.getContext('2d')!;
+        const dpr = window.devicePixelRatio || 1;
+        const len = vertical ? c.height : c.width;
+        const inner = Math.round(16 * dpr); // inside the tick zone, above the edge line
+        const px = vertical ? ctx.getImageData(inner, 0, 1, len).data : ctx.getImageData(0, inner, len, 1).data;
+        // the most common colour of the row is the ruler background; everything else is a tick
+        const hist = new Map<string, number>();
+        const keys: string[] = [];
+        for (let i = 0; i < px.length; i += 4) {
+          const k = `${px[i]},${px[i + 1]},${px[i + 2]}`;
+          keys.push(k);
+          hist.set(k, (hist.get(k) ?? 0) + 1);
+        }
+        const bg = [...hist.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        return keys.filter((k) => k !== bg).length;
+      };
+      return { vw: v.clientWidth, vh: v.clientHeight, hw: h.clientWidth, hh: h.clientHeight, vpW: box.width, vpH: box.height, vTicks: ticks(v, true), hTicks: ticks(h, false) };
+    });
+    expect(r.hh).toBe(20);
+    expect(r.vw).toBe(20);
+    expect(Math.abs(r.hw - r.vpW)).toBeLessThan(2);
+    expect(Math.abs(r.vh - r.vpH)).toBeLessThan(2); // the vertical ruler used to be a 20 px stub
+    expect(r.hTicks).toBeGreaterThan(20);
+    expect(r.vTicks).toBeGreaterThan(20);
+  });
+
   test('marquee selection, shift-click and delete', async ({ page }) => {
     await openApp(page);
     const a = await drawRect(page, 100, 100, 50, 50);

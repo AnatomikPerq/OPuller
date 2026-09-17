@@ -29,16 +29,19 @@ export function Ruler({ orientation, viewportRef }: Props) {
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
     const length = orientation === 'h' ? size.width : size.height;
-    canvas.width = Math.max(1, Math.round(length * dpr));
-    canvas.height = Math.round(RULER_SIZE * dpr);
-    canvas.style.width = `${length}px`;
-    canvas.style.height = `${RULER_SIZE}px`;
+    // the horizontal ruler runs along x, the vertical one along y: size the canvas accordingly
+    const cw = orientation === 'h' ? length : RULER_SIZE;
+    const ch = orientation === 'h' ? RULER_SIZE : length;
+    canvas.width = Math.max(1, Math.round(cw * dpr));
+    canvas.height = Math.max(1, Math.round(ch * dpr));
+    canvas.style.width = `${cw}px`;
+    canvas.style.height = `${ch}px`;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const dark = theme === 'dark';
     ctx.fillStyle = dark ? '#2b2b2e' : '#f0f0f2';
-    ctx.fillRect(0, 0, length, RULER_SIZE);
+    ctx.fillRect(0, 0, cw, ch);
     // origin = active artboard top-left (Illustrator style)
     const ab = artboards.find((a) => a.id === activeArtboardId) ?? artboards[0];
     const origin = ab ? (orientation === 'h' ? ab.x : ab.y) : 0;
