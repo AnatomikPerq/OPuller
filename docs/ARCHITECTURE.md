@@ -57,6 +57,12 @@ src/
                 centerline.ts (Strokes: thinning, skeleton graph, Bézier fitting),
                 vectorize.ts (pipeline) run in traceWorker.ts via traceRunner.ts;
                 trace.ts (document side), rasterize.ts, register.tsx (dialogs, commands)
+public/         static files copied into the build as-is: icons, manifest, robots.txt,
+                sitemap.xml, og.png / screenshot.png (generated), site.css and the static
+                site pages features/, guide/, ai/ (each an index.html; served at /<page>/)
+scripts/        gen-icons.mjs (favicon set), gen-og.mjs (social card + screenshot from the
+                running editor), gen-shortcuts.mjs (guide shortcut tables from the registries)
+deploy/         nginx server block + security-header snippet for the production site
 tests/
   unit/         vitest (jsdom)          -> `npm test`
   e2e/          Playwright (Chromium)   -> `npm run test:e2e`, helpers in helpers.ts
@@ -264,6 +270,13 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 9. Keep the model serializable (plain JSON). No class instances or functions in nodes.
 10. Report at the end: what was built (files), what works (tested how), what is missing,
     and any requested core changes.
+11. **Content-Security-Policy.** The production site runs with `script-src 'self'` (no
+    `'unsafe-eval'`, no inline scripts): browser code must not use `eval`, `new Function`
+    or inline `<script>`; `paper` is aliased to `paper-core` for that reason. Markup that
+    reaches the DOM from files (`dangerouslySetInnerHTML`) goes through
+    `io/sanitizeSvg.ts`. Check a change against the policy with `npm run build` +
+    `npm run preview` (the preview server sends the headers from
+    `deploy/nginx-opuller-headers.conf`).
 
 ## Feature modules (where things live)
 

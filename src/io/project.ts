@@ -12,6 +12,7 @@ import type { Document, Node, Artboard, Paint, StrokeStyle, TextStyle, Effect, S
 import { createDocument, makeLayer, makeArtboard, newId } from '@/model/nodes';
 import { defaultStroke, defaultTextStyle, defaultGrid, defaultSwatches, DEFAULT_FILL } from '@/model/defaults';
 import { liveShapeSubPaths } from '@/geometry/shapes';
+import { sanitizeSvgMarkup, safeImageSrc } from './sanitizeSvg';
 
 export const PROJECT_FORMAT = 'opuller';
 export const PROJECT_VERSION = 1;
@@ -421,7 +422,7 @@ function validNode(id: ID, v: unknown): Node | null {
       const out: Node & { type: 'image' } = {
         ...base,
         type: 'image',
-        src: str(n.src, ''),
+        src: safeImageSrc(str(n.src, '')),
         naturalWidth: Math.max(1, num(n.naturalWidth, w || 1)),
         naturalHeight: Math.max(1, num(n.naturalHeight, h || 1)),
         width: w,
@@ -614,7 +615,7 @@ export function validateDocument(raw: unknown): Document {
     ? d.patterns
         .map((p) => {
           const po = obj(p);
-          const def: import('@/model/types').PatternDef = { id: str(po.id, newId()), name: str(po.name, 'Pattern'), width: Math.max(1, num(po.width, 10)), height: Math.max(1, num(po.height, 10)), svg: str(po.svg, '') };
+          const def: import('@/model/types').PatternDef = { id: str(po.id, newId()), name: str(po.name, 'Pattern'), width: Math.max(1, num(po.width, 10)), height: Math.max(1, num(po.height, 10)), svg: sanitizeSvgMarkup(str(po.svg, '')) };
           const art = validateNodeMap(po.nodes, po.root);
           if (art) {
             def.nodes = art.nodes;

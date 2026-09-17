@@ -16,6 +16,9 @@ npm run build        # typecheck + production build
 npm run mcp          # MCP server (stdio); also registered in .mcp.json
 npm run mcp:smoke    # end-to-end check of the MCP server against the open editor tab
 node mcp/call.ts <tool> '<json>'   # call one MCP tool (e.g. render the artboard to a PNG file)
+npm run preview      # serve dist/ on :5181 with the production security headers (CSP check)
+node scripts/gen-shortcuts.mjs   # refresh the shortcut tables in public/guide/index.html (needs the dev server)
+node scripts/gen-og.mjs          # refresh public/og.png + public/screenshot.png (needs the dev server)
 ```
 
 Playwright starts its own dev server when none is running and kills it afterwards; when you
@@ -47,6 +50,15 @@ and Read the file instead.
   `geometry/paperBridge.ts` (`booleanOp`, `uniteAll`, `offsetPath`, `outlineStroke`…).
   paper.js needs a canvas, so unit tests (jsdom) must not import it — keep pure logic in
   separate files.
+* The public site around the editor is static: `index.html` carries the SEO head (canonical,
+  Open Graph, JSON-LD) and a boot screen with links that React replaces; the pages
+  `public/features/`, `public/guide/`, `public/ai/` share `public/site.css`; `robots.txt`,
+  `sitemap.xml`, `og.png`, `screenshot.png` live in `public/`. Adding a page = a new
+  `public/<page>/index.html` + a sitemap entry + a nav link on the other pages.
+* Production runs under a strict Content-Security-Policy (`deploy/nginx-opuller-headers.conf`):
+  no `eval` / `new Function` / inline scripts in browser code (`paper` is aliased to
+  `paper-core`); markup injected with `dangerouslySetInnerHTML` from files passes
+  `src/io/sanitizeSvg.ts`. `npm run preview` serves the build with the same headers.
 * The AI bridge: `src/mcp/api.ts` holds the scripting methods (also `window.__opuller.mcp`);
   `mcp/server.ts` maps them to MCP tools. Add a method there when a feature should be
   scriptable, then a `registerTool` in the server.

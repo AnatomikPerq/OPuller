@@ -100,6 +100,17 @@ Command-line helpers: `npm run mcp:smoke` (end-to-end check) and
 `node mcp/call.ts <tool> '<json>'` (call one tool). The same API is available in the
 browser console as `window.__opuller.mcp`.
 
+## Site and deployment
+
+The production site (https://opuller.huhusova67.online) is the static build in `dist/`:
+the editor at `/` plus the pages `/features/`, `/guide/` (with the shortcut tables
+generated from the command registry by `node scripts/gen-shortcuts.mjs`) and `/ai/`, a
+sitemap, robots.txt, the icon set (`node scripts/gen-icons.mjs`) and the social card
+(`node scripts/gen-og.mjs`, rendered from the running editor). `deploy/` holds the nginx
+server block and the security headers (HSTS, CSP, frame-ancestors, Permissions-Policy);
+`npm run preview` serves the build with the same headers so the Content-Security-Policy
+can be checked locally.
+
 ## Tests
 
 ```bash

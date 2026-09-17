@@ -882,8 +882,15 @@ export const mcpApi: Record<string, (p: Params) => any> = {
   },
   eval(p) {
     if (typeof p.code !== 'string') throw new Error('eval needs "code"');
-    // eslint-disable-next-line no-new-func
-    const fn = new Function('api', 'store', 'getState', 'runCommand', 'helpers', `return (async () => { ${p.code} })()`);
+    let fn: Function;
+    try {
+      // eslint-disable-next-line no-new-func
+      fn = new Function('api', 'store', 'getState', 'runCommand', 'helpers', `return (async () => { ${p.code} })()`);
+    } catch (err: any) {
+      // the hosted site ships a Content-Security-Policy without 'unsafe-eval'
+      if (err instanceof EvalError || /Content Security Policy|unsafe-eval/i.test(String(err?.message))) throw new Error("eval is disabled by this site's Content-Security-Policy; use the dev server (npm run dev) for scripted access, or the dedicated tools");
+      throw err;
+    }
     return fn((window as any).__opuller, useStore, getState, runCommand, (window as any).__opuller?.api);
   },
   toast(p) {

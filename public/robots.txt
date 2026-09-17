@@ -1,0 +1,6 @@
+# OPuller — https://opuller.huhusova67.online
+User-agent: *
+Allow: /
+Disallow: /assets/
+
+Sitemap: https://opuller.huhusova67.online/sitemap.xml

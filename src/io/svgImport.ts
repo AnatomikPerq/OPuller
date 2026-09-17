@@ -17,6 +17,7 @@ import { parseCssColor } from '@/util/color';
 import { defaultStroke } from '@/model/defaults';
 import { bakeTransform, localBounds } from '@/model/document';
 import { LAYER_COLORS } from '@/model/defaults';
+import { safeImageSrc } from './sanitizeSvg';
 
 export interface SvgImportOptions {
   /** name used for the top-level group / document */
@@ -817,8 +818,11 @@ function convertPoly(el: Element, ctx: Ctx, style: Style, closed: boolean): Node
 }
 
 function convertImage(el: Element, ctx: Ctx, style: Style): Node | null {
-  const href = hrefOf(el);
-  if (!href) return null;
+  const href = safeImageSrc(hrefOf(el) ?? '');
+  if (!href) {
+    warn(ctx, '<image> with an unsupported source was ignored.');
+    return null;
+  }
   const vw = ctx.viewport.width;
   const vh = ctx.viewport.height;
   const x = numAttr(el, 'x', 0, vw);
@@ -830,7 +834,7 @@ function convertImage(el: Element, ctx: Ctx, style: Style): Node | null {
     h = 100;
   } else if (w <= 0) w = h;
   else if (h <= 0) h = w;
-  const node = makeImage(href.trim(), Math.round(w), Math.round(h), { width: w, height: h, name: 'Image', transform: translate(x, y) });
+  const node = makeImage(href, Math.round(w), Math.round(h), { width: w, height: h, name: 'Image', transform: translate(x, y) });
   void style;
   return register(ctx, node);
 }

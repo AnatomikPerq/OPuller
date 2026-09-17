@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User guide &amp; keyboard shortcuts — OPuller vector editor</title>
+    <meta name="description" content="Getting started with OPuller, the free online vector editor: drawing shapes and paths, combining them with Pathfinder, colour and strokes, text, artboards, import and export — plus the complete keyboard shortcut list (Illustrator-compatible)." />
+    <link rel="canonical" href="https://opuller.huhusova67.online/guide/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#7a1f3d" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/site.css" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="OPuller" />
+    <meta property="og:url" content="https://opuller.huhusova67.online/guide/" />
+    <meta property="og:title" content="OPuller user guide &amp; keyboard shortcuts" />
+    <meta property="og:description" content="Getting started, drawing, colour, text, export — and every keyboard shortcut of the OPuller vector editor." />
+    <meta property="og:image" content="https://opuller.huhusova67.online/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "TechArticle",
+            "@id": "https://opuller.huhusova67.online/guide/",
+            "url": "https://opuller.huhusova67.online/guide/",
+            "headline": "OPuller user guide and keyboard shortcuts",
+            "description": "Getting started with the OPuller vector editor and the complete keyboard shortcut list.",
+            "isPartOf": { "@id": "https://opuller.huhusova67.online/#website" },
+            "about": { "@id": "https://opuller.huhusova67.online/#app" },
+            "author": { "@id": "https://opuller.huhusova67.online/#org" },
+            "inLanguage": "en"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "OPuller", "item": "https://opuller.huhusova67.online/" },
+              { "@type": "ListItem", "position": 2, "name": "User guide", "item": "https://opuller.huhusova67.online/guide/" }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="/"><img src="/favicon.svg" alt="" width="30" height="30" />OPuller</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="/features/">Features</a>
+          <a href="/guide/" aria-current="page">Guide</a>
+          <a href="/ai/">AI</a>
+          <a href="https://github.com/AnatomikPerq/OPuller" rel="noopener">GitHub</a>
+        </nav>
+        <a class="btn" href="/">Open the editor</a>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <h1>User guide</h1>
+        <p class="lead">
+          If you know Adobe Illustrator you already know OPuller: the tools, menus and keyboard shortcuts follow it wherever they exist. This
+          page covers the basics and lists every shortcut.
+        </p>
+      </section>
+
+      <nav class="toc" aria-label="On this page">
+        <a href="#start">Getting started</a>
+        <a href="#draw">Drawing</a>
+        <a href="#edit">Selecting &amp; editing</a>
+        <a href="#color">Colour &amp; strokes</a>
+        <a href="#type">Text</a>
+        <a href="#files">Files &amp; export</a>
+        <a href="#shortcuts">Keyboard shortcuts</a>
+      </nav>
+
+      <h2 id="start">Getting started</h2>
+      <p>
+        <a href="/">Open the editor</a> — it loads in a second or two and needs no account. The Home screen lists your projects (kept in the
+        browser), recent files, sample documents and quick tips; <strong>New</strong> creates a document with the size, colour mode (RGB
+        or CMYK) and number of artboards you choose. Work is autosaved and recovered after a crash or a closed tab.
+      </p>
+      <p>
+        The window follows the familiar layout: the toolbar on the left (press and hold or double-click a tool to open its flyout), the control
+        bar and menu bar on top, panels docked on the right (drag their tabs to rearrange; the Window menu shows and hides them), and a status
+        bar with zoom, the current artboard and the AI bridge indicator. Edit &gt; Preferences (<kbd>Ctrl</kbd>+<kbd>K</kbd>) switches between
+        the dark and the light interface, sets units, nudge distances and snapping. Help &gt; Keyboard Shortcuts (<kbd>Ctrl</kbd>+<kbd>/</kbd>)
+        shows the shortcut list inside the editor.
+      </p>
+
+      <h2 id="draw">Drawing</h2>
+      <ul>
+        <li><strong>Shapes</strong>: <kbd>M</kbd> rectangle, <kbd>L</kbd> ellipse, <kbd>\</kbd> line; Polygon, Star and Rounded Rectangle live in the same flyout. Shapes stay <em>live</em> — corner radius, sides and star points remain editable in the Properties panel. Hold <kbd>Shift</kbd> to constrain, <kbd>Alt</kbd> to draw from the centre.</li>
+        <li><strong>Paths</strong>: the Pen (<kbd>P</kbd>) draws Béziers click by click (drag for handles, <kbd>Alt</kbd>-drag a handle to break it), the Curvature tool (<kbd>Shift</kbd>+<kbd>`</kbd>) draws smooth curves through points, the Pencil (<kbd>N</kbd>) freehand, the Paintbrush (<kbd>B</kbd>) with calligraphic, scatter, art and pattern brushes.</li>
+        <li><strong>Combine</strong>: select overlapping shapes and use the Pathfinder panel (Unite, Minus Front, Intersect, Exclude, Divide…) or the Shape Builder (<kbd>Shift</kbd>+<kbd>M</kbd>) — drag across regions to merge them, <kbd>Alt</kbd>-drag to delete.</li>
+        <li><strong>Cut</strong>: Scissors (<kbd>C</kbd>) split a path at a point, the Knife cuts shapes along a drawn line, the Eraser (<kbd>Shift</kbd>+<kbd>E</kbd>) removes areas.</li>
+        <li><strong>Reshape</strong>: the liquify brushes — Warp (<kbd>Shift</kbd>+<kbd>R</kbd>), Twirl, Pucker, Bloat, Scallop, Crystallize, Wrinkle — push, twist and ripple paths under an elliptical brush; <kbd>Alt</kbd>-drag resizes the brush.</li>
+        <li><strong>Trace</strong>: Object &gt; Image &gt; Image Trace turns a placed picture into vector shapes — pick a preset, tune Paths / Corners / Noise with the live preview, then Trace. The Line Art and Technical Drawing presets produce centerline strokes.</li>
+      </ul>
+
+      <h2 id="edit">Selecting &amp; editing</h2>
+      <ul>
+        <li>The Selection tool (<kbd>V</kbd>) moves and transforms whole objects: bounding-box handles scale, the corners rotate. The Direct Selection tool (<kbd>A</kbd>) edits anchors and handles; the Lasso (<kbd>Q</kbd>) selects anchors freehand.</li>
+        <li>Numeric control: the Transform panel, Object &gt; Transform dialogs, the Rotate (<kbd>R</kbd>), Scale (<kbd>S</kbd>), Reflect (<kbd>O</kbd>) and Free Transform (<kbd>E</kbd>) tools. <kbd>Ctrl</kbd>+<kbd>D</kbd> repeats the last transform.</li>
+        <li>Arrange with <kbd>Ctrl</kbd>+<kbd>]</kbd> / <kbd>Ctrl</kbd>+<kbd>[</kbd>, group with <kbd>Ctrl</kbd>+<kbd>G</kbd>, double-click a group to enter isolation mode. The Align panel aligns and distributes to the selection, the artboard or a key object.</li>
+        <li>Object &gt; Path offers Offset Path, Outline Stroke, Simplify, Join, Average; Object &gt; Blend, Envelope Distort, Pattern, Symbols, Live Paint, Perspective, 3D and Graph hold the corresponding features.</li>
+        <li>Unlimited undo (<kbd>Ctrl</kbd>+<kbd>Z</kbd>) with a History panel.</li>
+      </ul>
+
+      <h2 id="color">Colour &amp; strokes</h2>
+      <ul>
+        <li>The Color, Swatches and Gradient panels edit the fill or stroke of the selection; <kbd>X</kbd> toggles which one is active, <kbd>Shift</kbd>+<kbd>X</kbd> swaps fill and stroke, <kbd>/</kbd> sets none. The Gradient tool (<kbd>G</kbd>) edits linear, radial and freeform gradients directly on the canvas; the Mesh tool (<kbd>U</kbd>) builds gradient meshes.</li>
+        <li>Swatches can be process, <em>global</em> (edit once, update everywhere, with tints) or <em>spot</em> colours; documents are RGB or CMYK.</li>
+        <li>The Stroke panel sets width, caps, joins, dashes, arrowheads and width profiles; the Width tool (<kbd>Shift</kbd>+<kbd>W</kbd>) draws variable-width strokes; brushes apply to any path.</li>
+        <li>Effects (shadows, glows, blur, round corners, colour adjustments) are live and stack in the Appearance panel; Object &gt; Expand Appearance bakes them into paths.</li>
+      </ul>
+
+      <h2 id="type">Text</h2>
+      <p>
+        <kbd>T</kbd> creates point text with a click, area text with a drag, and type on a path with a click on a path. The Character and
+        Paragraph panels format the text with fourteen bundled font families, your system fonts or fonts you upload; Type &gt; Create Outlines
+        turns text into editable paths.
+      </p>
+
+      <h2 id="files">Files &amp; export</h2>
+      <ul>
+        <li>File &gt; Open reads <code>.opuller</code> projects, SVG, PDF, Illustrator (.ai) and EPS files, and PNG / JPEG / WebP pictures; you can also drag files onto the canvas or paste SVG from the clipboard.</li>
+        <li>File &gt; Save (<kbd>Ctrl</kbd>+<kbd>S</kbd>) writes a <code>.opuller</code> file to disk — straight back into the same file in browsers with the File System Access API, as a download elsewhere; File &gt; Save to Library (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) keeps the project inside the browser, where the Home screen lists it.</li>
+        <li>File &gt; Export (<kbd>Ctrl</kbd>+<kbd>E</kbd>) writes SVG, PNG, JPEG, WebP, PDF, EPS or Illustrator (.ai) files per artboard or for the selection, with optional bleed and printer marks.</li>
+        <li><kbd>Shift</kbd>+<kbd>O</kbd> edits artboards on the canvas; the Artboards panel lists them.</li>
+      </ul>
+
+      <h2 id="shortcuts">Keyboard shortcuts</h2>
+      <p class="muted">
+        <kbd>Ctrl</kbd> is <kbd>⌘</kbd> on a Mac. This list is generated from the editor's command registry (<code>node scripts/gen-shortcuts.mjs</code>).
+      </p>
+      <!-- shortcuts:start -->
+      <h3 id="shortcuts-tools">Tools</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Selection Tool</td><td class="keys"><kbd>V</kbd></td></tr>
+            <tr><td>Direct Selection Tool</td><td class="keys"><kbd>A</kbd></td></tr>
+            <tr><td>Lasso Tool</td><td class="keys"><kbd>Q</kbd></td></tr>
+            <tr><td>Pen Tool</td><td class="keys"><kbd>P</kbd></td></tr>
+            <tr><td>Add Anchor Point Tool</td><td class="keys"><kbd>=</kbd></td></tr>
+            <tr><td>Delete Anchor Point Tool</td><td class="keys"><kbd>-</kbd></td></tr>
+            <tr><td>Anchor Point Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>C</kbd></td></tr>
+            <tr><td>Curvature Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>`</kbd></td></tr>
+            <tr><td>Pencil Tool</td><td class="keys"><kbd>N</kbd></td></tr>
+            <tr><td>Paintbrush Tool</td><td class="keys"><kbd>B</kbd></td></tr>
+            <tr><td>Blob Brush Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>B</kbd></td></tr>
+            <tr><td>Rectangle Tool</td><td class="keys"><kbd>M</kbd></td></tr>
+            <tr><td>Ellipse Tool</td><td class="keys"><kbd>L</kbd></td></tr>
+            <tr><td>Line Segment Tool</td><td class="keys"><kbd>\</kbd></td></tr>
+            <tr><td>Type Tool</td><td class="keys"><kbd>T</kbd></td></tr>
+            <tr><td>Graph Tool</td><td class="keys"><kbd>J</kbd></td></tr>
+            <tr><td>Rotate Tool</td><td class="keys"><kbd>R</kbd></td></tr>
+            <tr><td>Scale Tool</td><td class="keys"><kbd>S</kbd></td></tr>
+            <tr><td>Reflect Tool</td><td class="keys"><kbd>O</kbd></td></tr>
+            <tr><td>Free Transform Tool</td><td class="keys"><kbd>E</kbd></td></tr>
+            <tr><td>Shape Builder Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>M</kbd></td></tr>
+            <tr><td>Eraser Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>E</kbd></td></tr>
+            <tr><td>Live Paint Bucket</td><td class="keys"><kbd>K</kbd></td></tr>
+            <tr><td>Live Paint Selection</td><td class="keys"><kbd>Shift</kbd>+<kbd>L</kbd></td></tr>
+            <tr><td>Gradient Tool</td><td class="keys"><kbd>G</kbd></td></tr>
+            <tr><td>Eyedropper Tool</td><td class="keys"><kbd>I</kbd></td></tr>
+            <tr><td>Mesh Tool</td><td class="keys"><kbd>U</kbd></td></tr>
+            <tr><td>Scissors Tool</td><td class="keys"><kbd>C</kbd></td></tr>
+            <tr><td>Width Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>W</kbd></td></tr>
+            <tr><td>Blend Tool</td><td class="keys"><kbd>W</kbd></td></tr>
+            <tr><td>Symbol Sprayer Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>S</kbd></td></tr>
+            <tr><td>Warp Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>R</kbd></td></tr>
+            <tr><td>Perspective Grid Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>P</kbd></td></tr>
+            <tr><td>Perspective Selection Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>V</kbd></td></tr>
+            <tr><td>Artboard Tool</td><td class="keys"><kbd>Shift</kbd>+<kbd>O</kbd></td></tr>
+            <tr><td>Hand Tool</td><td class="keys"><kbd>H</kbd></td></tr>
+            <tr><td>Zoom Tool</td><td class="keys"><kbd>Z</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="shortcuts-file">File menu</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Home Screen</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></td></tr>
+            <tr><td>New…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>N</kbd></td></tr>
+            <tr><td>Open…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>O</kbd></td></tr>
+            <tr><td>Save</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>S</kbd></td></tr>
+            <tr><td>Save As…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td></tr>
+            <tr><td>Save to Library</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd></td></tr>
+            <tr><td>Place…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></td></tr>
+            <tr><td>Export…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>E</kbd></td></tr>
+            <tr><td>Export Selection…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd></td></tr>
+            <tr><td>Document Setup…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="shortcuts-edit">Edit menu</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Undo</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Z</kbd></td></tr>
+            <tr><td>Redo</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> <span class="muted">or</span> <kbd>Ctrl</kbd>+<kbd>Y</kbd></td></tr>
+            <tr><td>Cut</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>X</kbd></td></tr>
+            <tr><td>Copy</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>C</kbd></td></tr>
+            <tr><td>Paste</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>V</kbd></td></tr>
+            <tr><td>Paste in Front</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>F</kbd></td></tr>
+            <tr><td>Paste in Back</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>B</kbd></td></tr>
+            <tr><td>Paste in Place</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></td></tr>
+            <tr><td>Duplicate</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd></td></tr>
+            <tr><td>Delete</td><td class="keys"><kbd>Del</kbd> <span class="muted">or</span> <kbd>⌫</kbd></td></tr>
+            <tr><td>Preferences…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>K</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="shortcuts-object">Object menu</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Path › Join</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>J</kbd></td></tr>
+            <tr><td>Path › Average…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd></td></tr>
+            <tr><td>Group</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>G</kbd></td></tr>
+            <tr><td>Ungroup</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></td></tr>
+            <tr><td>Arrange › Bring to Front</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd></td></tr>
+            <tr><td>Arrange › Bring Forward</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>]</kbd></td></tr>
+            <tr><td>Arrange › Send Backward</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>[</kbd></td></tr>
+            <tr><td>Arrange › Send to Back</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd></td></tr>
+            <tr><td>Lock › Lock Selection</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>2</kbd></td></tr>
+            <tr><td>Lock › Unlock All</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>2</kbd></td></tr>
+            <tr><td>Hide › Hide Selection</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>3</kbd></td></tr>
+            <tr><td>Hide › Show All</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>3</kbd></td></tr>
+            <tr><td>Transform › Transform Again</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>D</kbd></td></tr>
+            <tr><td>Transform › Move…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td></tr>
+            <tr><td>Transform › Transform Each…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></td></tr>
+            <tr><td>Layers › New Layer</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>L</kbd></td></tr>
+            <tr><td>Compound Path › Make</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>8</kbd></td></tr>
+            <tr><td>Layers › New Sublayer</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd></td></tr>
+            <tr><td>Compound Path › Release</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>8</kbd></td></tr>
+            <tr><td>Clipping Mask › Make</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>7</kbd></td></tr>
+            <tr><td>Clipping Mask › Release</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>7</kbd></td></tr>
+            <tr><td>Blend › Make</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd></td></tr>
+            <tr><td>Blend › Release</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd></td></tr>
+            <tr><td>Symbol › Make Symbol</td><td class="keys"><kbd>F8</kbd></td></tr>
+            <tr><td>Envelope Distort › Make with Warp…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></td></tr>
+            <tr><td>Envelope Distort › Make with Mesh…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></td></tr>
+            <tr><td>Envelope Distort › Make with Top Object</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></td></tr>
+            <tr><td>Live Paint › Make</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>X</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="shortcuts-type">Type menu</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Create Outlines</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td></tr>
+            <tr><td>Size › Increase Font Size</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd></td></tr>
+            <tr><td>Size › Decrease Font Size</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>,</kbd></td></tr>
+            <tr><td>Style › Italic</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td></tr>
+            <tr><td>Style › Underline</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></td></tr>
+            <tr><td>Align › Align Left</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td></tr>
+            <tr><td>Align › Align Center</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td></tr>
+            <tr><td>Align › Align Right</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td></tr>
+            <tr><td>Align › Justify</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd></td></tr>
+            <tr><td>Character Panel</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>T</kbd></td></tr>
+            <tr><td>Paragraph Panel</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="shortcuts-select">Select menu</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>All</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>A</kbd></td></tr>
+            <tr><td>All on Active Artboard</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd></td></tr>
+            <tr><td>Deselect</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td></tr>
+            <tr><td>Inverse</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="shortcuts-effect">Effect menu</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Apply Last Effect</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td></tr>
+            <tr><td>Last Effect…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="shortcuts-view">View menu</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Zoom In</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>=</kbd> <span class="muted">or</span> <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>=</kbd></td></tr>
+            <tr><td>Zoom Out</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>-</kbd></td></tr>
+            <tr><td>Fit Artboard in Window</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>0</kbd></td></tr>
+            <tr><td>Fit All in Window</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>0</kbd></td></tr>
+            <tr><td>Fit Selection in Window</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>0</kbd></td></tr>
+            <tr><td>Actual Size (100%)</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>1</kbd></td></tr>
+            <tr><td>Outline Mode</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Y</kbd></td></tr>
+            <tr><td>Show Rulers</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>R</kbd></td></tr>
+            <tr><td>Show Grid</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>'</kbd></td></tr>
+            <tr><td>Snap to Grid</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>'</kbd></td></tr>
+            <tr><td>Show Guides</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>;</kbd></td></tr>
+            <tr><td>Lock Guides</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>;</kbd></td></tr>
+            <tr><td>Smart Guides</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>U</kbd></td></tr>
+            <tr><td>Snap to Point</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>"</kbd></td></tr>
+            <tr><td>Show Bounding Box</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd></td></tr>
+            <tr><td>Perspective Grid › Show Perspective Grid</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td></tr>
+            <tr><td>Show Artboards</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></td></tr>
+            <tr><td>Show Transparency Grid</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="shortcuts-help">Help menu</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Keyboard Shortcuts…</td><td class="keys"><kbd>Ctrl</kbd>+<kbd>/</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="shortcuts-other">Other keys</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Edit Artboards</td><td class="keys"><kbd>Shift</kbd>+<kbd>O</kbd></td></tr>
+            <tr><td>Swap Fill &amp; Stroke</td><td class="keys"><kbd>Shift</kbd>+<kbd>X</kbd></td></tr>
+            <tr><td>Default Fill &amp; Stroke</td><td class="keys"><kbd>D</kbd></td></tr>
+            <tr><td>Toggle Fill/Stroke</td><td class="keys"><kbd>X</kbd></td></tr>
+            <tr><td>None</td><td class="keys"><kbd>/</kbd></td></tr>
+            <tr><td>Color</td><td class="keys"><kbd>,</kbd></td></tr>
+            <tr><td>Gradient</td><td class="keys"><kbd>.</kbd></td></tr>
+            <tr><td>Nudge Up</td><td class="keys"><kbd>↑</kbd></td></tr>
+            <tr><td>Nudge Down</td><td class="keys"><kbd>↓</kbd></td></tr>
+            <tr><td>Nudge Left</td><td class="keys"><kbd>←</kbd></td></tr>
+            <tr><td>Nudge Right</td><td class="keys"><kbd>→</kbd></td></tr>
+            <tr><td>Nudge Up ×10</td><td class="keys"><kbd>Shift</kbd>+<kbd>↑</kbd></td></tr>
+            <tr><td>Nudge Down ×10</td><td class="keys"><kbd>Shift</kbd>+<kbd>↓</kbd></td></tr>
+            <tr><td>Nudge Left ×10</td><td class="keys"><kbd>Shift</kbd>+<kbd>←</kbd></td></tr>
+            <tr><td>Nudge Right ×10</td><td class="keys"><kbd>Shift</kbd>+<kbd>→</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- shortcuts:end -->
+
+      <div class="cta">
+        <div>
+          <h2>Ready to draw?</h2>
+          <p>The editor opens instantly — no download, no sign-up.</p>
+        </div>
+        <a class="btn large" href="/">Open OPuller</a>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>OPuller — free online vector graphics editor</span>
+        <a href="/">Editor</a>
+        <a href="/features/">Features</a>
+        <a href="/guide/">Guide</a>
+        <a href="/ai/">AI</a>
+        <a href="https://github.com/AnatomikPerq/OPuller" rel="noopener">Source on GitHub</a>
+      </div>
+    </footer>
+  </body>
+</html>

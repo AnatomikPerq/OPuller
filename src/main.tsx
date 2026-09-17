@@ -12,6 +12,8 @@ import { useStore } from './store/store';
 import { runCommand, allCommands } from './commands/registry';
 import { worldBounds, localBounds, worldMatrix } from './model/document';
 import { getTool, allTools } from './tools/registry';
+import { allPanels } from './ui/panels/registry';
+import { shortcutLabel } from './util/keys';
 import * as documentApi from './model/document';
 import * as nodesApi from './model/nodes';
 import * as pathApi from './geometry/path';
@@ -28,6 +30,8 @@ import * as paperApi from './geometry/paperBridge';
   worldMatrix,
   getTool,
   allTools,
+  allPanels,
+  shortcutLabel,
   api: { document: documentApi, nodes: nodesApi, path: pathApi, paper: paperApi },
 };
 

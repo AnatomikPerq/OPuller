@@ -21,6 +21,39 @@ const EDITOR_URL = process.env.OPULLER_URL ?? 'http://localhost:5180';
 const CALL_TIMEOUT = 60_000;
 const WAIT_FOR_EDITOR = 15_000;
 
+/**
+ * Browser origins allowed to attach as an editor session. Any web page open in the
+ * user's browser can reach ws://127.0.0.1, so without this check a malicious page
+ * could pose as the editor and receive the tool calls (and the documents they carry).
+ * Extend with OPULLER_BRIDGE_ORIGINS="https://a.example,https://b.example".
+ */
+const ALLOWED_ORIGINS = new Set<string>(
+  [
+    'http://localhost:5180',
+    'http://127.0.0.1:5180',
+    'http://localhost:5181',
+    'http://127.0.0.1:5181',
+    'https://opuller.huhusova67.online',
+    originOf(EDITOR_URL),
+    ...(process.env.OPULLER_BRIDGE_ORIGINS ?? '').split(','),
+  ]
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean),
+);
+
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return '';
+  }
+}
+
+/** Non-browser clients send no Origin header; browsers always do and must match the list. */
+function originAllowed(origin: string | undefined): boolean {
+  return origin === undefined || ALLOWED_ORIGINS.has(origin.replace(/\/$/, ''));
+}
+
 interface Session {
   ws: WebSocket;
   id: string;
@@ -50,7 +83,15 @@ let wsError: string | null = null;
 
 function startWebSocketServer(): void {
   try {
-    wss = new WebSocketServer({ host: '127.0.0.1', port: PORT });
+    wss = new WebSocketServer({
+      host: '127.0.0.1',
+      port: PORT,
+      verifyClient: ({ origin }, done) => {
+        const ok = originAllowed(origin);
+        if (!ok) log(`rejected editor connection from origin ${origin}`);
+        done(ok, 403, 'Forbidden origin');
+      },
+    });
   } catch (err: any) {
     wsError = String(err?.message ?? err);
     log('WebSocket server failed:', wsError);
