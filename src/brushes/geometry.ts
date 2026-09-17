@@ -176,7 +176,8 @@ function scatterItems(def: Extract<BrushDef, { kind: 'scatter' }>, sps: SubPath[
       const rot = rangeOf(def.rotation);
       const scatter = (rangeOf(def.scatter) / 100) * w * k;
       const at = spine.at(Math.min(s, spine.length));
-      const angle = def.rotationRelativeTo === 'path' ? (Math.atan2(at.tangent.y, at.tangent.x) * 180) / Math.PI + rot : rot;
+      // the user's rotation is counter-clockwise (Illustrator); screen rotation is clockwise-positive
+      const angle = def.rotationRelativeTo === 'path' ? (Math.atan2(at.tangent.y, at.tangent.x) * 180) / Math.PI - rot : -rot;
       const pos = { x: at.point.x + at.normal.x * scatter, y: at.point.y + at.normal.y * scatter };
       const m = compose(translate(pos.x, pos.y), rotate(angle), scaleM(size, size), translate(-cx, -cy));
       for (const p of art.paths) {

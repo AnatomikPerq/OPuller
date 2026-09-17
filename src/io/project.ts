@@ -15,7 +15,7 @@ import { liveShapeSubPaths } from '@/geometry/shapes';
 import { sanitizeSvgMarkup, safeImageSrc } from './sanitizeSvg';
 
 export const PROJECT_FORMAT = 'opuller';
-export const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 2;
 export const PROJECT_EXTENSION = '.opuller';
 export const PROJECT_MIME = 'application/json';
 
@@ -38,6 +38,23 @@ type Migration = (data: Record<string, unknown>) => Record<string, unknown>;
 const MIGRATIONS: Record<number, Migration> = {
   // 0 → 1: pre-release files stored the document at the top level
   0: (data) => ({ format: PROJECT_FORMAT, version: 1, document: data.document ?? data }),
+  // 1 → 2: pattern paint angles and scatter brush rotations became counter-clockwise (Illustrator)
+  1: (data) => {
+    const doc = (data.document ?? {}) as Record<string, any>;
+    const flip = (paint: any) => {
+      if (paint && typeof paint === 'object' && paint.type === 'pattern' && typeof paint.angle === 'number') paint.angle = -paint.angle;
+    };
+    for (const n of Object.values((doc.nodes ?? {}) as Record<string, any>)) {
+      if (!n || typeof n !== 'object') continue;
+      flip(n.fill);
+      flip(n.stroke?.paint);
+    }
+    for (const sw of (doc.swatches ?? []) as any[]) flip(sw?.paint);
+    for (const b of (doc.brushes ?? []) as any[]) {
+      if (b?.kind === 'scatter' && Array.isArray(b.rotation) && b.rotation.length === 2) b.rotation = [-Number(b.rotation[1]), -Number(b.rotation[0])];
+    }
+    return { ...data, version: 2, document: doc };
+  },
 };
 
 /** Hook for modules that need to migrate their own node `data` payloads. */

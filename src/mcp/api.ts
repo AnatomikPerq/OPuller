@@ -358,7 +358,8 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       default:
         throw new Error(`Unknown shape kind "${kind}" (rect, ellipse, circle, polygon, star, line)`);
     }
-    if (p.rotation) m = multiply(m, rotateM(Number(p.rotation)));
+    // Illustrator convention: positive angles turn counter-clockwise on screen
+    if (p.rotation) m = multiply(m, rotateM(-Number(p.rotation)));
     const node = makeShape(shape, {
       fill: kind === 'line' && p.fill === undefined ? { type: 'none' } : toPaint(p.fill, s.appearance.fill),
       stroke: toStroke(p.stroke, kind === 'line' && p.stroke === undefined && s.appearance.stroke.paint.type === 'none' ? { ...s.appearance.stroke, paint: { type: 'solid', color: '#000000', opacity: 1 } } : s.appearance.stroke),
@@ -572,7 +573,7 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       const sy = typeof p.scale === 'number' ? p.scale : Number(p.scale.y ?? sx);
       m = multiply(scaleM(sx, sy, origin.x, origin.y), m);
     }
-    if (p.rotate !== undefined) m = multiply(rotateM(Number(p.rotate), origin.x, origin.y), m);
+    if (p.rotate !== undefined) m = multiply(rotateM(-Number(p.rotate), origin.x, origin.y), m); // counter-clockwise positive (Illustrator)
     if (p.matrix) m = multiply(p.matrix as Matrix, m);
     s.updateDoc((d) => {
       for (const id of ids) applyWorldMatrix(d, id, m, true);

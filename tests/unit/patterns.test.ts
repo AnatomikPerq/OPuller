@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createDocument, makeShape } from '@/model/nodes';
+import { createDocument, makeShape, makeGroup } from '@/model/nodes';
 import { addNode, worldBounds } from '@/model/document';
 import { patternCell, tilesCovering } from '@/patterns/tile';
 import { patternFromNodes, makePattern, updatePatternOptions, expandPatternFill, createTileGroup, commitTileGroup, nodesUsingPattern, deletePattern } from '@/patterns/ops';
 import { PATTERN_LIBRARY } from '@/patterns/library';
 import { setPatternRenderer } from '@/patterns/refresh';
-import { validateDocument } from '@/io/project';
+import { validateDocument, parseProject, PROJECT_VERSION } from '@/io/project';
 
 // the real renderer needs a browser canvas (paper.js); a stub keeps the markup checks meaningful
 setPatternRenderer((_doc, def) => `<stub layout="${def.layout}" bg="${def.background ?? ''}">${Object.values(def.nodes ?? {}).map((n: any) => (n.fill?.type === 'solid' ? n.fill.color : '')).join(' ')}</stub>`);
@@ -112,5 +112,32 @@ describe('patterns', () => {
     expect(copy.patterns).toHaveLength(PATTERN_LIBRARY.length);
     expect(copy.patterns[0].nodes).toBeTruthy();
     expect(copy.patterns[0].layout).toBe('grid');
+  });
+
+  it('version 1 files: pattern angles and scatter rotations become counter-clockwise (plan item 8)', () => {
+    const doc = createDocument();
+    const def = PATTERN_LIBRARY[0].build();
+    doc.patterns.push(def);
+    const r = rect(0, 0, 100, 100);
+    r.fill = { type: 'pattern', patternId: def.id, scale: 1, angle: 30 };
+    r.stroke = { ...r.stroke, paint: { type: 'pattern', patternId: def.id, scale: 1, angle: -15 } };
+    addNode(doc, r, doc.layers[0]);
+    doc.swatches.push({ id: 'sw', name: 'Tiles', paint: { type: 'pattern', patternId: def.id, scale: 1, angle: 45 } });
+    const artRoot = makeGroup([], { name: 'art' });
+    const artDot = rect(0, 0, 4, 4);
+    artDot.parent = artRoot.id;
+    artRoot.children = [artDot.id];
+    (doc as any).brushes = [{ id: 'sc', name: 'Scatter', kind: 'scatter', art: { nodes: { [artRoot.id]: artRoot, [artDot.id]: artDot }, root: artRoot.id }, size: [100, 100], spacing: [100, 100], scatter: [0, 0], rotation: [10, 40], rotationRelativeTo: 'page', colorization: 'none' }];
+    expect(PROJECT_VERSION).toBe(2);
+    const v1 = JSON.stringify({ format: 'opuller', version: 1, document: doc });
+    const back = parseProject(v1);
+    const node = Object.values(back.nodes).find((n) => n.type === 'path')!;
+    expect((node as any).fill.angle).toBe(-30);
+    expect((node as any).stroke.paint.angle).toBe(15);
+    expect((back.swatches.find((sw) => sw.id === 'sw')!.paint as any).angle).toBe(-45);
+    expect((back.brushes.find((b) => b.id === 'sc') as any).rotation).toEqual([-40, -10]);
+    // a version 2 file is left alone
+    const v2 = JSON.stringify({ format: 'opuller', version: 2, document: doc });
+    expect((Object.values(parseProject(v2).nodes).find((n) => n.type === 'path') as any).fill.angle).toBe(30);
   });
 });

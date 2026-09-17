@@ -540,7 +540,7 @@ server.registerTool(
       y1: z.number().optional(),
       x2: z.number().optional(),
       y2: z.number().optional(),
-      rotation: z.number().optional().describe('degrees'),
+      rotation: z.number().optional().describe('degrees, counter-clockwise positive (Illustrator convention)'),
       fill: paintSchema.optional(),
       stroke: strokeSchema.optional(),
       opacity: z.number().optional(),
@@ -636,8 +636,8 @@ server.registerTool(
   'opuller_transform',
   {
     title: 'Transform',
-    description: 'Move / scale / rotate nodes (default: selection). scale can be a number or {x,y}; rotate in degrees; origin defaults to the selection centre.',
-    inputSchema: { ids: idsSchema, translate: z.object({ x: z.number(), y: z.number() }).optional(), scale: z.union([z.number(), z.object({ x: z.number(), y: z.number().optional() })]).optional(), rotate: z.number().optional(), origin: z.object({ x: z.number(), y: z.number() }).optional(), matrix: z.object({ a: z.number(), b: z.number(), c: z.number(), d: z.number(), e: z.number(), f: z.number() }).optional() },
+    description: 'Move / scale / rotate nodes (default: selection). scale can be a number or {x,y}; rotate in degrees, positive = counter-clockwise on screen (Illustrator convention, same as the Rotate tool and the Transform panel); origin defaults to the selection centre.',
+    inputSchema: { ids: idsSchema, translate: z.object({ x: z.number(), y: z.number() }).optional(), scale: z.union([z.number(), z.object({ x: z.number(), y: z.number().optional() })]).optional(), rotate: z.number().optional().describe('degrees, counter-clockwise positive'), origin: z.object({ x: z.number(), y: z.number() }).optional(), matrix: z.object({ a: z.number(), b: z.number(), c: z.number(), d: z.number(), e: z.number(), f: z.number() }).optional() },
   },
   async (p) => text(await call('transform', p)),
 );

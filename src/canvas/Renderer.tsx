@@ -159,7 +159,7 @@ function PatternDef({ paint, id, doc }: { paint: Paint; id: string; doc: Documen
   const def = doc.patterns.find((p) => p.id === paint.patternId);
   if (!def) return null;
   const cell = patternCell(def);
-  const t = `${paint.x || paint.y ? `translate(${paint.x ?? 0} ${paint.y ?? 0}) ` : ''}rotate(${paint.angle}) scale(${paint.scale})`;
+  const t = `${paint.x || paint.y ? `translate(${paint.x ?? 0} ${paint.y ?? 0}) ` : ''}rotate(${-(paint.angle ?? 0)}) scale(${paint.scale})`;
   return (
     <pattern
       id={id}

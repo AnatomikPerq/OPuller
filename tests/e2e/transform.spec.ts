@@ -42,6 +42,39 @@ async function dragWorldWith(page: Page, from: { x: number; y: number }, to: { x
 }
 
 test.describe('transform module', () => {
+  test('positive angles are counter-clockwise on screen in every entry point (plan item 8)', async ({ page }) => {
+    await openApp(page);
+    // a point to the right of the origin rotated by +90 must move UP (screen y down): (1,0) → (0,−1)
+    const api = (o: any) => page.evaluate((o) => (window as any).__opuller.mcp[o.method](o.args), o);
+    const dot = await api({ method: 'createShape', args: { kind: 'rect', x: 300, y: 195, width: 10, height: 10, fill: '#ff0000', stroke: 'none', name: 'Dot' } });
+    await api({ method: 'transform', args: { ids: [dot.id], rotate: 90, origin: { x: 200, y: 200 } } });
+    let b = (await worldBounds(page, dot.id))!;
+    expect(b.x + b.width / 2).toBeCloseTo(200, 3);
+    expect(b.y + b.height / 2).toBeCloseTo(95, 3); // above the origin
+    // createShape rotation: a wide rectangle rotated +30 has its right end higher than its left end
+    const bar = await api({ method: 'createShape', args: { kind: 'rect', x: 400, y: 400, width: 200, height: 10, rotation: 30, fill: '#00ff00', stroke: 'none', name: 'Bar' } });
+    const n = await nodeById(page, bar.id);
+    expect(n.transform.b).toBeLessThan(0); // sin(−30°) in the screen matrix
+    // the Rotate dialog / Transform panel value agrees with the API: +30 reads back as +30
+    const rot = await page.evaluate((id) => {
+      const st = (window as any).__opuller.store.getState();
+      const m = st.doc.nodes[id].transform;
+      return (-Math.atan2(m.b, m.a) * 180) / Math.PI;
+    }, bar.id);
+    expect(rot).toBeCloseTo(30, 3);
+    // the same rotation through the Object > Transform > Rotate 90° CCW command sends the dot the same way as rotate: 90
+    const dot2 = await api({ method: 'createShape', args: { kind: 'rect', x: 300, y: 195, width: 10, height: 10, fill: '#0000ff', stroke: 'none', name: 'Dot2' } });
+    await api({ method: 'transform', args: { ids: [dot2.id], rotate: -90, origin: { x: 200, y: 200 } } });
+    b = (await worldBounds(page, dot2.id))!;
+    expect(b.y + b.height / 2).toBeCloseTo(305, 3); // −90 = clockwise → below the origin
+    // symbols: placing with rotation 30 tilts the instance counter-clockwise (matrix b < 0)
+    const sym = await page.evaluate((id) => (window as any).__opuller.mcp.symbols({ op: 'make', ids: [id], name: 'S' }), bar.id);
+    const placed = await page.evaluate((sid) => (window as any).__opuller.mcp.symbols({ op: 'place', id: sid, x: 100, y: 100, rotation: 30 }), sym.id);
+    const inst = await nodeById(page, placed.instance);
+    expect(inst.transform.b).toBeLessThan(0);
+    expect((-Math.atan2(inst.transform.b, inst.transform.a) * 180) / Math.PI).toBeCloseTo(30, 3);
+  });
+
   test('rotate dialog rotates a rectangle by 90° (bounds swap) and undo restores it', async ({ page }) => {
     await openApp(page);
     await showTransformPanel(page);

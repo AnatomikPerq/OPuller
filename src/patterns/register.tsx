@@ -167,7 +167,7 @@ export function PatternPreview({ def, paint, width = 220, height = 120 }: { def:
   const cell = patternCell(def);
   const id = `ppv-${def.id}`;
   const p = paint && paint.type === 'pattern' ? paint : null;
-  const pt = `translate(${p?.x ?? 0} ${p?.y ?? 0}) rotate(${p?.angle ?? 0}) scale(${p?.scale ?? 1})`;
+  const pt = `translate(${p?.x ?? 0} ${p?.y ?? 0}) rotate(${-(p?.angle ?? 0)}) scale(${p?.scale ?? 1})`;
   return (
     <svg className="pattern-preview" width={width} height={height} viewBox={`0 0 ${width} ${height}`} xmlns="http://www.w3.org/2000/svg" data-testid="pattern-preview">
       <defs>

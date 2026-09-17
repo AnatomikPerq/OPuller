@@ -133,7 +133,7 @@ export function placeInstance(doc: Document, symbolId: ID, at: Vec, parentId: ID
   const g = makeGroup([], { name: def.name });
   g.data = { symbol: { id: def.id, version: def.version } };
   const pw = parentWorldMatrix(doc, parent);
-  const local = multiply(invert(multiply(pw, doc.nodes[parent].transform)), compose(translate(at.x, at.y), rotate(opts.rotation ?? 0), scaleM(opts.scale ?? 1)));
+  const local = multiply(invert(multiply(pw, doc.nodes[parent].transform)), compose(translate(at.x, at.y), rotate(-(opts.rotation ?? 0)), scaleM(opts.scale ?? 1)));
   g.transform = local;
   if (opts.opacity !== undefined) g.opacity = opts.opacity;
   addNode(doc, g, parent, opts.index);

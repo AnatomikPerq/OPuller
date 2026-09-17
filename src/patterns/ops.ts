@@ -261,11 +261,11 @@ export function expandPatternFill(doc: Document, nodeId: ID): ID | null {
   addNode(doc, clip, group.id);
   group.clipId = clip.id;
   // pattern space: rotate/scale about the origin, then offset, like the SVG patternTransform
-  const pm = compose(inv, translate(paint.x ?? 0, paint.y ?? 0), rotate(paint.angle), scaleM(paint.scale, paint.scale));
+  const pm = compose(inv, translate(paint.x ?? 0, paint.y ?? 0), rotate(-paint.angle), scaleM(paint.scale, paint.scale));
   const root = def.nodes[def.root];
   const rootChildren = root && isContainer(root) ? root.children : [];
   // bounds expressed in pattern space to know which tiles are needed
-  const invPattern = invert(compose(translate(paint.x ?? 0, paint.y ?? 0), rotate(paint.angle), scaleM(paint.scale, paint.scale)));
+  const invPattern = invert(compose(translate(paint.x ?? 0, paint.y ?? 0), rotate(-paint.angle), scaleM(paint.scale, paint.scale)));
   const corners = [
     { x: bounds.x, y: bounds.y },
     { x: bounds.x + bounds.width, y: bounds.y },

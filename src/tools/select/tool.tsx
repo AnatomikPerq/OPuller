@@ -14,6 +14,7 @@ import { nodesInRect } from '@/canvas/hitTest';
 import { useOverlayStore } from '@/canvas/overlayStore';
 import { applyWorldMatrix, bakeTransform, cloneSubtree, addSubtree, indexInParent, selectionBounds, worldMatrix, layerOf, isAncestor } from '@/model/document';
 import { translate, scale, rotate, multiply, invert, scaleFactor, identity } from '@/geometry/matrix';
+import { normalizeAngle } from '@/transform/matrices';
 import { rectFromPoints, sub, add, constrainAngle } from '@/geometry/vec';
 import { SnapSession, constrainDelta } from '@/canvas/snap';
 import { formatLength } from '@/util/units';
@@ -273,7 +274,7 @@ export const selectTool: Tool = {
       const m = rotate(deg, c.x, c.y);
       lastAppliedMatrix = m;
       s.replaceDoc(applyMatrixToSelection(g.base, g.ids, m));
-      useOverlayStore.getState().setHud({ screen: e.screen, text: `∠ ${deg.toFixed(1)}°` });
+      useOverlayStore.getState().setHud({ screen: e.screen, text: `∠ ${normalizeAngle(-deg).toFixed(1)}°` });
       ctx.setCursor('alias');
       return;
     }
