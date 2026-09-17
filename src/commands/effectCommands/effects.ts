@@ -4,7 +4,7 @@
  * and the functions that apply an effect to the selection.
  */
 import type { ComponentType } from 'react';
-import { CloudFog, Droplets, Sun, SunMedium, Moon, SquareRoundCorner, Palette, Waves, Move3d, Grid2x2, Shapes, Box, Disc3, Rotate3d } from 'lucide-react';
+import { CloudFog, Droplets, Sun, SunMedium, Moon, SquareRoundCorner, Palette, Waves, Move3d, Grid2x2, Shapes, Box, Disc3, Rotate3d, Activity, Flower2, Mountain, Copy, Shuffle } from 'lucide-react';
 import type { Effect, ID } from '@/model/types';
 import { getState } from '@/store/store';
 import { formatLength } from '@/util/units';
@@ -189,6 +189,82 @@ EFFECT_DEFS.push(
     ],
     summary: (e) => (e.type === 'warp' ? `${e.style} · bend ${Math.round(e.bend)}%${e.horizontal ? '' : ' · vertical'}` : ''),
     dialog: 'effect.warp',
+  },
+  {
+    type: 'zigZag',
+    label: 'Zig Zag',
+    menuLabel: 'Zig Zag…',
+    menu: 'Distort & Transform',
+    order: 30,
+    icon: Activity,
+    description: 'Adds ridges to every segment: a saw tooth (corner points) or a wave (smooth points).',
+    defaults: () => ({ type: 'zigZag', enabled: true, size: 10, relative: false, ridges: 4, smooth: false }),
+    params: [
+      { key: 'size', label: 'Size', kind: 'length', min: 0, max: 500, step: 0.5 },
+      { key: 'ridges', label: 'Ridges per segment', kind: 'factor', min: 0, max: 100, step: 1 },
+    ],
+    summary: (e) => (e.type === 'zigZag' ? `${e.relative ? `${Math.round(e.size)}%` : formatLength(e.size, getState().prefs.units)} · ${e.ridges} ridges · ${e.smooth ? 'smooth' : 'corner'}` : ''),
+    dialog: 'effect.zigZag',
+  },
+  {
+    type: 'puckerBloat',
+    label: 'Pucker & Bloat',
+    menuLabel: 'Pucker & Bloat…',
+    menu: 'Distort & Transform',
+    order: 31,
+    icon: Flower2,
+    description: 'Pulls the anchors in and bulges the segments out (bloat), or the reverse (pucker).',
+    defaults: () => ({ type: 'puckerBloat', enabled: true, amount: 30 }),
+    params: [],
+    summary: (e) => (e.type === 'puckerBloat' ? `${e.amount > 0 ? 'bloat' : 'pucker'} ${Math.abs(Math.round(e.amount))}%` : ''),
+    dialog: 'effect.puckerBloat',
+  },
+  {
+    type: 'roughen',
+    label: 'Roughen',
+    menuLabel: 'Roughen…',
+    menu: 'Distort & Transform',
+    order: 32,
+    icon: Mountain,
+    description: 'Turns the outline into a jagged (corner) or wobbly (smooth) edge with points every 1/detail inch.',
+    defaults: () => ({ type: 'roughen', enabled: true, size: 5, relative: false, detail: 10, smooth: false, seed: 1 }),
+    params: [
+      { key: 'size', label: 'Size', kind: 'length', min: 0, max: 500, step: 0.5 },
+      { key: 'detail', label: 'Detail (per inch)', kind: 'factor', min: 0.1, max: 100, step: 1 },
+    ],
+    summary: (e) => (e.type === 'roughen' ? `${e.relative ? `${Math.round(e.size)}%` : formatLength(e.size, getState().prefs.units)} · ${e.detail}/in · ${e.smooth ? 'smooth' : 'corner'}` : ''),
+    dialog: 'effect.roughen',
+  },
+  {
+    type: 'transform',
+    label: 'Transform',
+    menuLabel: 'Transform…',
+    menu: 'Distort & Transform',
+    order: 33,
+    icon: Copy,
+    description: 'Moves, scales, rotates or reflects the object live, optionally as a series of copies.',
+    defaults: () => ({ type: 'transform', enabled: true, copies: 0, dx: 0, dy: 0, scaleX: 100, scaleY: 100, angle: 0, reflectX: false, reflectY: false, origin: 'center' }),
+    params: [],
+    summary: (e) =>
+      e.type === 'transform'
+        ? [e.copies ? `${e.copies} cop${e.copies === 1 ? 'y' : 'ies'}` : '', e.dx || e.dy ? `move ${Math.round(e.dx)}, ${Math.round(e.dy)}` : '', e.scaleX !== 100 || e.scaleY !== 100 ? `scale ${Math.round(e.scaleX)}×${Math.round(e.scaleY)}%` : '', e.angle ? `rotate ${Math.round(e.angle)}°` : '', e.reflectX ? 'reflect X' : '', e.reflectY ? 'reflect Y' : '']
+            .filter(Boolean)
+            .join(' · ') || 'identity'
+        : '',
+    dialog: 'effect.transform',
+  },
+  {
+    type: 'tweak',
+    label: 'Tweak',
+    menuLabel: 'Tweak…',
+    menu: 'Distort & Transform',
+    order: 34,
+    icon: Shuffle,
+    description: 'Moves anchor and control points by random amounts.',
+    defaults: () => ({ type: 'tweak', enabled: true, horizontal: 10, vertical: 10, relative: true, anchors: true, inControl: true, outControl: true, seed: 1 }),
+    params: [],
+    summary: (e) => (e.type === 'tweak' ? `${Math.round(e.horizontal)}${e.relative ? '%' : ''} × ${Math.round(e.vertical)}${e.relative ? '%' : ''}` : ''),
+    dialog: 'effect.tweak',
   },
   {
     type: 'freeDistort',

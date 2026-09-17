@@ -11,7 +11,7 @@
  */
 import type { SubPath, Anchor, Vec } from '@/model/types';
 import { anchor as makeAnchor, segmentCount, segmentCubic, absHandleIn, absHandleOut } from './path';
-import { cubicSplit, cubicLength, cubicDerivative, isLine, type Cubic } from './bezier';
+import { cubicSplit, cubicLength, cubicDerivative, cubicTAtLength, type Cubic } from './bezier';
 
 /** Break angle below which a junction counts as smooth (≈ 1°). */
 const SMOOTH_EPS = Math.PI / 180;
@@ -190,33 +190,7 @@ export function maxCornerRadius(sp: SubPath, i: number, radiusOf: (j: number, a:
   return Math.max(0, Math.min(before, after)) * Math.tan(theta / 2);
 }
 
-/** Parameter t on a cubic at arc length `d` from its start. */
-function tAtLength(c: Cubic, d: number): number {
-  const total = cubicLength(c, 0.02);
-  if (d <= 0) return 0;
-  if (d >= total) return 1;
-  if (isLine(c)) {
-    // a straight cubic (handles on the end points) is not linear in t: B(t) = p0 + (3t² − 2t³)(p3 − p0)
-    const u = d / total;
-    let t = u;
-    for (let k = 0; k < 12; k++) {
-      const f = 3 * t * t - 2 * t * t * t - u;
-      const df = 6 * t - 6 * t * t;
-      if (Math.abs(df) < 1e-12) break;
-      t -= f / df;
-      t = Math.min(1, Math.max(0, t));
-    }
-    return t;
-  }
-  let lo = 0;
-  let hi = 1;
-  for (let k = 0; k < 22; k++) {
-    const mid = (lo + hi) / 2;
-    if (cubicLength(cubicSplit(c, mid)[0], 0.02) < d) lo = mid;
-    else hi = mid;
-  }
-  return (lo + hi) / 2;
-}
+const tAtLength = cubicTAtLength;
 
 /** Position along the path (segment + t) after walking `d` backwards from anchor i. */
 function walkBack(sp: SubPath, i: number, d: number, cache: Map<number, number>): number {

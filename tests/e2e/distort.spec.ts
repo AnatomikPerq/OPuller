@@ -10,6 +10,63 @@ test.describe('distort and 3D effects', () => {
     await openApp(page);
   });
 
+  test('Distort & Transform effects: Zig Zag dialog, Pucker & Bloat, Roughen, Transform copies, Tweak; expand bakes them (plan item 7)', async ({ page }) => {
+    const id = await drawRect(page, 100, 100, 200, 100);
+    const steps0 = (await getState(page)).past.length;
+    // Zig Zag through its dialog: size 4, 3 ridges, corner points
+    await runCommand(page, 'effect.zigZag');
+    await expect(page.getByTestId('zigzag-ok')).toBeVisible();
+    await page.getByTestId('zigzag-size').fill('4');
+    await page.getByTestId('zigzag-size').press('Tab');
+    await page.getByTestId('zigzag-ridges').fill('3');
+    await page.getByTestId('zigzag-ridges').press('Tab');
+    await expect.poll(async () => (await nodeById(page, id)).effects[0]?.ridges).toBe(3);
+    await page.getByTestId('zigzag-ok').click();
+    let s = await getState(page);
+    expect(s.past.length).toBe(steps0 + 1);
+    expect(s.past[s.past.length - 1].label).toBe('Zig Zag');
+    let n = await nodeById(page, id);
+    expect(n.effects[0]).toMatchObject({ type: 'zigZag', size: 4, ridges: 3, smooth: false });
+    // rendered outline: 4 anchors + 4 segments × 5 peaks = 24 points; bounds grow by the peak size
+    let d = (await page.locator(`.document-layer g[data-id="${id}"] path`).first().getAttribute('d')) ?? '';
+    expect(d.split('L').length - 1).toBe(24); // 24 line segments around the closed outline
+    let b = (await worldBounds(page, id))!;
+    expect(b.x).toBeCloseTo(96, 3);
+    expect(b.width).toBeCloseTo(208, 3);
+    // the Effect menu lists the five effects
+    const cmds = await page.evaluate(() => (window as any).__opuller.mcp.listCommands({ menu: 'Effect/Distort & Transform' }).map((c: any) => c.id));
+    for (const t of ['zigZag', 'puckerBloat', 'roughen', 'transform', 'tweak', 'warp']) expect(cmds).toContain(`effect.${t}`);
+    // stack the others through the scripting API (each replaces the effect list)
+    const set = (effects: any[]) => page.evaluate(({ id, effects }) => (window as any).__opuller.mcp.updateNodes({ ids: [id], patch: { effects } }), { id, effects });
+    await set([{ type: 'puckerBloat', enabled: true, amount: 100 }]);
+    d = (await page.locator(`.document-layer g[data-id="${id}"] path`).first().getAttribute('d')) ?? '';
+    expect(d).toContain('C');
+    b = (await worldBounds(page, id))!;
+    expect(b.y).toBeLessThan(60); // petals bulge beyond the original top edge (100)
+    await set([{ type: 'roughen', enabled: true, size: 3, relative: false, detail: 10, smooth: false, seed: 5 }]);
+    d = (await page.locator(`.document-layer g[data-id="${id}"] path`).first().getAttribute('d')) ?? '';
+    expect(d.split('L').length).toBeGreaterThan(40);
+    await set([{ type: 'transform', enabled: true, copies: 2, dx: 250, dy: 0, scaleX: 50, scaleY: 50, angle: 0, reflectX: false, reflectY: false, origin: 'center' }]);
+    b = (await worldBounds(page, id))!;
+    expect(b.x + b.width).toBeCloseTo(600, 3); // copies accumulate the step about the reference point: 400..500 and 550..600
+    expect(b.x).toBeCloseTo(100, 3);
+    await set([{ type: 'tweak', enabled: true, horizontal: 10, vertical: 10, relative: true, anchors: true, inControl: false, outControl: false, seed: 2 }]);
+    n = await nodeById(page, id);
+    expect(n.shape.kind).toBe('rect'); // still a live rect underneath
+    // expand bakes the geometry and drops the effect
+    await runCommand(page, 'object.expandAppearance');
+    n = await nodeById(page, id);
+    expect(n.effects).toHaveLength(0);
+    expect(n.shape).toBeUndefined();
+    expect(n.subpaths[0].anchors).toHaveLength(4);
+    const moved = n.subpaths[0].anchors.filter((a: any) => Math.abs(a.point.x) > 1e-9 && Math.abs(a.point.x - 200) > 1e-9).length;
+    expect(moved).toBeGreaterThan(0);
+    // project round trip keeps the effect types
+    await set([{ type: 'zigZag', enabled: true, size: 4, relative: true, ridges: 2, smooth: true }]);
+    const json = await page.evaluate(async () => (await (window as any).__opuller.mcp.getProject({})).json as string);
+    expect(json).toContain('"type":"zigZag"');
+  });
+
   test('warp effect dialog previews live, commits one step and changes the bounds; expand bakes it', async ({ page }) => {
     const id = await drawRect(page, 100, 100, 200, 100);
     const steps0 = (await getState(page)).past.length;

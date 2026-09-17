@@ -32,8 +32,16 @@ describe('warp', () => {
     expect(b.height).toBeGreaterThan(100);
     const vertical = warpMap({ ...e, horizontal: false }, frame)({ x: 100, y: 50 });
     expect(Number.isFinite(vertical.x)).toBe(true);
+    // horizontal distortion is perspective along the horizontal axis: the right side grows taller
     const distorted = warpMap({ ...e, bend: 0, hDistort: 50 }, frame)({ x: 200, y: 100 });
-    expect(distorted.x).toBeGreaterThan(200);
+    expect(distorted.y).toBeGreaterThan(100);
+    expect(distorted.x).toBeCloseTo(200, 6);
+    const left = warpMap({ ...e, bend: 0, hDistort: 50 }, frame)({ x: 0, y: 100 });
+    expect(left.y).toBeLessThan(100);
+    // vertical distortion widens the bottom
+    const vd = warpMap({ ...e, bend: 0, vDistort: 50 }, frame)({ x: 200, y: 100 });
+    expect(vd.x).toBeGreaterThan(200);
+    expect(vd.y).toBeCloseTo(100, 6);
   });
 });
 

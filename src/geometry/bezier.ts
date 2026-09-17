@@ -91,6 +91,37 @@ export function cubicLength(c: Cubic, tolerance = 0.05): number {
   return cubicLength(l, tolerance) + cubicLength(r, tolerance);
 }
 
+/**
+ * Parameter t at arc length `d` from the start of the curve. A straight cubic (handles on
+ * its end points) is not linear in t — B(t) = p0 + (3t² − 2t³)(p3 − p0) — so it is solved
+ * exactly; curves use bisection on the length of the left piece.
+ */
+export function cubicTAtLength(c: Cubic, d: number): number {
+  const total = cubicLength(c, 0.02);
+  if (d <= 0) return 0;
+  if (d >= total) return 1;
+  if (isLine(c)) {
+    const u = d / total;
+    let t = u;
+    for (let k = 0; k < 12; k++) {
+      const f = 3 * t * t - 2 * t * t * t - u;
+      const df = 6 * t - 6 * t * t;
+      if (Math.abs(df) < 1e-12) break;
+      t -= f / df;
+      t = Math.min(1, Math.max(0, t));
+    }
+    return t;
+  }
+  let lo = 0;
+  let hi = 1;
+  for (let k = 0; k < 22; k++) {
+    const mid = (lo + hi) / 2;
+    if (cubicLength(cubicSplit(c, mid)[0], 0.02) < d) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
 /** Flatten into a polyline (does not include p0). */
 export function cubicFlatten(c: Cubic, tolerance = 0.25, out: Vec[] = []): Vec[] {
   if (isLine(c)) {

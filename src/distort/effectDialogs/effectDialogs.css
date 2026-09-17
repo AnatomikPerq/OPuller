@@ -1,0 +1,28 @@
+/* Distort & Transform effect dialogs */
+.dt-dialog .section-title {
+  margin-top: 6px;
+}
+.dt-origin {
+  display: grid;
+  grid-template-columns: repeat(3, 12px);
+  grid-template-rows: repeat(3, 12px);
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-panel-alt);
+  width: max-content;
+}
+.dt-origin-cell {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg-panel);
+  cursor: pointer;
+}
+.dt-origin-cell.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}

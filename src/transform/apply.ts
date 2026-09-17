@@ -111,6 +111,14 @@ function scaleEffect(e: Effect, k: number): Effect {
       return { ...e, blur: e.blur * k };
     case 'roundCorners':
       return { ...e, radius: e.radius * k };
+    case 'zigZag':
+      return e.relative ? e : { ...e, size: e.size * k };
+    case 'roughen':
+      return e.relative ? e : { ...e, size: e.size * k };
+    case 'tweak':
+      return e.relative ? e : { ...e, horizontal: e.horizontal * k, vertical: e.vertical * k };
+    case 'transform':
+      return { ...e, dx: e.dx * k, dy: e.dy * k };
     default:
       return e;
   }

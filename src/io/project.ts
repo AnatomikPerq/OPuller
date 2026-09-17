@@ -344,7 +344,7 @@ function validSubPaths(v: unknown): SubPath[] {
   return out;
 }
 
-const EFFECT_TYPES = new Set(['dropShadow', 'innerShadow', 'blur', 'outerGlow', 'innerGlow', 'colorAdjust', 'roundCorners', 'warp', 'freeDistort', 'meshDistort', 'coonsDistort', 'extrude', 'revolve', 'rotate3d']);
+const EFFECT_TYPES = new Set(['dropShadow', 'innerShadow', 'blur', 'outerGlow', 'innerGlow', 'colorAdjust', 'roundCorners', 'warp', 'zigZag', 'puckerBloat', 'roughen', 'transform', 'tweak', 'freeDistort', 'meshDistort', 'coonsDistort', 'extrude', 'revolve', 'rotate3d']);
 function validEffects(v: unknown): Effect[] {
   if (!Array.isArray(v)) return [];
   const out: Effect[] = [];

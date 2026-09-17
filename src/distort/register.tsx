@@ -10,9 +10,10 @@ import { registerCommands, when, type Command } from '@/commands/registry';
 import { DialogFrame } from '@/ui/DialogHost';
 import { Button, Checkbox, NumberField, Row, Segmented, Select, Slider } from '@/ui/widgets';
 import { getState, useStore, type EditorState } from '@/store/store';
-import type { Document, Effect, ID, WarpEffect, WarpStyle, FreeDistortEffect, MeshDistortEffect, CoonsDistortEffect, Rect, Vec } from '@/model/types';
+import type { Document, Effect, ID, WarpEffect, WarpStyle, FreeDistortEffect, MeshDistortEffect, CoonsDistortEffect, Rect, Vec, ZigZagEffect, PuckerBloatEffect, RoughenEffect, TransformEffect, TweakEffect } from '@/model/types';
 import { isContainer } from '@/model/types';
-import { registerGeometryEffect, applyGeometryEffects, hasGeometryEffects } from '@/canvas/effectiveGeometry';
+import { registerGeometryEffect, applyGeometryEffects, hasGeometryEffects, isGeometryEffect } from '@/canvas/effectiveGeometry';
+import { zigZagSubPaths, puckerBloatSubPaths, roughenSubPaths, transformEffectSubPaths, tweakSubPaths } from './transformEffects';
 import { registerExpander } from '@/appearance/expand';
 import { applyEffect, initialEffect, rememberEffect, cloneEffect, effectDef, type ApplyMode } from '@/commands/effectCommands/effects';
 import { effectTargets } from '@/commands/effectCommands/register';
@@ -34,13 +35,19 @@ registerGeometryEffect('meshDistort', (sps, e, frame) => {
 });
 registerGeometryEffect('coonsDistort', (sps, e, frame) => coonsSubPaths(sps, e as CoonsDistortEffect, frame));
 registerGeometryEffect('rotate3d', (sps, e, frame) => rotate3dSubPaths(sps, e as never, frame));
+registerGeometryEffect('zigZag', (sps, e) => zigZagSubPaths(sps, e as ZigZagEffect));
+registerGeometryEffect('puckerBloat', (sps, e, frame) => puckerBloatSubPaths(sps, e as PuckerBloatEffect, frame));
+registerGeometryEffect('roughen', (sps, e, frame) => roughenSubPaths(sps, e as RoughenEffect, frame));
+registerGeometryEffect('transform', (sps, e, frame) => transformEffectSubPaths(sps, e as TransformEffect, frame));
+registerGeometryEffect('tweak', (sps, e, frame) => tweakSubPaths(sps, e as TweakEffect, frame));
 
 // ---------------------------------------------------------------------------
 // Expanders: bake geometry effects into plain geometry
 // ---------------------------------------------------------------------------
 
 function geometryEffectsOf(effects: Effect[]): Effect[] {
-  return effects.filter((e) => e.enabled && (e.type === 'warp' || e.type === 'freeDistort' || e.type === 'meshDistort' || e.type === 'coonsDistort' || e.type === 'rotate3d' || e.type === 'roundCorners'));
+  // every registered geometry effect (warp, envelopes, 3D rotate, Distort & Transform set) plus round corners
+  return effects.filter((e) => e.enabled && isGeometryEffect(e.type));
 }
 
 /** Bake the geometry effects of a node (path: own geometry; group: descendants in the group frame). */
@@ -210,12 +217,12 @@ registerCommands(commands);
 // Dialog scaffolding shared by the custom effect dialogs (live preview, cancel reverts)
 // ---------------------------------------------------------------------------
 
-interface EffectDialogProps {
+export interface EffectDialogProps {
   type: Effect['type'];
   index?: number;
 }
 
-function useEffectSession(props: EffectDialogProps) {
+export function useEffectSession(props: EffectDialogProps) {
   const setup = useMemo(() => {
     const s = getState();
     if (s.doc !== s.historyBase) s.commit('Edit');

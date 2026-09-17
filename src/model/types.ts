@@ -354,6 +354,72 @@ export interface WarpEffect {
   vDistort: number;
 }
 
+/** Effect > Distort & Transform > Zig Zag. */
+export interface ZigZagEffect {
+  type: 'zigZag';
+  enabled: boolean;
+  /** peak height: px, or % of the segment length when `relative` */
+  size: number;
+  relative: boolean;
+  /** ridges per segment */
+  ridges: number;
+  /** smooth (wave) or corner (saw tooth) points */
+  smooth: boolean;
+}
+
+/** Effect > Distort & Transform > Pucker & Bloat: −200 (pucker) .. 200 (bloat) percent. */
+export interface PuckerBloatEffect {
+  type: 'puckerBloat';
+  enabled: boolean;
+  amount: number;
+}
+
+/** Effect > Distort & Transform > Roughen. */
+export interface RoughenEffect {
+  type: 'roughen';
+  enabled: boolean;
+  /** px, or % of the object's longer side when `relative` */
+  size: number;
+  relative: boolean;
+  /** points per inch (96 px) */
+  detail: number;
+  smooth: boolean;
+  /** random seed (stable rendering) */
+  seed: number;
+}
+
+/** Effect > Distort & Transform > Transform: a transform applied to the object and/or repeated for copies. */
+export interface TransformEffect {
+  type: 'transform';
+  enabled: boolean;
+  copies: number;
+  dx: number;
+  dy: number;
+  /** percent */
+  scaleX: number;
+  scaleY: number;
+  /** degrees, counter-clockwise */
+  angle: number;
+  reflectX: boolean;
+  reflectY: boolean;
+  /** reference point on the object's bounds */
+  origin: 'topLeft' | 'top' | 'topRight' | 'left' | 'center' | 'right' | 'bottomLeft' | 'bottom' | 'bottomRight';
+}
+
+/** Effect > Distort & Transform > Tweak: random displacement of anchors / control points. */
+export interface TweakEffect {
+  type: 'tweak';
+  enabled: boolean;
+  /** px, or % of the object's width / height when `relative` */
+  horizontal: number;
+  vertical: number;
+  relative: boolean;
+  anchors: boolean;
+  inControl: boolean;
+  outControl: boolean;
+  seed: number;
+}
+
 /** Free Distort: the object's bounding box is mapped onto a quadrilateral (bbox units: TL, TR, BR, BL). */
 export interface FreeDistortEffect {
   type: 'freeDistort';
@@ -441,6 +507,11 @@ export type Effect =
   | ColorAdjustEffect
   | RoundCornersEffect
   | WarpEffect
+  | ZigZagEffect
+  | PuckerBloatEffect
+  | RoughenEffect
+  | TransformEffect
+  | TweakEffect
   | FreeDistortEffect
   | MeshDistortEffect
   | CoonsDistortEffect

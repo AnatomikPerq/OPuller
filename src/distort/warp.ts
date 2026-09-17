@@ -69,7 +69,7 @@ export function warpUnit(style: WarpStyle, bend: number, u: number, v: number, W
       py = y * H - b * H * 0.5 * Math.sin(2 * Math.PI * x);
       break;
     case 'wave':
-      py = y * H - b * H * 0.5 * Math.sin(3 * Math.PI * x) * (1 - 0.5 * Math.abs(y * 2) * 0);
+      py = y * H - b * H * 0.5 * Math.sin(3 * Math.PI * x);
       break;
     case 'fish': {
       // pointed ends, fat middle: vertical scale follows the hump, ends pinch
@@ -99,7 +99,6 @@ export function warpUnit(style: WarpStyle, bend: number, u: number, v: number, W
     case 'squeeze': {
       const hy = 1 - 4 * y * y;
       px = x * W * (1 - b * 0.6 * hy);
-      py = y * H * (1 + b * 0.35 * (1 - hy) * 0);
       break;
     }
     case 'twist': {
@@ -123,11 +122,13 @@ export function warpMap(effect: WarpEffect, frame: Rect): PointMap {
   const vd = Math.max(-1, Math.min(1, effect.vDistort / 100));
   return (p: Vec) => {
     let u = toUnit(frame, p);
-    // horizontal/vertical distortion: perspective-like scaling towards one side
+    // distortion = perspective (Illustrator): "Horizontal" makes one side taller than the other
+    // as if the object turned away along its horizontal axis, "Vertical" makes the top wider
+    // than the bottom (a road running away). Positive values enlarge the right / bottom side.
     let x = u.x - 0.5;
     let y = u.y - 0.5;
-    if (h) x *= 1 + h * y * 2;
-    if (vd) y *= 1 + vd * x * 2;
+    if (h) y *= 1 + h * x * 2;
+    if (vd) x *= 1 + vd * y * 2;
     u = { x: x + 0.5, y: y + 0.5 };
     let out: Vec;
     if (effect.horizontal) out = warpUnit(effect.style, effect.bend, u.x, u.y, W, H);
