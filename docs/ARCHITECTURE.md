@@ -236,6 +236,10 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 * `npm run typecheck` (tsc) must pass. Run it after every file you write.
 * Unit tests: `tests/unit/<area>.test.ts` (vitest, jsdom). Pure geometry/model logic
   belongs here.
+* Lesson fixtures: `tests/e2e/lessons.spec.ts` builds `tests/e2e/lessons/lessons.ts` (owl, kitten,
+  rowan — scripted through `window.__opuller.mcp`) and compares the render with
+  `tests/e2e/lessons/baseline/*.png` (IoU ≥ 0.95); `UPDATE_LESSONS=1` rewrites the baselines after an
+  intended rendering change.
 * E2E: `tests/e2e/<feature>.spec.ts` with helpers from `tests/e2e/helpers.ts`
   (`openApp`, `drawRect`, `dragWorld`, `clickWorld`, `selectTool`, `getState`,
   `withStore`, `runCommand`, `nodeById`, `worldBounds`). `window.__opuller` exposes
