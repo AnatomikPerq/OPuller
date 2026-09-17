@@ -80,15 +80,19 @@ const CP1251: Record<number, number> = { 0x0401: 0xa8, 0x0451: 0xb8, 0x0404: 0xa
 const WIN_PUNCT: Record<number, number> = { 0x2026: 0x85, 0x2018: 0x91, 0x2019: 0x92, 0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x2122: 0x99 };
 const CP1252_EXTRA: Record<number, number> = { 0x20ac: 0x80, 0x201a: 0x82, 0x2030: 0x89, 0x0160: 0x8a, 0x2039: 0x8b, 0x0152: 0x8c, 0x017d: 0x8e, 0x201e: 0x84, 0x2020: 0x86, 0x2021: 0x87, 0x02c6: 0x88, 0x0161: 0x9a, 0x203a: 0x9b, 0x0153: 0x9c, 0x017e: 0x9e, 0x0178: 0x9f };
 
+/** Latin-1 code points that keep their byte in Windows-1251 (the rest of 0xa0–0xff is Cyrillic there). */
+const CP1251_LATIN = new Set<number>([0xa0, 0xa4, 0xa6, 0xa7, 0xa9, 0xab, 0xac, 0xad, 0xae, 0xb0, 0xb1, 0xb5, 0xb6, 0xb7, 0xbb]);
+
 /** Byte for a non-ASCII character in the given encoding, or -1 when it has none. */
 function encodeChar(cp: number, encoding: 'latin1' | 'cp1251'): number {
-  if (cp >= 0xa0 && cp <= 0xff) return cp;
   if (WIN_PUNCT[cp] !== undefined) return WIN_PUNCT[cp];
   if (encoding === 'cp1251') {
+    if (cp >= 0xa0 && cp <= 0xff) return CP1251_LATIN.has(cp) ? cp : -1;
     if (cp >= 0x0410 && cp <= 0x044f) return 0xc0 + (cp - 0x0410);
     if (CP1251[cp] !== undefined) return CP1251[cp];
     return -1;
   }
+  if (cp >= 0xa0 && cp <= 0xff) return cp;
   return CP1252_EXTRA[cp] ?? -1;
 }
 
@@ -102,6 +106,17 @@ export function isEncodable(text: string, encoding: 'ascii' | 'latin1' | 'cp1251
     if (encodeChar(cp, encoding) < 0) return false;
   }
   return true;
+}
+
+/** The text encoding that keeps the most text objects editable (ties → Latin-1). */
+export function chooseAiEncoding(texts: Array<{ text: string }>): 'latin1' | 'cp1251' {
+  let latin = 0;
+  let cyrillic = 0;
+  for (const t of texts) {
+    if (isEncodable(t.text, 'latin1')) latin++;
+    if (isEncodable(t.text, 'cp1251')) cyrillic++;
+  }
+  return cyrillic > latin ? 'cp1251' : 'latin1';
 }
 
 /** Encode a JS string as PostScript string bytes (escaped), newlines as \r paragraphs. */
@@ -308,7 +323,12 @@ function subpathOps(sp: SubPath): string[] {
 }
 
 function emit(ctx: Ctx, ...lines: string[]): void {
-  ctx.lines.push(...lines);
+  for (const l of lines) ctx.lines.push(l);
+}
+
+/** `emit` for arrays of any size: never spread lines into call arguments (a raster or a huge subpath overflows the stack). */
+function emitAll(ctx: Ctx, lines: string[]): void {
+  for (const l of lines) ctx.lines.push(l);
 }
 
 /** Write the modal paint attributes that changed. */
@@ -394,9 +414,9 @@ function writePath(ctx: Ctx, node: PathNode): void {
     return closed ? 'n' : 'N';
   };
   const one = (sp: SubPath) => {
-    emit(ctx, ...subpathOps(sp));
+    emitAll(ctx, subpathOps(sp));
     if (gradient) {
-      emit(ctx, ...gradientInstance(ctx, gradient, geo, m));
+      emitAll(ctx, gradientInstance(ctx, gradient, geo, m));
       emit(ctx, sp.closed ? 'f' : 'F');
       emit(ctx, `${hasStroke ? (sp.closed ? 2 : 1) : 0} BB`);
     } else emit(ctx, render(sp.closed));
@@ -418,7 +438,10 @@ function writeClipPath(ctx: Ctx, clip: PathNode): boolean {
     emit(ctx, `${xr} XR`);
     ctx.state.XR = xr;
   }
-  const mask = (sp: SubPath) => emit(ctx, ...subpathOps(sp), 'h', 'W', 'n');
+  const mask = (sp: SubPath) => {
+    emitAll(ctx, subpathOps(sp));
+    emit(ctx, 'h', 'W', 'n');
+  };
   if (sps.length === 1) mask(sps[0]);
   else {
     emit(ctx, '*u');
@@ -751,7 +774,8 @@ export function exportAiRegion(doc: Document, region: ExportRegion, opts: AiOpti
     }
     for (const id of layer.children) writeNode(ctx, id, includeHidden);
     emit(ctx, 'LB', '%AI5_EndLayer--');
-    body.push(...ctx.lines);
+    // one hex row per line for every raster: tens of thousands of entries per image — never spread
+    for (const l of ctx.lines) body.push(l);
   });
   if (!layers.length) body.push('%AI5_BeginLayer', '1 1 1 1 0 0 0 79 128 255 Lb', '(Layer 1) Ln', 'LB', '%AI5_EndLayer--');
   const roots = layers.flatMap((l) => l.children);

@@ -37,8 +37,8 @@ async function roundTrip(page: Page, name: string, opts: { textMode?: 'auto' | '
     const io = (window as any).__opullerIO;
     const st = (window as any).__opuller.store.getState();
     const doc = st.doc;
-    const prep = await io.prepareDocumentForAi(doc, { textMode: o.textMode ?? 'auto', encoding: o.encoding ?? 'latin1' });
-    const files = io.exportAiAll(prep.doc, { scope: o.scope ?? 'artboard', cmyk: o.cmyk, encoding: o.encoding ?? 'latin1' });
+    const prep = await io.prepareDocumentForAi(doc, { textMode: o.textMode ?? 'auto', encoding: o.encoding ?? 'auto' });
+    const files = io.exportAiAll(prep.doc, { scope: o.scope ?? 'artboard', cmyk: o.cmyk, encoding: prep.encoding });
     const count = (d: any) => {
       const nodes: any[] = Object.values(d.nodes);
       return { paths: nodes.filter((n) => n.type === 'path' && n.visible).length, texts: nodes.filter((n) => n.type === 'text' && n.visible).length, images: nodes.filter((n) => n.type === 'image').length };
@@ -157,7 +157,7 @@ test.describe('AI export on realistic projects', () => {
       api.createPath({ d: 'M40 40 m-26 0 a26 26 0 1 0 52 0 a26 26 0 1 0 -52 0 Z M40 40 m-14 0 a14 14 0 1 0 28 0 a14 14 0 1 0 -28 0 Z', fill: '#c8102e', stroke: 'none', fillRule: 'evenodd', name: 'Ring', x: 30, y: 20 });
       const dot = api.createShape({ kind: 'circle', cx: 70, cy: 60, r: 10, fill: '#ffcc00', stroke: 'none', name: 'Dot' });
       api.updateNodes({ ids: [dot.id], patch: { fill: { type: 'radial', cx: 0.4, cy: 0.4, r: 0.6, stops: [{ offset: 0, color: '#fff3b0', opacity: 1 }, { offset: 1, color: '#e0a800', opacity: 1 }], spread: 'pad' } } });
-      // text: Latin name (editable), Cyrillic title (outlined in auto mode), contacts
+      // text: Latin name, Cyrillic title and the contacts (a middle dot): the automatic encoding keeps all three editable as Windows-1251
       api.createText({ x: 130, y: 62, text: 'Anna Petrova', fontFamily: 'Inter', fontSize: 22, fontWeight: 700, fill: '#003a5d', name: 'Name' });
       api.createText({ x: 130, y: 84, text: 'Графический дизайнер', fontFamily: 'Inter', fontSize: 12, fontWeight: 400, fill: '#333333', name: 'Title' });
       api.createText({ x: 130, y: 170, text: 'anna@example.com  ·  +7 900 000-00-00', fontFamily: 'Roboto', fontSize: 9, fill: '#ffffff', name: 'Contacts' });
@@ -180,14 +180,17 @@ test.describe('AI export on realistic projects', () => {
     expect(ai).toContain(' k\n'); // process colours as inks
     expect(ai).toContain('(Anna Petrova) Tx 1 0 Tk');
     expect(ai).toContain('/_Inter-Bold 16.5 Tf');
-    expect(ai).not.toContain('????'); // Cyrillic was outlined, not mangled
+    expect(ai).not.toContain('????'); // Cyrillic was encoded, not mangled
+    expect(ai).toContain('%AI_OPuller_TextEncoding: cp1251');
+    expect(ai).toContain('(\\303\\360\\340\\364\\350\\367\\345\\361\\352\\350\\351'); // "Графический" as Windows-1251 bytes
     expect(ai).toContain('%AI5_RulerUnits: 1'); // mm
     expect(ai).toMatch(/\[2\.25 1\.5\] 0 d/); // dash 3/2 px → pt
-    expect(r.prepWarnings.some((w) => w.includes('converted to outlines'))).toBe(true);
+    expect(r.prepWarnings.some((w) => w.includes('converted to outlines'))).toBe(false);
     expect(ai).toContain('(Guides \\(locked\\)) Ln');
     expect(ai).toMatch(/1 1 0 1 0 0 \d+ \d+ \d+ \d+ Lb\n\(Guides \\\(locked\\\)\) Ln/); // enabled = 0 for the locked layer
     expect(r.back.layers).toEqual(['Layer 1', 'Guides (locked)']);
-    expect(r.back.texts).toBe(1); // the ASCII name stays editable; the contacts line has a middle dot (·) and is outlined in auto mode
+    expect(r.back.texts).toBe(3); // every text object stays editable
+    expect(r.back.warnings ?? []).toEqual([]);
     expect(r.back.gradients).toBe(1);
     expect(r.diff).toBeLessThan(0.02);
   });
@@ -351,8 +354,11 @@ test.describe('AI export on realistic projects', () => {
       api.createText({ x: 240, y: 470, text: 'Фестиваль уличного искусства', fontFamily: 'Inter', fontSize: 20, textAlign: 'center', fill: '#ffcc00', name: 'Subtitle' });
       api.createText({ x: 240, y: 600, text: '12–14 July · Old Harbour', fontFamily: 'Inter', fontSize: 16, textAlign: 'center', fill: '#ffffff', name: 'Date' });
     });
-    const r = await roundTrip(page, 'poster', { textMode: 'editable', encoding: 'cp1251' });
+    // default options: the encoding is chosen from the text — two of three objects are Cyrillic → Windows-1251, nothing outlined
+    const r = await roundTrip(page, 'poster');
     const ai = r.files[0].ai;
+    expect(ai).toContain('%AI_OPuller_TextEncoding: cp1251');
+    expect(r.prepWarnings.some((w) => w.includes('converted to outlines'))).toBe(false);
     expect(ai).toContain('%AI5_BeginRaster');
     expect(ai).toMatch(/\] 0 0 160 120 160 120 8 3 0 0 0 0 XI/);
     expect(r.back.images).toBe(1);

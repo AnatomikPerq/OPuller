@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { exportAi, exportAiAll, psString, isEncodable, postScriptFontName } from '@/io/aiExport';
+import { exportAi, exportAiAll, psString, isEncodable, postScriptFontName, chooseAiEncoding } from '@/io/aiExport';
+import { setPreparedRaster, rgbaToHexLines } from '@/io/rasterHex';
+import { makeImage } from '@/model/nodes';
 import { importAi, rgbToBmpDataUrl, decodeAiString } from '@/io/aiImport';
 import { createDocument, makeShape, makePath, makeArtboard, makeText } from '@/model/nodes';
 import { sampleDocument } from './aiSample';
@@ -94,6 +96,56 @@ describe('AI export: syntax', () => {
     expect(r.ai).toContain('%AI5_NumLayers: 1');
     const withHidden = exportAi(sampleDocument(), { includeHidden: true });
     expect(withHidden.ai).toContain('0.0706 0.2039 0.3373 Xa'); // #123456
+  });
+});
+
+describe('AI export: large rasters', () => {
+  it('exports a document with a multi-megapixel image without overflowing the stack (plan item 4)', () => {
+    // 2000×2000 RGB → 333 334 hex lines in one layer; spreading them into call arguments used to throw RangeError
+    const w = 2000;
+    const h = 2000;
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < rgba.length; i += 4) {
+      rgba[i] = i % 251;
+      rgba[i + 1] = 128;
+      rgba[i + 2] = 7;
+      rgba[i + 3] = 255;
+    }
+    setPreparedRaster('img:big', { width: w, height: h, hex: rgbaToHexLines(rgba) });
+    const doc = createDocument({ name: 'big', width: 800, height: 600 });
+    const img = makeImage('img:big', w, h, { name: 'Big', width: 400, height: 400 });
+    img.transform = translate(100, 100);
+    addNode(doc, img, doc.layers[0]);
+    const r = exportAi(doc, { scope: 'artboard' });
+    expect(r.ai).toContain(`0 0 ${w} ${h} ${w} ${h} 8 3 0 0 0 0 XI`);
+    expect(r.ai.split('\n').length).toBeGreaterThan((w * h * 6) / 72);
+    expect(r.warnings).toEqual([]);
+    const v = validateAi(r.ai);
+    expect(v.errors).toEqual([]);
+    expect(v.ops.XI).toBe(1);
+  });
+
+  it('a subpath with a hundred thousand anchors is written without spreading its operators', () => {
+    const anchors = [] as Array<{ point: { x: number; y: number }; handleIn: null; handleOut: null; kind: 'corner' }>;
+    for (let i = 0; i < 150_000; i++) anchors.push({ point: { x: (i % 500) * 0.5, y: Math.floor(i / 500) * 0.5 }, handleIn: null, handleOut: null, kind: 'corner' });
+    const doc = createDocument({ name: 'huge', width: 800, height: 600 });
+    const path = makePath([{ anchors, closed: true }], { name: 'Huge', fill: { type: 'solid', color: '#ff0000', opacity: 1 } });
+    addNode(doc, path, doc.layers[0]);
+    const r = exportAi(doc, { scope: 'artboard' });
+    expect(validateAi(r.ai).errors).toEqual([]);
+  });
+});
+
+describe('AI export: text encoding choice', () => {
+  it('picks Windows-1251 when the text is mostly Cyrillic and Latin-1 otherwise (plan item 10)', () => {
+    expect(chooseAiEncoding([])).toBe('latin1');
+    expect(chooseAiEncoding([{ text: 'Hello' }])).toBe('latin1');
+    expect(chooseAiEncoding([{ text: 'Привет, мир' }])).toBe('cp1251');
+    expect(chooseAiEncoding([{ text: 'Лисёнок' }, { text: 'café' }])).toBe('latin1'); // tie → Latin-1
+    expect(chooseAiEncoding([{ text: 'Лисёнок' }, { text: 'Осень' }, { text: 'café' }])).toBe('cp1251');
+    expect(chooseAiEncoding([{ text: 'ASCII' }, { text: 'Осень' }])).toBe('cp1251'); // ASCII fits both, so Windows-1251 keeps everything editable
+    expect(chooseAiEncoding([{ text: 'ASCII' }, { text: 'café' }])).toBe('latin1');
+    expect(chooseAiEncoding([{ text: '日本語' }, { text: 'Осень' }])).toBe('cp1251');
   });
 });
 

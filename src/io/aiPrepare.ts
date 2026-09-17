@@ -17,16 +17,28 @@ import { variableWidthOutlines } from '@/geometry/widthProfile';
 import { effectiveSubPaths } from '@/canvas/effectiveGeometry';
 import { textToOutlinePaths } from '@/text/outline';
 import { prepareRasterImages } from './rasterHex';
-import { isEncodable } from './aiExport';
+import { isEncodable, chooseAiEncoding } from './aiExport';
 
-/** 'auto' keeps ASCII text editable and outlines the rest; 'editable' keeps every text object (see AiOptions.encoding); 'outlines' converts all text. */
+export { chooseAiEncoding };
+
+/**
+ * 'auto' and 'editable' keep every text object whose characters fit the text encoding
+ * editable and outline the rest; 'outlines' converts all text. (The two differ only in
+ * intent: 'editable' is what the UI calls "keep text editable".)
+ */
 export type AiTextMode = 'auto' | 'editable' | 'outlines';
+
+export type AiEncoding = 'latin1' | 'cp1251';
 
 export interface AiPrepareOptions {
   /** restrict the work to these subtrees (selection export) */
   ids?: ID[];
   textMode?: AiTextMode;
-  encoding?: 'latin1' | 'cp1251';
+  /**
+   * Text encoding of the file; 'auto' (default) picks the one that keeps the most text
+   * editable — Windows-1251 as soon as the document is mostly Cyrillic, Latin-1 otherwise.
+   */
+  encoding?: AiEncoding | 'auto';
 }
 
 export interface AiPrepareResult {
@@ -34,7 +46,20 @@ export interface AiPrepareResult {
   /** text objects that could not be outlined (kept editable) */
   failed: string[];
   warnings: string[];
+  /** the encoding the exporter must write text with (the auto choice resolved) */
+  encoding: AiEncoding;
 }
+
+/** Text nodes of the export scope with content. */
+function textNodes(doc: Document, ids?: ID[]): TextNode[] {
+  const out: TextNode[] = [];
+  for (const id of scopeIds(doc, ids)) {
+    const nd = doc.nodes[id];
+    if (nd && nd.type === 'text' && nd.text.trim()) out.push(nd as TextNode);
+  }
+  return out;
+}
+
 
 function scopeIds(doc: Document, ids?: ID[]): ID[] {
   if (!ids) return Object.keys(doc.nodes).filter((id) => doc.nodes[id].type !== 'layer');
@@ -75,14 +100,13 @@ function expandWidthProfile(doc: Document, id: ID): void {
   addNode(doc, strokePath, g.id);
 }
 
-function needsOutline(doc: Document, t: TextNode, mode: AiTextMode, encoding: 'latin1' | 'cp1251'): boolean {
+function needsOutline(doc: Document, t: TextNode, mode: AiTextMode, encoding: AiEncoding): boolean {
   if (mode === 'outlines') return true;
   if (t.kind === 'path' && t.pathId && doc.nodes[t.pathId]) return true;
   if (t.fill.type !== 'none' && t.fill.type !== 'solid') return true;
   if (t.stroke.paint.type !== 'none' && t.stroke.paint.type !== 'solid') return true;
   if (t.stroke.paint.type !== 'none' && (t.stroke.widthProfile?.length || t.stroke.brush)) return true;
-  if (mode === 'editable') return !isEncodable(t.text, encoding);
-  return !isEncodable(t.text, 'ascii');
+  return !isEncodable(t.text, encoding);
 }
 
 async function outlineText(doc: Document, t: TextNode, failed: string[]): Promise<void> {
@@ -110,19 +134,23 @@ export async function prepareDocumentForAi(source: Document, opts: AiPrepareOpti
   const warnings: string[] = [];
   const failed: string[] = [];
   const mode = opts.textMode ?? 'auto';
-  const encoding = opts.encoding ?? 'latin1';
+  const encoding: AiEncoding = opts.encoding && opts.encoding !== 'auto' ? opts.encoding : chooseAiEncoding(textNodes(doc, opts.ids));
   // 1. text that the format cannot keep editable → outlines (first: text on a path must still find its path
   //    before brush expansion replaces path nodes)
   let outlined = 0;
-  for (const id of scopeIds(doc, opts.ids)) {
-    const nd = doc.nodes[id];
-    if (!nd || nd.type !== 'text' || !nd.text.trim()) continue;
-    if (needsOutline(doc, nd as TextNode, mode, encoding)) {
-      await outlineText(doc, nd as TextNode, failed);
+  let unencodable = 0;
+  for (const nd of textNodes(doc, opts.ids)) {
+    if (needsOutline(doc, nd, mode, encoding)) {
+      if (mode !== 'outlines' && !isEncodable(nd.text, encoding)) unencodable++;
+      await outlineText(doc, nd, failed);
       outlined++;
     }
   }
-  if (outlined && mode !== 'outlines') warnings.push(`${outlined} text object${outlined === 1 ? '' : 's'} converted to outlines (text on a path, gradient text or characters outside the AI text encoding)`);
+  if (outlined && mode !== 'outlines') {
+    const enc = encoding === 'cp1251' ? 'Windows-1251' : 'Latin-1';
+    const why = unencodable ? `characters outside the ${enc} text encoding${encoding === 'latin1' ? ' (encoding "cp1251" keeps Cyrillic editable)' : ''}, ` : '';
+    warnings.push(`${outlined} text object${outlined === 1 ? '' : 's'} converted to outlines (${why}text on a path, gradient text, brush or variable-width strokes); text "outlines" converts all text`);
+  }
   // 2. live appearance: brush strokes, warp / distort / 3D geometry effects
   const ids = scopeIds(doc, opts.ids);
   const r = expandAppearance(doc, ids);
@@ -138,7 +166,7 @@ export async function prepareDocumentForAi(source: Document, opts: AiPrepareOpti
   for (const id of scopeIds(doc, opts.ids)) expandWidthProfile(doc, id);
   // 5. raster images
   await prepareRasterImages(doc, opts.ids ? scopeIds(doc, opts.ids) : undefined);
-  return { doc, failed, warnings };
+  return { doc, failed, warnings, encoding };
 }
 
 /** Paths of the tree in paint order (helper for tests). */

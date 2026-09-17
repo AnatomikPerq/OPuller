@@ -56,7 +56,7 @@ interface ExportSettings {
   aiFormat: AiFlavor;
   /** AI: how text is written (see aiPrepare) */
   aiText: AiTextMode;
-  aiEncoding: 'latin1' | 'cp1251';
+  aiEncoding: 'auto' | 'latin1' | 'cp1251';
   /** AI: process colours as CMYK inks; null = follow the document colour mode */
   aiCmyk: boolean | null;
   /** printer's marks */
@@ -89,7 +89,7 @@ const DEFAULTS: ExportSettings = {
   epsCmyk: false,
   aiFormat: 'legacy',
   aiText: 'auto',
-  aiEncoding: 'latin1',
+  aiEncoding: 'auto',
   aiCmyk: null,
   marks: false,
   trimMarks: true,
@@ -140,10 +140,10 @@ function svgOptions(st: ExportSettings, ids: ID[], artboardId: ID | null, region
   };
 }
 
-async function documentForExport(doc: Document, st: ExportSettings, ids: ID[]): Promise<{ doc: Document; failed: string[]; warnings?: string[] }> {
+async function documentForExport(doc: Document, st: ExportSettings, ids: ID[]): Promise<{ doc: Document; failed: string[]; warnings?: string[]; encoding?: 'latin1' | 'cp1251' }> {
   if (st.format === 'ai' && st.aiFormat === 'legacy') {
     const r = await prepareDocumentForAi(doc, { ids: st.scope === 'selection' ? ids : undefined, textMode: st.aiText, encoding: st.aiEncoding });
-    return { doc: r.doc, failed: r.failed, warnings: r.warnings };
+    return { doc: r.doc, failed: r.failed, warnings: r.warnings, encoding: r.encoding };
   }
   if (st.format !== 'svg' && st.format !== 'pdf' && st.format !== 'eps' && st.format !== 'ai') return { doc, failed: [] };
   if (!st.outlineText && st.format !== 'eps') return { doc, failed: [] };
@@ -268,14 +268,23 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
     setBusy('Exporting…');
     const s = getState();
     try {
-      const { doc: d, failed, warnings: prepWarnings } = await documentForExport(doc, st, ids);
+      const { doc: d, failed, warnings: prepWarnings, encoding: aiEncoding } = await documentForExport(doc, st, ids);
       if (failed.length) s.toast(`Some text could not be outlined: ${failed[0]}`, 'info');
       const ext = extFor(st.format);
       const mime = mimeFor(st.format);
       let count = 0;
-      const aiPdf = st.format === 'ai' && st.aiFormat === 'pdf';
+      let aiPdf = st.format === 'ai' && st.aiFormat === 'pdf';
+      let results: ReturnType<typeof exportAiAll> = [];
       if (st.format === 'ai' && !aiPdf) {
-        const results = exportAiAll(d, { ...svgOptions(st, ids, activeArtboardId, region), cmyk: st.aiCmyk ?? doc.colorMode === 'cmyk', encoding: st.aiEncoding });
+        try {
+          results = exportAiAll(d, { ...svgOptions(st, ids, activeArtboardId, region), cmyk: st.aiCmyk ?? doc.colorMode === 'cmyk', encoding: aiEncoding ?? 'latin1' });
+        } catch (err: any) {
+          // never lose the artwork: write the PDF-compatible flavour instead and say so
+          s.toast(`Illustrator 8 export failed (${err?.message ?? err}); writing a PDF-compatible .ai instead`, 'error');
+          aiPdf = true;
+        }
+      }
+      if (st.format === 'ai' && !aiPdf) {
         const notes = Array.from(new Set([...(prepWarnings ?? []), ...results.flatMap((r) => r.warnings)]));
         for (let i = 0; i < results.length; i++) {
           const r = results[i];
@@ -515,13 +524,28 @@ export function ExportDialog({ props, close }: { props: ExportDialogProps; close
                         onChange={(v) => patch({ aiText: v })}
                         width={250}
                         options={[
-                          { value: 'auto', label: 'Editable (Latin), outline the rest' },
-                          { value: 'editable', label: 'Editable (all, Windows-1251 for Cyrillic)' },
+                          { value: 'auto', label: 'Editable when it fits the encoding, outline the rest' },
                           { value: 'outlines', label: 'Convert all text to outlines' },
                         ]}
                         id="export-ai-text"
                       />
                     </Row>
+                    {st.aiText !== 'outlines' ? (
+                      <Row gap={6}>
+                        <span className="io-hint">Encoding</span>
+                        <Select
+                          value={st.aiEncoding}
+                          onChange={(v) => patch({ aiEncoding: v })}
+                          width={250}
+                          options={[
+                            { value: 'auto', label: 'Auto (Windows-1251 for Cyrillic text)' },
+                            { value: 'latin1', label: 'Latin-1 / Windows-1252' },
+                            { value: 'cp1251', label: 'Windows-1251 (Cyrillic)' },
+                          ]}
+                          id="export-ai-encoding"
+                        />
+                      </Row>
+                    ) : null}
                     <Checkbox checked={st.aiCmyk ?? doc.colorMode === 'cmyk'} onChange={(v) => patch({ aiCmyk: v })} label="CMYK colours (k / K)" title="Write process colours as inks; spot swatches are always written as named custom colours" />
                     <Checkbox checked={st.includeHidden} onChange={(v) => patch({ includeHidden: v })} label="Include hidden objects" />
                     <span className="io-hint">Brushes, patterns, effects and variable-width strokes are expanded; opacity and blend modes are not part of the format. One file per artboard.</span>

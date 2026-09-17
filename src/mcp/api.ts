@@ -449,13 +449,19 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       const r = eps.exportEps(d, { ...opts, cmyk: !!p.cmyk });
       return { format, text: r.eps, name: r.name, width: r.width, height: r.height };
     }
+    const fallbackWarnings: string[] = [];
     if (format === 'ai' && p.aiFormat !== 'pdf') {
       // Illustrator 8 (legacy) native format: editable layers, text, gradients, spot colours
-      const { exportAi } = await import('@/io/aiExport');
-      const { prepareDocumentForAi } = await import('@/io/aiPrepare');
-      const prep = await prepareDocumentForAi(s.doc, { ids: opts.ids, textMode: p.outlineText ? 'outlines' : (p.text ?? 'auto'), encoding: p.encoding ?? 'latin1' });
-      const r = exportAi(prep.doc, { ...opts, cmyk: p.cmyk === undefined ? undefined : !!p.cmyk, encoding: p.encoding ?? 'latin1' });
-      return { format, text: r.ai, name: `${r.name}.ai`, width: r.width, height: r.height, warnings: [...prep.warnings, ...r.warnings], failed: prep.failed };
+      try {
+        const { exportAi } = await import('@/io/aiExport');
+        const { prepareDocumentForAi } = await import('@/io/aiPrepare');
+        const prep = await prepareDocumentForAi(s.doc, { ids: opts.ids, textMode: p.outlineText ? 'outlines' : (p.text ?? 'auto'), encoding: p.encoding ?? 'auto' });
+        const r = exportAi(prep.doc, { ...opts, cmyk: p.cmyk === undefined ? undefined : !!p.cmyk, encoding: prep.encoding });
+        return { format, aiFormat: 'legacy', text: r.ai, name: `${r.name}.ai`, width: r.width, height: r.height, encoding: prep.encoding, warnings: [...prep.warnings, ...r.warnings], failed: prep.failed };
+      } catch (err: any) {
+        // never lose the artwork: fall back to the PDF-compatible flavour and say so
+        fallbackWarnings.push(`Illustrator 8 export failed (${err?.message ?? err}); a PDF-compatible .ai was written instead`);
+      }
     }
     if (format === 'pdf' || format === 'ai') {
       const { exportPdf } = await import('@/io/pdf');
@@ -465,7 +471,7 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       const buf = new Uint8Array(await r.blob.arrayBuffer());
       let bin = '';
       for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-      return { format, base64: btoa(bin), pages: r.pages, name: `${s.doc.name}.${format}` };
+      return { format, aiFormat: format === 'ai' ? 'pdf' : undefined, base64: btoa(bin), pages: r.pages, name: `${s.doc.name}.${format}`, warnings: fallbackWarnings.length ? fallbackWarnings : undefined };
     }
     const r = exportSvg(s.doc, { ...opts, pretty: p.pretty ?? true });
     return { format: 'svg', text: r.svg, name: r.name, width: r.width, height: r.height };
