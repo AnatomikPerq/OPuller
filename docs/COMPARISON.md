@@ -162,7 +162,7 @@ Image Trace. То же API — в консоли `window.__opuller.mcp`.
 | Отсутствует | Насколько важно | Возможная замена сейчас |
 | --- | --- | --- |
 | ICC-профили, цветопроба, цветоделение, overprint | важно для серьёзной типографии | CMYK-документ + PDF/EPS с метками; профили применяет типография |
-| Puppet Warp, Repeat (radial/grid/mirror), Global Edit | низко | Liquify-кисти и Envelope Mesh; Transform Each + Duplicate |
+| Puppet Warp, Repeat (radial/grid/mirror), Global Edit | низко | Liquify-кисти и Envelope Mesh; эффект Transform с копиями; Transform Each + Duplicate |
 | 3D-материалы, текстуры, тени с трассировкой | низко | Extrude/Revolve/Rotate с затенением |
 | Продвинутый текст: переносы, OpenType-features, глифы, вертикальный набор, связанные блоки, стили абзацев/символов | средне | базовый rich-text |
 | Динамические символы, 9-slice | низко | Redefine символа |
@@ -176,6 +176,45 @@ Image Trace. То же API — в консоли `window.__opuller.mcp`.
   скриншотом; символы, кисти, узоры, диаграммы и перспектива тоже доступны через инструменты MCP.
 * Работает в браузере, ставится из репозитория, без подписки; данные остаются локально.
 * Тесты: 230 unit + 144 e2e сценариев покрывают инструменты, панели, экспорт/импорт и ИИ-мост.
+
+### Шаги уроков Illustrator → OPuller
+
+Таблица соответствия для повторения пошаговых уроков (через UI или MCP). Известные различия
+отмечены отдельно.
+
+| Illustrator | OPuller (UI) | OPuller (MCP) |
+| --- | --- | --- |
+| Прямоугольник со скруглёнными углами, разные радиусы (Transform → Corners) | Properties → Shape: четыре радиуса; каждый угол может занять всю сторону минус сосед | `opuller_create_shape {kind:"rect", radii:[tl,tr,br,bl]}`, `opuller_update_nodes {patch:{shape:{radii}}}` |
+| Живые углы (corner widget, Direct Selection) | инструмент Direct Selection (A): кружок внутри каждого угла — тянуть; двойной клик — диалог Corners; Object → Path → Corners… | `opuller_corners {ids, radius, anchors?}`, `opuller_pen {anchors:[{…, cornerRadius}]}` |
+| Effect → Distort & Transform → Zig Zag / Pucker & Bloat / Roughen / Transform / Tweak | те же пункты меню Effect → Distort & Transform; панель Appearance правит параметры | `opuller_effect {op:"add", type:"zigZag"|"puckerBloat"|"roughen"|"transform"|"tweak", params}` |
+| Effect → Warp (Arc, Bulge, …) | Effect → Distort & Transform → Warp… | `opuller_effect {type:"warp", params:{style, bend, horizontal, hDistort, vDistort}}` |
+| Effect → Stylize → Round Corners | Effect → Stylize → Round Corners (работает и после варпа) | `opuller_effect {type:"roundCorners", params:{radius}}` |
+| Object → Expand Appearance | Object → Expand Appearance | `opuller_effect {op:"expand"}` |
+| Rotate (R), угол +26° | инструмент Rotate / диалог Transform → Rotate; плюс = против часовой | `opuller_transform {rotate: 26}` (против часовой) |
+| Scale + «Scale Strokes & Effects», «Scale Corners» | Preferences → Scale strokes; диалог Transform | `opuller_transform {scale, scaleStrokes, scaleEffects, scaleCorners}` |
+| Align → Horizontal/Vertical Align Center, Align to Artboard / Key Object, Distribute Spacing | панель Align (Shift+F7) | `opuller_align {h, v, to, key, distribute, spacing}` |
+| Object → Blend → Make / Blend Options (Specified Steps) | Object → Blend → Make (Ctrl+Alt+B), Blend Options… | `opuller_blend {op:"make", steps}` / `{op:"options", spacing, distance}` / `expand` |
+| Object → Path → Offset Path | Object → Path → Offset Path… | `opuller_offset_path {distance, join, mode}` |
+| Object → Path → Simplify | Object → Path → Simplify… | `opuller_simplify {tolerance, cornerAngle}` |
+| Pathfinder → Minus Front / Unite … | панель Pathfinder | `opuller_pathfinder {op}` (мелкие «огрызки» удаляются, `cleanup:false` — оставить) |
+| Pencil (N) с текущей заливкой | Pencil: рисует текущим оформлением (выделение объекта делает его стиль текущим, как в Illustrator) | `opuller_set_appearance {fill, stroke}` → `opuller_pencil {points, fidelity, smoothness, fillStrokes}` |
+| Pen (P) | Pen | `opuller_pen {anchors:[{x, y, handleIn, handleOut}], closed}` |
+| Warp Tool (Shift+R), широкий мазок | инструменты Liquify (кисть — Alt-перетаскивание) | `opuller_liquify {kind:"warp", points:[…], options:{width, intensity}}` |
+| Swatches → New Swatch / Global | панель Swatches | `opuller_swatches {op:"add", name, color, kind:"global"}`, `{op:"apply", name, target, tint}` |
+| Шрифт из файла (Champion HTF и т. п.) | Character → семейство → «Upload font…» | `opuller_fonts {op:"load", file}` |
+| Save As → Illustrator (.ai) | File → Export → AI (Illustrator 8 или PDF-совместимый) | `opuller_export_file {file:"x.ai", text:"auto"}` — кодировка кириллицы выбирается сама |
+
+Известные отличия от Illustrator:
+
+* Warp → Bulge и другие стили считаются envelope-моделью (бокс деформируется по гладкому
+  профилю, содержимое интерполируется); эталонных растров Illustrator в репозитории нет, так
+  что форма может отличаться в деталях. Horizontal/Vertical distortion — перспектива вдоль оси.
+* Эффекты применяются в порядке списка панели Appearance (как в Illustrator); живые углы
+  (corner widget) — до эффектов.
+* Углы поворота везде против часовой стрелки; файлы проектов формата 1 (угол узора,
+  вращение scatter-кисти) мигрируют при открытии.
+* Radius прямоугольника обрезается по-угловому: пара радиусов, не влезающая в сторону,
+  масштабируется пропорционально (CSS `border-radius`), остальные углы не трогаются.
 
 ### Итоговая оценка покрытия
 

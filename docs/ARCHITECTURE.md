@@ -109,8 +109,10 @@ s.revert();                                          // drop uncommitted changes
   `addToSelection`, `toggleSelection`, `clearSelection`.
 * Viewport: `zoom`, `pan` (screen = world*zoom + pan), `setZoom(z, screenAnchor)`,
   `zoomToRect`. Helpers `screenToWorld/worldToScreen` in store.ts.
-* `s.appearance` = fill/stroke/textStyle used for **new** objects (Illustrator
-  semantics: when nothing is selected, colour edits change these defaults).
+* `s.appearance` = fill/stroke/textStyle used for **new** objects. Illustrator semantics:
+  selecting an object copies its appearance into these defaults (`appearanceFromSelection`),
+  colour edits with a selection change both, and the drawing tools read `s.appearance` only —
+  never the selection — so an explicit change of the defaults while something is selected wins.
   Use `commands/appearance.ts` (`setFillPaint`, `setStrokePaint`, `setStrokeProps`,
   `setTextStyle`, `useCurrentAppearance`) instead of touching nodes directly.
 * `s.view` (rulers/grid/guides/snap/outline...), `s.prefs` (units, nudge, theme,
@@ -282,7 +284,7 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 
 | Area | Folder(s) | Notes |
 | --- | --- | --- |
-| Path editing tools | `src/tools/{direct,pen,anchor,curvature,lasso}`, shared helpers in `src/tools/pathEditing` | world-space anchor/handle editing |
+| Path editing tools | `src/tools/{direct,pen,anchor,curvature,lasso}`, shared helpers in `src/tools/pathEditing` (`corners.ts` = live corner widgets) | world-space anchor/handle editing; `anchor.cornerRadius` (live corners) is applied by `effectiveSubPaths` before effects and by `worldSubPaths(doc, id, { liveCorners: true })` for destructive operations; `geometry/corners.ts` holds the rounding maths (tangent-break corners, trims across segments) and `clampRectRadii` |
 | Freehand tools | `src/tools/{pencil,brush,blob,smooth,patheraser,eraser}`, `src/tools/freehand` | cutting/sampling helpers reused by the Knife |
 | Type | `src/tools/text`, `src/text/{fonts,layout,outline,editing}.ts`, panels `character`, `paragraph`, `src/commands/typeCommands` | |
 | Transform | `src/transform`, `src/tools/{rotate,scale,reflect,shear,freetransform}`, panels `transform`, `align`, dialogs `transform` | angles use Illustrator's convention |
@@ -299,14 +301,14 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 | Liquify | `src/liquify` (`brush.ts`, `engine.ts`, `register.tsx`), `src/tools/liquify` | seven tools share one gesture engine (`LiquifySession`); brush dimensions are shared options; `applyLiquify` scripts a gesture |
 | Samples | `src/samples` | File > Open Sample; the bird is built with boolean ops at load |
 | Help & preferences | `src/help` | Preferences (Ctrl+K), Keyboard Shortcuts, About, Welcome screen |
-| AI bridge / MCP | `src/mcp` (page side: `api.ts` methods, `bridge.ts` WebSocket client), `mcp/server.ts` (MCP stdio server), `.mcp.json` | `window.__opuller.mcp` exposes the same methods |
+| AI bridge / MCP | `src/mcp` (page side: `api.ts` methods, `bridge.ts` WebSocket client), `mcp/server.ts` (MCP stdio server), `mcp/registry.ts` (port registry), `.mcp.json` | `window.__opuller.mcp` exposes the same methods. The server binds the first free port of 5187–5197, records it in `<tmp>/opuller-bridge.json`; the dev server serves the live ports at `/__opuller/bridge-ports` and the page connects to every listed server (`?bridgePort=` for built copies). Dialog commands take an argument (`runCommand('path.offset', params)` → `applyDialog`) |
 | Colour management | `src/color/{globals,editColors,libraries,actions}.ts`, `src/color/register.tsx`, `src/ui/dialogs/recolor` | global swatches link paints via `swatchId` + `tint`; spot swatches have `kind: 'spot'`; CMYK values live on swatches (`cmyk`) and the document (`colorMode`) |
 | Print | `src/print` (`marks.ts`, `store.ts`, `BleedFields.tsx`), `src/io/regions.ts` | `Document.bleed`; export regions add bleed + printer marks for SVG/PDF/EPS |
 | Symbols | `src/symbols` (`ops.ts`, `library.ts`, `SymbolsPanel.tsx`), `src/tools/symbolSprayer` | `Document.symbols`; instances are groups with `data.symbol {id, version}`, sets carry `data.symbolSet`; editing = isolation of a temporary copy, redefine on exit |
 | Patterns | `src/patterns` (`tile.ts`, `ops.ts`, `render.ts`, `refresh.ts`, `library.ts`) | `PatternDef` may hold editable `nodes/root`; tile editing group has `data.patternEdit`; renderer draws `<pattern>` cells sized by `patternCell` |
 | Brushes | `src/brushes` (`spine.ts`, `geometry.ts`, `ops.ts`, `library.ts`, `BrushesPanel.tsx`) | `StrokeStyle.brush` references `Document.brushes`; the renderer draws `brushItems` instead of the stroke; expander `'brush'` bakes them |
 | Gradients (mesh / freeform) | `src/gradients` (`mesh.ts`, `freeform.ts`, `raster.ts`), `src/tools/mesh`, `src/tools/gradient/freeform.tsx`, `src/ui/panels/gradient/FreeformFields.tsx` | `Paint` types `'mesh'` and `'freeform'` are rasterised into a `<pattern><image>` tile (`rasterGradientTile`) |
-| Distort & Warp | `src/distort` (`warp.ts`, `envelope.ts`, `map.ts`, `register.tsx`), `src/tools/mesh` (drags envelope points) | effects `warp`, `freeDistort`, `meshDistort`, `coonsDistort` are geometry effects (`registerGeometryEffect`); envelope groups carry `data.envelope` |
+| Distort & Warp | `src/distort` (`warp.ts`, `envelope.ts`, `map.ts`, `transformEffects.ts`, `register.tsx`, `effectDialogs/`), `src/tools/mesh` (drags envelope points) | effects `warp`, `freeDistort`, `meshDistort`, `coonsDistort`, `zigZag`, `puckerBloat`, `roughen`, `transform`, `tweak` are geometry effects (`registerGeometryEffect`, applied in list order after live corners); envelope groups carry `data.envelope`; the `geometry` expander bakes every registered geometry effect |
 | 3D | `src/effects3d` (`geometry.ts`, `register.tsx`) | `extrude` / `revolve` render faces (`FacesView`), `rotate3d` is a geometry effect; expander `'3d'` bakes faces into paths |
 | Live Paint | `src/livepaint` (`ops.ts`, `register.tsx`), `src/tools/livepaint` | group with `data.livePaint`; children are faces/edges (`data.lpKind`) computed with `computeFaceSet` + `splitAtIntersections` |
 | Graphs | `src/graphs` (`build.ts`, `ops.ts`, `register.tsx`), `src/tools/graph` | group with `data.graph` (spec) + `data.frame`; regenerated from the spec, never edited by hand |
