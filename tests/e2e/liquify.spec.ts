@@ -35,6 +35,51 @@ test.describe('liquify tools', () => {
     await openApp(page);
   });
 
+  test('one wide warp stroke through a rectangle gives a smooth, simple outline with few anchors (plan item 9)', async ({ page }) => {
+    const id = await drawRect(page, 100, 100, 300, 200);
+    await withStore(page, (st) => st.clearSelection());
+    // a scripted stroke of two points: the engine must interpolate the whole way, not jump
+    const r = await page.evaluate((id) => (window as any).__opuller.liquify.applyLiquify({ kind: 'warp', ids: [id], points: [{ x: 40, y: 200 }, { x: 460, y: 200 }], options: { width: 120, height: 120, intensity: 50, detail: 2, simplify: 50 } }), id);
+    expect(r.changed).toBe(true);
+    const n = await nodeById(page, id);
+    expect(n.subpaths).toHaveLength(1);
+    expect(n.subpaths[0].closed).toBe(true);
+    const count = await anchorCount(page, id);
+    expect(count).toBeLessThanOrEqual(40);
+    expect(count).toBeGreaterThan(4);
+    // the outline is simple: no two non-adjacent segments of the flattened polygon intersect
+    const crossings = await page.evaluate((id) => {
+      const api = (window as any).__opuller;
+      const doc = api.store.getState().doc;
+      const sps = api.api.document.worldSubPaths(doc, id);
+      const pts: Array<{ x: number; y: number }> = api.api.path.flattenSubPath(sps[0], 0.2);
+      const n = pts.length;
+      const cross = (a: any, b: any, c: any) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+      let hits = 0;
+      for (let i = 0; i < n; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % n];
+        for (let j = i + 2; j < n; j++) {
+          if (i === 0 && j === n - 1) continue;
+          const c = pts[j];
+          const d = pts[(j + 1) % n];
+          const d1 = cross(a, b, c);
+          const d2 = cross(a, b, d);
+          const d3 = cross(c, d, a);
+          const d4 = cross(c, d, b);
+          if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) hits++;
+        }
+      }
+      return hits;
+    }, id);
+    expect(crossings).toBe(0);
+    // the stroke pushed the right edge to the right and dented the left one; the rest of the box is intact
+    const b = (await worldBounds(page, id))!;
+    expect(b.x + b.width).toBeGreaterThan(410);
+    expect(b.y).toBeCloseTo(100, 1);
+    expect(b.y + b.height).toBeCloseTo(300, 1);
+  });
+
   test('warp tool pushes an edge of the path under the brush in one undo step', async ({ page }) => {
     const id = await drawRect(page, 100, 100, 300, 200);
     await withStore(page, (st) => st.clearSelection());
@@ -103,16 +148,23 @@ test.describe('liquify tools', () => {
     expect(shrunk).toBeLessThan(grown * 0.9);
     s = await getState(page);
     expect(s.past[s.past.length - 1].label).toBe('Pucker Tool');
-    // twirl (scripted engine, counter-clockwise on screen for a positive rate):
-    // the top-left corner of a square around the brush centre travels to the lower left
+    // twirl (scripted engine, counter-clockwise on screen for a positive rate): the corners of a
+    // square around the brush centre turn by 240° × falloff(0.57) ≈ 95°, so the top-left corner
+    // travels to the lower left
     const sq = await drawRect(page, 300, 300, 200, 200);
     await withStore(page, (st) => st.clearSelection());
     await page.evaluate((id) => (window as any).__opuller.liquify.applyLiquify({ kind: 'twirl', ids: [id], points: [{ x: 400, y: 400 }], steps: 20, options: { width: 500, height: 500, intensity: 100, rate: 120, simplify: 0 } }), sq);
     const after = await nodeById(page, sq);
     const pts = after.subpaths[0].anchors.map((a: any) => a.point);
-    const near = (x: number, y: number, r: number) => pts.some((p: any) => Math.hypot(p.x - x, p.y - y) < r);
-    expect(near(300, 300, 25)).toBe(false);
-    expect(near(347, 531, 30)).toBe(true);
+    const angleOf = (p: any) => (Math.atan2(p.y - 400, p.x - 400) * 180) / Math.PI;
+    // every corner keeps its distance from the centre and turned by 80..110 degrees counter-clockwise on screen (negative screen angle change)
+    const turned = pts.map((p: any) => ({ d: Math.hypot(p.x - 400, p.y - 400), a: angleOf(p) }));
+    for (const t of turned) expect(Math.abs(t.d - 141.4)).toBeLessThan(3);
+    const startAngles = [-135, -45, 45, 135];
+    const deltas = turned.map((t: any) => startAngles.map((a0) => ((t.a - a0 + 540) % 360) - 180));
+    // one of the four corner assignments explains every point with a turn of 80..110 degrees (CCW on screen = negative)
+    const ok = deltas.every((ds: number[]) => ds.some((d) => d < -80 && d > -110));
+    expect(ok).toBe(true);
     s = await getState(page);
     expect(s.past[s.past.length - 1].label).toBe('Twirl Tool');
   });

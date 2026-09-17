@@ -144,11 +144,16 @@ export function brushDistance(f: Frame, p: Vec): number {
   return Math.hypot(u, v);
 }
 
-/** Smooth falloff: 1 at the centre, 0 at the edge. */
+/**
+ * Brush profile: 1 at the centre, 0 at the edge, a raised cosine in between. The previous
+ * quartic (1 − r²)² was peaky (0.13 at r = 0.8) and left a hard shoulder where the brush
+ * edge passed; the cosine hands the material over gradually, so a wide stroke gives a soft
+ * wave instead of a shifted band.
+ */
 export function falloff(r: number): number {
   if (r >= 1) return 0;
-  const t = 1 - r * r;
-  return t * t;
+  if (r <= 0) return 1;
+  return 0.5 * (1 + Math.cos(Math.PI * r));
 }
 
 /** Outline of the brush as a polygon (world units), for overlays. */

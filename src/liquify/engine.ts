@@ -236,8 +236,10 @@ export class LiquifySession {
     const dy = p.y - from.y;
     const dist = Math.hypot(dx, dy);
     if (dist < 1e-6) return false;
+    // sub-steps of at most a twelfth of the brush: a fast or scripted drag is applied along its
+    // whole path instead of in a few big jumps that cut the shape into bands
     const stepLen = Math.max(1.5, Math.min(this.opts.width, this.opts.height) / 12);
-    const n = Math.max(1, Math.min(8, Math.ceil(dist / stepLen)));
+    const n = Math.max(1, Math.min(400, Math.ceil(dist / stepLen)));
     let any = false;
     for (let i = 1; i <= n; i++) {
       const target = { x: from.x + (dx * i) / n, y: from.y + (dy * i) / n };
@@ -305,10 +307,22 @@ export function applyLiquify(p: ApplyLiquifyParams): { changed: boolean; targets
   if (kind === 'warp') {
     for (let i = 1; i < pts.length; i++) session.warpTo(pts[i], pressure);
   } else {
+    // timed tools: `steps` applications at every point; a path of several points is interpolated
+    // so the brush is applied along the stroke (about one site per quarter brush)
     const steps = Math.max(1, Math.min(500, Math.round(p.steps ?? 10)));
-    for (const q of pts) {
+    const site = Math.max(2, Math.min(opts.width, opts.height) / 4);
+    const sites: Vec[] = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      const d = Math.hypot(b.x - a.x, b.y - a.y);
+      const n = Math.max(1, Math.min(200, Math.ceil(d / site)));
+      for (let k = 1; k <= n; k++) sites.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+    }
+    const perSite = pts.length > 1 ? Math.max(1, Math.round(steps / Math.max(1, sites.length / pts.length))) : steps;
+    for (const q of sites) {
       session.moveTo(q);
-      for (let k = 0; k < steps; k++) session.step(undefined, pressure);
+      for (let k = 0; k < perSite; k++) session.step(undefined, pressure);
     }
   }
   const changed = session.finish();
