@@ -5,6 +5,11 @@ import { polylineSubPath, subpathToCubics, pathBounds, flattenSubPath, segmentCo
 import { warpSubPaths } from '@/distort/warp';
 import { cubicLength } from '@/geometry/bezier';
 import type { SubPath, WarpEffect } from '@/model/types';
+import { transformSubPath } from '@/geometry/path';
+import { scale, rotate, multiply, translate } from '@/geometry/matrix';
+import { createDocument, makeShape, makePath } from '@/model/nodes';
+import { addNode, worldSubPaths, refreshLiveShape, localBounds } from '@/model/document';
+import { validateDocument } from '@/io/project';
 
 /** Length of the straight run of a rounded rectangle along x = 0 (between the two left-side arcs). */
 function leftStraightEdge(sp: SubPath): number {
@@ -155,5 +160,46 @@ describe('corner rounding by tangent break (plan item 6)', () => {
     const b1 = pathBounds([out])!;
     expect(b1.width).toBeLessThan(b0.width + 1e-6);
     expect(b1.height).toBeLessThan(b0.height + 1e-6);
+  });
+});
+
+describe('live corners in the model', () => {
+  it('radii scale with transforms, survive live-shape refreshes, project validation and bake into worldSubPaths on request', () => {
+    const tri = triangle();
+    tri.anchors[2].cornerRadius = 9;
+    const scaled = transformSubPath(tri, multiply(translate(5, 5), scale(2, 2)));
+    expect(scaled.anchors[2].cornerRadius).toBeCloseTo(18, 9);
+    expect(scaled.anchors[0].cornerRadius).toBeUndefined();
+    const turned = transformSubPath(tri, rotate(30));
+    expect(turned.anchors[2].cornerRadius).toBeCloseTo(9, 9);
+    // a live polygon keeps per-anchor radii when its parameters change (same anchor count)
+    const poly = makeShape({ kind: 'polygon', sides: 6, radius: 50 }, {});
+    poly.subpaths[0].anchors[1].cornerRadius = 7;
+    poly.shape = { kind: 'polygon', sides: 6, radius: 80 };
+    refreshLiveShape(poly);
+    expect(poly.subpaths[0].anchors[1].cornerRadius).toBe(7);
+    expect(poly.subpaths[0].anchors[0].cornerRadius).toBeUndefined();
+    poly.shape = { kind: 'polygon', sides: 5, radius: 80 };
+    refreshLiveShape(poly);
+    expect(poly.subpaths[0].anchors.every((a) => a.cornerRadius === undefined)).toBe(true);
+    // document: raw vs baked world geometry, bounds use the rounded outline
+    const doc = createDocument({ name: 'c', width: 400, height: 400 });
+    const path = makePath([tri], { name: 'Ear' });
+    addNode(doc, path, doc.layers[0]);
+    expect(worldSubPaths(doc, path.id)[0].anchors).toHaveLength(3);
+    expect(worldSubPaths(doc, path.id)[0].anchors[2].cornerRadius).toBe(9);
+    const baked = worldSubPaths(doc, path.id, { liveCorners: true })[0];
+    expect(baked.anchors).toHaveLength(4);
+    expect(baked.anchors.every((a) => a.cornerRadius === undefined)).toBe(true);
+    expect(localBounds(doc, path.id)!.y).toBeGreaterThan(5); // the rounded tip sits below y = 0
+    // project files: positive finite radii survive validation, junk does not
+    const copy = validateDocument(JSON.parse(JSON.stringify(doc)));
+    expect((copy.nodes[path.id] as any).subpaths[0].anchors[2].cornerRadius).toBe(9);
+    const junk = JSON.parse(JSON.stringify(doc));
+    junk.nodes[path.id].subpaths[0].anchors[0].cornerRadius = -3;
+    junk.nodes[path.id].subpaths[0].anchors[1].cornerRadius = 'big';
+    junk.nodes[path.id].subpaths[0].anchors[2].cornerRadius = NaN;
+    const cleaned = validateDocument(junk);
+    expect((cleaned.nodes[path.id] as any).subpaths[0].anchors.every((a: any) => a.cornerRadius === undefined)).toBe(true);
   });
 });

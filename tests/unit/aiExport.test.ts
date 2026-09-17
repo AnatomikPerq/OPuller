@@ -136,6 +136,17 @@ describe('AI export: large rasters', () => {
   });
 });
 
+describe('AI export: Windows-1251 bytes', () => {
+  it('writes Cyrillic as 0xc0.. bytes and refuses Latin-1 letters that would collide with them', () => {
+    expect(psString('Яя', 'cp1251')).toBe(String.raw`(\337\377)`);
+    expect(isEncodable('café', 'latin1')).toBe(true);
+    expect(isEncodable('café', 'cp1251')).toBe(false); // 0xe9 is "й" in Windows-1251
+    expect(psString('é', 'cp1251')).toBe('(?)');
+    expect(isEncodable('§ © « » °', 'cp1251')).toBe(true); // the shared Latin-1 punctuation keeps its byte
+    expect(psString('«Ёж»', 'cp1251')).toBe(String.raw`(\253\250\346\273)`);
+  });
+});
+
 describe('AI export: text encoding choice', () => {
   it('picks Windows-1251 when the text is mostly Cyrillic and Latin-1 otherwise (plan item 10)', () => {
     expect(chooseAiEncoding([])).toBe('latin1');
