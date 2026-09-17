@@ -18,6 +18,7 @@ import { pathBounds, transformSubPaths, polylineSubPath } from '@/geometry/path'
 import { multiply, invert } from '@/geometry/matrix';
 import { noStroke } from '@/model/defaults';
 import { applyGeometryEffects } from '@/canvas/effectiveGeometry';
+import { effectiveSubPaths } from '@/canvas/effectiveGeometry';
 import { extrudeFaces, revolveFaces, POSITION_PRESETS, type Face3D } from './geometry';
 import * as geometry from './geometry';
 
@@ -67,7 +68,7 @@ export function expand3D(doc: Document, id: ID): ID | null {
     for (const d of descendants(doc, id)) {
       const c = doc.nodes[d];
       if (!c || c.type !== 'path') continue;
-      const sps = transformSubPaths(applyGeometryEffects(c.subpaths, c.effects, null), multiply(inv, worldMatrix(doc, d)));
+      const sps = transformSubPaths(effectiveSubPaths(c), multiply(inv, worldMatrix(doc, d)));
       const faces = facesFor(sps, frame, n.effects, c.fill);
       if (faces) facesToNodes(doc, faces, g.id, c.name, c.stroke);
     }

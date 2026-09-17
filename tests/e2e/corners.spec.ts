@@ -115,6 +115,20 @@ test.describe('live corners', () => {
       api.updateNodes({ ids: [id], patch: { effects: [...n.effects, { type: 'roundCorners', enabled: true, radius: 9 }] } });
     }, id);
     expect((await topY(page, id)) - sharpWarpedTop).toBeGreaterThan(5);
+    // Expand Appearance bakes live corners and effects together: the outline does not change
+    await page.evaluate((id) => (window as any).__opuller.mcp.corners({ ids: [id], radius: 9, anchors: [2] }), id);
+    await page.evaluate((id) => (window as any).__opuller.mcp.updateNodes({ ids: [id], patch: { effects: [{ type: 'warp', enabled: true, style: 'bulge', bend: 40, horizontal: false, hDistort: -10, vDistort: 0 }] } }), id);
+    const before = (await worldBounds(page, id))!;
+    const dBefore = await page.evaluate((id) => (window as any).__opuller.mcp.getNode({ id }).d as string, id);
+    void dBefore;
+    await page.evaluate((id) => (window as any).__opuller.mcp.effect({ op: 'expand', ids: [id] }), id);
+    const n2 = await nodeById(page, id);
+    expect(n2.effects).toHaveLength(0);
+    expect(n2.subpaths[0].anchors.every((a: any) => a.cornerRadius === undefined)).toBe(true);
+    const after = (await worldBounds(page, id))!;
+    expect(after.y).toBeCloseTo(before.y, 1);
+    expect(after.height).toBeCloseTo(before.height, 1);
+    expect(after.width).toBeCloseTo(before.width, 1);
   });
 
   test('Direct Selection shows corner widgets; dragging one rounds the corner, double-click opens the Corners dialog', async ({ page }) => {

@@ -13,6 +13,7 @@ import { getState, useStore, type EditorState } from '@/store/store';
 import type { Document, Effect, ID, WarpEffect, WarpStyle, FreeDistortEffect, MeshDistortEffect, CoonsDistortEffect, Rect, Vec, ZigZagEffect, PuckerBloatEffect, RoughenEffect, TransformEffect, TweakEffect } from '@/model/types';
 import { isContainer } from '@/model/types';
 import { registerGeometryEffect, applyGeometryEffects, hasGeometryEffects, isGeometryEffect } from '@/canvas/effectiveGeometry';
+import { effectiveSubPaths } from '@/canvas/effectiveGeometry';
 import { zigZagSubPaths, puckerBloatSubPaths, roughenSubPaths, transformEffectSubPaths, tweakSubPaths } from './transformEffects';
 import { registerExpander } from '@/appearance/expand';
 import { applyEffect, initialEffect, rememberEffect, cloneEffect, effectDef, type ApplyMode } from '@/commands/effectCommands/effects';
@@ -57,7 +58,8 @@ export function bakeGeometryEffects(doc: Document, id: ID): boolean {
   const geo = geometryEffectsOf(n.effects);
   if (!geo.length) return false;
   if (n.type === 'path') {
-    n.subpaths = applyGeometryEffects(n.subpaths, n.effects, null);
+    // live corners are part of the geometry: bake them together with the effects
+    n.subpaths = effectiveSubPaths(n);
     n.shape = undefined;
     n.effects = n.effects.filter((e) => !geo.includes(e));
     return true;
@@ -71,7 +73,7 @@ export function bakeGeometryEffects(doc: Document, id: ID): boolean {
     const c = doc.nodes[d];
     if (!c || c.type !== 'path') continue;
     // path geometry in the group frame (own effects baked first)
-    const own = applyGeometryEffects(c.subpaths, c.effects, null);
+    const own = effectiveSubPaths(c);
     const wm = worldMatrix(doc, d);
     const inGroup = transformSubPaths(own, multiply(inv, wm));
     const mapped = applyGeometryEffects(inGroup, geo, frame);
