@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { openApp, drawRect, drawEllipse, selectTool, getState, nodeById, selection, press, runCommand, worldBounds, clickWorld } from './helpers';
 
-const SHOT_DIR = 'C:/Users/BADAB/AppData/Local/Temp/claude/C--Users-BADAB--------------OPuller/9538e8e9-28f5-4b8d-9cb3-a9e066e10c8b/scratchpad';
+// screenshots go to test-results/ (Playwright's output dir), never to a machine-specific path
+const SHOT_DIR = 'test-results/shots';
 
 async function collectErrors(page: Page): Promise<string[]> {
   const errors: string[] = [];

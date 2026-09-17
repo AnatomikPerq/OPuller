@@ -6,12 +6,13 @@
 import type { Document, ID, Node, PathNode, TextNode, Paint, StrokeStyle, LiveShape, Rect, Vec, Matrix, TextStyle, ImageNode } from '@/model/types';
 import { isContainer } from '@/model/types';
 import { getState, setState, useStore } from '@/store/store';
-import { makeShape, makePath, makeText, makeImage, newId } from '@/model/nodes';
+import { makeShape, makePath, makeText, makeImage, newId, clonePaint, cloneStroke } from '@/model/nodes';
 import { addNode, removeNode, worldBounds, selectionBounds, applyWorldMatrix, refreshLiveShape, worldSubPaths, setWorldSubPaths, topmostOf, descendants, cloneSubtree, addSubtree, getChildren, moveNode, indexInParent, isEditable } from '@/model/document';
 import { translate, scale as scaleM, rotate as rotateM, multiply, compose, identity, applyToPoint } from '@/geometry/matrix';
 import { parseSvgPathData, pathToSvgD } from '@/geometry/path';
 import { rectUnion } from '@/geometry/vec';
 import { allCommands, runCommand, getCommand, isEnabled } from '@/commands/registry';
+import { appearanceTargets } from '@/commands/appearance';
 import { allTools, getTool } from '@/tools/registry';
 import { insertionParent } from '@/tools/shapes/tool';
 import { exportSvg } from '@/io/svgExport';
@@ -651,12 +652,27 @@ export const mcpApi: Record<string, (p: Params) => any> = {
   },
   setAppearance(p) {
     const s = getState();
+    const target = String(p.target ?? 'defaults');
+    if (!['defaults', 'selection', 'both'].includes(target)) throw new Error('target must be "defaults", "selection" or "both"');
     const patch: any = {};
     if (p.fill !== undefined) patch.fill = toPaint(p.fill, s.appearance.fill);
     if (p.stroke !== undefined) patch.stroke = toStroke(p.stroke, s.appearance.stroke);
     if (p.textStyle) patch.textStyle = { ...s.appearance.textStyle, ...p.textStyle };
-    s.setAppearance(patch);
-    return getState().appearance;
+    const targets = target === 'defaults' ? [] : appearanceTargets(idsParam(p));
+    if (targets.length) {
+      const stroke = patch.stroke as StrokeStyle | undefined;
+      s.updateDoc((d) => {
+        for (const id of targets) {
+          const n = d.nodes[id];
+          if (!n || (n.type !== 'path' && n.type !== 'text')) continue;
+          if (patch.fill) n.fill = clonePaint(patch.fill);
+          if (stroke) n.stroke = { ...n.stroke, ...cloneStroke(stroke) };
+          if (patch.textStyle && n.type === 'text') n.style = { ...n.style, ...patch.textStyle };
+        }
+      }, 'Appearance');
+    }
+    if (target !== 'selection') s.setAppearance(patch);
+    return { target, applied: targets, appearance: getState().appearance };
   },
 
   // --------------------------------------------------------------- history

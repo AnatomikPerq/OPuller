@@ -7,9 +7,9 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { produce, enableMapSet } from 'immer';
 import type { Document, ID, AnchorRef, Paint, StrokeStyle, TextStyle, Vec, Units, HandleRef } from '@/model/types';
-import { createDocument } from '@/model/nodes';
+import { createDocument, clonePaint, cloneStroke } from '@/model/nodes';
 import { DEFAULT_FILL, defaultStroke, defaultTextStyle } from '@/model/defaults';
-import { touch } from '@/model/document';
+import { touch, descendants } from '@/model/document';
 
 enableMapSet();
 
@@ -262,6 +262,25 @@ function loadPersisted(): Partial<Pick<EditorState, 'toolOptions' | 'view' | 'pr
 
 let toastSeq = 1;
 
+/**
+ * Illustrator semantics: selecting an object makes its fill / stroke (and, for text, its
+ * character style) the *current* appearance that new objects are drawn with. Drawing tools
+ * read `state.appearance` only — never the selection — so an explicit change of the
+ * defaults (Color panel, `setAppearance`) while something is selected wins over it.
+ */
+export function appearanceFromSelection(doc: Document, selection: ID[], current: Appearance): Appearance {
+  for (const id of selection) {
+    for (const d of descendants(doc, id, true)) {
+      const n = doc.nodes[d];
+      if (!n || (n.type !== 'path' && n.type !== 'text')) continue;
+      const next: Appearance = { ...current, fill: clonePaint(n.fill), stroke: cloneStroke(n.stroke) };
+      if (n.type === 'text') next.textStyle = { ...n.style };
+      return next;
+    }
+  }
+  return current;
+}
+
 export const useStore = create<EditorState>()(
   subscribeWithSelector((set, get) => {
     const persisted = loadPersisted();
@@ -418,17 +437,18 @@ export const useStore = create<EditorState>()(
       setSelection: (ids, anchors) => {
         const doc = get().doc;
         const valid = Array.from(new Set(ids.filter((id) => !!doc.nodes[id])));
-        set({ selection: valid, selectedAnchors: anchors ?? [], selectedHandle: null });
+        set({ selection: valid, selectedAnchors: anchors ?? [], selectedHandle: null, appearance: appearanceFromSelection(doc, valid, get().appearance) });
       },
       addToSelection: (ids) => {
         const doc = get().doc;
         const cur = get().selection;
         const next = cur.concat(ids.filter((id) => !!doc.nodes[id] && !cur.includes(id)));
-        set({ selection: next });
+        set({ selection: next, appearance: appearanceFromSelection(doc, next, get().appearance) });
       },
       toggleSelection: (id) => {
         const cur = get().selection;
-        set({ selection: cur.includes(id) ? cur.filter((x) => x !== id) : cur.concat([id]) });
+        const next = cur.includes(id) ? cur.filter((x) => x !== id) : cur.concat([id]);
+        set({ selection: next, appearance: appearanceFromSelection(get().doc, next, get().appearance) });
       },
       removeFromSelection: (ids) => set({ selection: get().selection.filter((x) => !ids.includes(x)) }),
       clearSelection: () => set({ selection: [], selectedAnchors: [], selectedHandle: null }),

@@ -85,6 +85,42 @@ async function makePolylineNode(page: Page, pts: Array<{ x: number; y: number }>
 }
 
 test.describe('freehand tools', () => {
+  test('drawing tools use the current appearance, not the selection (plan item 3)', async ({ page }) => {
+    await openApp(page);
+    // a blue circle, selected: selecting makes its style current (Illustrator behaviour)
+    const circle = await drawEllipse(page, 700, 500, 120, 120);
+    await withStore(page, (s) => s.updateDoc((d: any) => { d.nodes[s.selection[0]].fill = { type: 'solid', color: '#0000ff', opacity: 1 }; }, 'Blue'));
+    await withStore(page, (s) => s.setSelection([s.selection[0]]));
+    expect((await getState(page)).appearance.fill).toEqual({ type: 'solid', color: '#0000ff', opacity: 1 });
+    // an explicit change of the defaults while the circle stays selected must win over it
+    const r = await page.evaluate(() => (window as any).__opuller.mcp.setAppearance({ fill: '#ff0000', stroke: 'none' }));
+    expect(r.target).toBe('defaults');
+    expect((await nodeById(page, circle)).fill.color).toBe('#0000ff');
+    await selectTool(page, 'pencil');
+    await setOptions(page, 'pencil', { fillStrokes: true, editSelected: false });
+    const before = await pathNodes(page);
+    await drawPolyline(page, circlePts(300, 300, 80, 30, 4));
+    const id = (await pathNodes(page)).find((x) => !before.includes(x))!;
+    const n = await nodeById(page, id);
+    expect(n.fill).toEqual({ type: 'solid', color: '#ff0000', opacity: 1 });
+    expect((await nodeById(page, circle)).fill.color).toBe('#0000ff');
+    // the new stroke is selected and current; the brush follows the same rule
+    expect(await selection(page)).toEqual([id]);
+    await page.evaluate(() => (window as any).__opuller.mcp.setAppearance({ fill: '#00aa00' }));
+    await selectTool(page, 'brush');
+    await setOptions(page, 'brush', { width: 20, simple: false, paint: 'fill' });
+    await drawPolyline(page, sineWave(100, 500, 600, 30, 20));
+    const bid = (await pathNodes(page)).find((x) => !before.includes(x) && x !== id)!;
+    expect((await nodeById(page, bid)).fill.color).toBe('#00aa00');
+    expect((await nodeById(page, id)).fill.color).toBe('#ff0000');
+    // target "selection" edits the objects and leaves the defaults alone
+    await withStore(page, (s) => s.setSelection([]));
+    const r2 = await page.evaluate((cid) => (window as any).__opuller.mcp.setAppearance({ fill: '#123456', target: 'selection', ids: [cid] }), circle);
+    expect(r2.applied).toEqual([circle]);
+    expect((await nodeById(page, circle)).fill.color).toBe('#123456');
+    expect((await getState(page)).appearance.fill.color).toBe('#00aa00');
+  });
+
   test('pencil fits a stroke to fewer anchors and closes near the start', async ({ page }) => {
     await openApp(page);
     await selectTool(page, 'pencil');
@@ -233,7 +269,6 @@ test.describe('freehand tools', () => {
     expect(s.fill.type).toBe('none');
     expect(s.stroke.width).toBe(24);
     expect(s.stroke.cap).toBe('round');
-    await page.screenshot({ path: 'C:/Users/BADAB/AppData/Local/Temp/claude/C--Users-BADAB--------------OPuller/9538e8e9-28f5-4b8d-9cb3-a9e066e10c8b/scratchpad/brush.png' });
   });
 
   test('blob brush merges with a same-fill shape and Alt erases from it', async ({ page }) => {
@@ -276,7 +311,6 @@ test.describe('freehand tools', () => {
       { x: 820, y: 500 },
     ]);
     expect(await nodeCount(page)).toBe(count + 1);
-    await page.screenshot({ path: 'C:/Users/BADAB/AppData/Local/Temp/claude/C--Users-BADAB--------------OPuller/9538e8e9-28f5-4b8d-9cb3-a9e066e10c8b/scratchpad/blob.png' });
   });
 
   test('smooth tool reduces anchors of a jagged selected path', async ({ page }) => {
@@ -430,7 +464,6 @@ test.describe('freehand tools', () => {
     expect(await nodeCount(page)).toBe(c2 + 1);
     const lb = (await worldBounds(page, line))!;
     expect(lb.x + lb.width).toBeLessThan(295);
-    await page.screenshot({ path: 'C:/Users/BADAB/AppData/Local/Temp/claude/C--Users-BADAB--------------OPuller/9538e8e9-28f5-4b8d-9cb3-a9e066e10c8b/scratchpad/eraser.png' });
   });
 
   test('tools work at 4x zoom and inside a transformed group', async ({ page }) => {

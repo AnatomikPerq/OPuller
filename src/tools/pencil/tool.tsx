@@ -20,7 +20,6 @@ import { worldSubPaths, setWorldSubPaths } from '@/model/document';
 import { clonePaint, cloneStroke } from '@/model/nodes';
 import { nearestPointOnPath, segmentCount, cloneSubPaths } from '@/geometry/path';
 import { useToolOptions } from '@/canvas/toolContext';
-import { currentAppearance } from '@/commands/appearance';
 import { NumberField } from '@/ui/widgets';
 import { StrokeSampler, smoothSamples, endsNearStart, polylineLength } from '../freehand/sampling';
 import { fitRuns } from '../freehand/fit';
@@ -99,9 +98,12 @@ function findEditTarget(ctx: ToolContext, p: Vec): EditTarget | null {
   return best;
 }
 
-/** Appearance for a new pencil path: stroke from the current appearance, optional fill. */
+/**
+ * Appearance for a new pencil path: stroke from the current defaults (`state.appearance`,
+ * which follows the selection but can be overridden while it is selected), optional fill.
+ */
 export function pencilStyle(state: EditorState, fillStrokes: boolean): { fill: Paint; stroke: StrokeStyle } {
-  const app = currentAppearance(state);
+  const app = state.appearance;
   const fill: Paint = fillStrokes ? clonePaint(app.fill) : { type: 'none' };
   let stroke = cloneStroke(app.stroke);
   stroke.widthProfile = undefined;

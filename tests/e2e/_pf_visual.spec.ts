@@ -1,7 +1,8 @@
 import { test } from '@playwright/test';
 import { openApp, drawEllipse, drawRect, selectTool, moveWorld, viewport, worldToScreen, runCommand, withStore, setView, press } from './helpers';
 
-const OUT = 'C:/Users/BADAB/AppData/Local/Temp/claude/C--Users-BADAB--------------OPuller/9538e8e9-28f5-4b8d-9cb3-a9e066e10c8b/scratchpad';
+// screenshots go to test-results/ (Playwright's output dir), never to a machine-specific path
+const OUT = 'test-results/shots';
 
 test('visual: menus, simplify, twitter bird performance', async ({ page }) => {
   const errors: string[] = [];

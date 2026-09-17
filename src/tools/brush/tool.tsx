@@ -12,7 +12,6 @@ import { clonePaint } from '@/model/nodes';
 import { noStroke } from '@/model/defaults';
 import { ellipseSubPath } from '@/geometry/shapes';
 import { useToolOptions } from '@/canvas/toolContext';
-import { currentAppearance } from '@/commands/appearance';
 import { StrokeSampler, smoothSamples, polylineLength, brushWidthAt, pressureLookup, outlineRing } from '../freehand/sampling';
 import { fitPolyline, variableOutline } from '../freehand/fit';
 import { addWorldPath } from '../freehand/apply';
@@ -43,9 +42,9 @@ interface Gesture {
 
 let gesture: Gesture | null = null;
 
-/** Paint used by brush-like tools: the chosen source, falling back to the other one, then black. */
+/** Paint used by brush-like tools (from the current defaults): the chosen source, falling back to the other one, then black. */
 export function resolveBrushPaint(state: EditorState, source: 'stroke' | 'fill'): Paint {
-  const app = currentAppearance(state);
+  const app = state.appearance;
   const primary = source === 'stroke' ? app.stroke.paint : app.fill;
   const secondary = source === 'stroke' ? app.fill : app.stroke.paint;
   if (primary.type !== 'none') return clonePaint(primary);
@@ -90,14 +89,14 @@ function finish(ctx: ToolContext, g: Gesture) {
     const brushDef = activeBrush ? getBrush(s.doc, activeBrush) : undefined;
     if (brushDef) {
       // a library/defined brush: plain path whose stroke carries the brush (weight 1 = 100 %)
-      const app = currentAppearance(s);
+      const app = s.appearance;
       const stroke = { ...app.stroke, paint: g.paint, width: 1, cap: 'round' as const, join: 'round' as const, dash: [] as number[], widthProfile: undefined, markerStart: 'none' as const, markerEnd: 'none' as const, brush: { ...(app.stroke.brush?.id === brushDef.id ? app.stroke.brush : {}), id: brushDef.id } };
       s.updateDoc((d) => {
         const n = addWorldPath(d, [center], { fill: { type: 'none' }, stroke, name: `${brushDef.name} Stroke` });
         created.id = n?.id ?? null;
       }, label);
     } else if (opts.simple) {
-      const app = currentAppearance(s);
+      const app = s.appearance;
       const stroke = { ...app.stroke, paint: g.paint, width: opts.width, cap: 'round' as const, join: 'round' as const, dash: [] as number[], widthProfile: undefined, markerStart: 'none' as const, markerEnd: 'none' as const };
       s.updateDoc((d) => {
         const n = addWorldPath(d, [center], { fill: { type: 'none' }, stroke, name: 'Brush Stroke' });

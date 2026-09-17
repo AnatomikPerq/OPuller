@@ -661,7 +661,16 @@ server.registerTool(
   async (p) => text(await call('pathfinder', p)),
 );
 
-server.registerTool('opuller_set_appearance', { title: 'Set default appearance', description: 'Set the fill/stroke/text style used for NEW objects (and for the selection when the UI applies it).', inputSchema: { fill: paintSchema.optional(), stroke: strokeSchema.optional(), textStyle: z.record(z.string(), z.unknown()).optional() } }, async (p) => text(await call('setAppearance', p)));
+server.registerTool(
+  'opuller_set_appearance',
+  {
+    title: 'Set current appearance',
+    description:
+      'Set the fill/stroke/text style. target "defaults" (default): only the current appearance that NEW objects (pencil, pen, brush, shapes, text) are drawn with — the selection is left alone. "selection": apply to the selected objects (or ids) only. "both": selection and defaults, like editing the Color panel with a selection. Note: selecting an object makes its appearance current (Illustrator behaviour), so call this after selecting when the new object must differ.',
+    inputSchema: { fill: paintSchema.optional(), stroke: strokeSchema.optional(), textStyle: z.record(z.string(), z.unknown()).optional(), target: z.enum(['defaults', 'selection', 'both']).optional(), ids: idsSchema },
+  },
+  async (p) => text(await call('setAppearance', p)),
+);
 
 // ---- history / document -----------------------------------------------------
 
