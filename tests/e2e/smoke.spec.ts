@@ -74,6 +74,34 @@ test.describe('core editor', () => {
     expect(r.vTicks).toBeGreaterThan(20);
   });
 
+  test('dragging from either ruler creates a guide at the drop position', async ({ page }) => {
+    await openApp(page);
+    const v = page.locator('canvas.ruler-v');
+    const h = page.locator('canvas.ruler-h');
+    const vb = (await v.boundingBox())!;
+    const hb = (await h.boundingBox())!;
+    const vp = (await page.locator('[data-testid="viewport"]').boundingBox())!;
+    // from the vertical ruler (its lower half, where the old 20 px stub had no canvas) into the canvas
+    await page.mouse.move(vb.x + vb.width / 2, vb.y + vb.height * 0.7);
+    await page.mouse.down();
+    await page.mouse.move(vp.x + 250, vp.y + 300, { steps: 8 });
+    await page.mouse.up();
+    // from the horizontal ruler
+    await page.mouse.move(hb.x + hb.width * 0.6, hb.y + hb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(vp.x + 400, vp.y + 180, { steps: 8 });
+    await page.mouse.up();
+    const s = await getState(page);
+    expect(s.doc.guides).toHaveLength(2);
+    const gx = s.doc.guides.find((g: any) => g.axis === 'x');
+    const gy = s.doc.guides.find((g: any) => g.axis === 'y');
+    expect(gx).toBeTruthy();
+    expect(gy).toBeTruthy();
+    expect(Math.abs(gx.position - (250 - s.pan.x) / s.zoom)).toBeLessThan(2);
+    expect(Math.abs(gy.position - (180 - s.pan.y) / s.zoom)).toBeLessThan(2);
+    expect(s.past[s.past.length - 1].label).toBe('Add Guide');
+  });
+
   test('marquee selection, shift-click and delete', async ({ page }) => {
     await openApp(page);
     const a = await drawRect(page, 100, 100, 50, 50);
