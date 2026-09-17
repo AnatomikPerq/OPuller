@@ -3,8 +3,8 @@
  * commands (+ the small Average / Expand dialogs).
  */
 import React, { useEffect, useState } from 'react';
-import type { ID, SubPath } from '@/model/types';
-import { subpathArea } from '@/geometry/path';
+import type { ID } from '@/model/types';
+import { cleanupResults } from '@/pathops/cleanup';
 import { registerCommands, getCommand, when } from '@/commands/registry';
 import { applyDialog } from '@/ui/dialogs/registry';
 import { getState, type EditorState } from '@/store/store';
@@ -43,19 +43,6 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Run a pathfinder operation on the selection. Returns true when the document changed. */
-/** Area (px²) below which a subpath of a boolean result is a sliver that gets dropped. */
-export const SLIVER_AREA = 0.25;
-
-/** Remove degenerate subpaths (tiny area, fewer than 2 anchors) from boolean results; keeps at least one subpath per result. */
-export function cleanupResults<T extends { subpaths: SubPath[] }>(results: T[], minArea = SLIVER_AREA): T[] {
-  return results
-    .map((r) => {
-      const kept = r.subpaths.filter((sp) => sp.anchors.length >= 2 && (!sp.closed || Math.abs(subpathArea(sp)) >= minArea));
-      return kept.length ? { ...r, subpaths: kept } : r;
-    })
-    .filter((r) => r.subpaths.length > 0);
-}
-
 export interface PathfinderOptions {
   /** drop sliver subpaths (area < SLIVER_AREA px²) left behind by the boolean kernel (default true) */
   cleanup?: boolean;
