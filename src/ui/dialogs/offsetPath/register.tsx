@@ -137,4 +137,25 @@ function OffsetPathDialog({ close }: { close: () => void }) {
   );
 }
 
-registerDialog('offsetPath', ({ close }) => <OffsetPathDialog close={close} />);
+/** Offset Path from parameters (scripting / runCommand('path.offset', params)): returns the created or replaced ids. */
+export function applyOffsetPath(params: Record<string, unknown>): ID[] {
+  const s = getState();
+  const p: OffsetParams = {
+    offset: Number(params.distance ?? params.offset ?? last.offset),
+    join: params.join === 'round' || params.join === 'bevel' ? params.join : 'miter',
+    miterLimit: Math.max(1, Number(params.miterLimit ?? last.miterLimit)),
+    mode: params.mode === 'replace' ? 'replace' : 'new',
+  };
+  if (!Number.isFinite(p.offset)) throw new Error('Offset Path needs a numeric "distance"');
+  const ids = Array.isArray(params.ids) && params.ids.length ? selectionTargets({ ...s, selection: params.ids as ID[] } as typeof s).ids : selectionTargets(s).ids;
+  if (!ids.length) throw new Error('Offset Path needs a path selection');
+  let created: ID[] = [];
+  s.updateDoc((d) => {
+    created = offsetNodes(d, ids, p);
+  }, 'Offset Path');
+  last = p;
+  if (created.length) getState().setSelection(created);
+  return created;
+}
+
+registerDialog('offsetPath', ({ close }) => <OffsetPathDialog close={close} />, { apply: applyOffsetPath });

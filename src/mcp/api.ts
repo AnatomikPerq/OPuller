@@ -14,6 +14,19 @@ import { rectUnion } from '@/geometry/vec';
 import { allCommands, runCommand, getCommand, isEnabled } from '@/commands/registry';
 import { appearanceTargets } from '@/commands/appearance';
 import { setCornerRadii } from '@/tools/pathEditing/corners';
+import { applyBlendOptions, makeBlendCommand } from '@/blend/register';
+import { applyOffsetPath } from '@/ui/dialogs/offsetPath/register';
+import { applySimplify } from '@/ui/dialogs/simplify/register';
+import { applyEffect, effectDef, EFFECT_DEFS, type EffectType } from '@/commands/effectCommands/effects';
+import { alignFromParams } from '@/transform/align';
+import { transformDocument, scaleEffect } from '@/transform/apply';
+import { fitPolyline } from '@/tools/freehand/fit';
+import { smoothSamples, endsNearStart } from '@/tools/freehand/sampling';
+import { addWorldPath } from '@/tools/freehand/apply';
+import { anchor as makeAnchorPt } from '@/geometry/path';
+import { scaleFactor } from '@/geometry/matrix';
+import { produce } from 'immer';
+import type { Effect, SubPath } from '@/model/types';
 import { allTools, getTool } from '@/tools/registry';
 import { insertionParent } from '@/tools/shapes/tool';
 import { exportSvg } from '@/io/svgExport';
@@ -575,10 +588,34 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     }
     if (p.rotate !== undefined) m = multiply(rotateM(-Number(p.rotate), origin.x, origin.y), m); // counter-clockwise positive (Illustrator)
     if (p.matrix) m = multiply(p.matrix as Matrix, m);
-    s.updateDoc((d) => {
-      for (const id of ids) applyWorldMatrix(d, id, m, true);
-    }, p.label ?? 'Transform');
-    return ids.map((id) => summary(getState().doc, id, 0, true));
+    // the same pipeline as the UI: strokes / effects scale with the object only when asked
+    // (prefs.scaleStrokes by default), corners always unless scaleCorners is false
+    const scaleStrokes = p.scaleStrokes !== undefined ? !!p.scaleStrokes : s.prefs.scaleStrokes;
+    const scaleEffects = p.scaleEffects !== undefined ? !!p.scaleEffects : scaleStrokes;
+    const k = scaleFactor(m);
+    const result = transformDocument(s.doc, ids, m, { scaleStrokes });
+    let doc = result.doc;
+    if ((scaleEffects !== scaleStrokes || p.scaleCorners === false) && Math.abs(k - 1) > 1e-9) {
+      doc = produce(doc, (d) => {
+        for (const id of result.ids) {
+          for (const leaf of descendants(d, id, true)) {
+            const n = d.nodes[leaf];
+            if (!n || (n.type !== 'path' && n.type !== 'text')) continue;
+            if (scaleEffects !== scaleStrokes) n.effects = n.effects.map((e) => scaleEffect(e, scaleEffects ? k : 1 / k));
+            if (p.scaleCorners === false && n.type === 'path') {
+              if (n.shape?.kind === 'rect') {
+                n.shape = { ...n.shape, radii: n.shape.radii.map((r) => r / k) as [number, number, number, number] };
+                refreshLiveShape(n);
+              }
+              for (const sp of n.subpaths) for (const a of sp.anchors) if (a.cornerRadius) a.cornerRadius /= k;
+            }
+          }
+        }
+      });
+    }
+    s.replaceDoc(doc);
+    s.commit(p.label ?? 'Transform');
+    return result.ids.map((id) => summary(getState().doc, id, 0, true));
   },
   setBounds(p) {
     const n = requireNode(p.id);
@@ -648,6 +685,160 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     }, 'Move to Layer');
     return { ok: true };
   },
+  blend(p) {
+    const s = getState();
+    const op = String(p.op ?? 'make');
+    const ids = idsParam(p);
+    if (ids.length) s.setSelection(ids);
+    const opts: Record<string, unknown> = {};
+    for (const k of ['spacing', 'steps', 'distance', 'colors'] as const) if (p[k] !== undefined) opts[k] = p[k];
+    let groups: ID[] = [];
+    if (op === 'make') {
+      if (Object.keys(opts).length) {
+        const before = getState().docVersion;
+        groups = applyBlendOptions(opts);
+        if (getState().docVersion === before) throw new Error('Blend needs at least two paths');
+      } else {
+        const gid = makeBlendCommand();
+        if (!gid) throw new Error('Blend needs at least two paths');
+        groups = [gid];
+      }
+    } else if (op === 'options') {
+      groups = applyBlendOptions(opts);
+      if (!groups.length) throw new Error('No blend in the selection');
+    } else if (op === 'expand' || op === 'release' || op === 'reverse' || op === 'reverseStack') {
+      const cmd = op === 'reverse' ? 'blend.reverseSpine' : `blend.${op}`;
+      const c = getCommand(cmd);
+      if (!c || !isEnabled(c)) throw new Error(`"${op}" is not available for this selection`);
+      runCommand(cmd);
+      const st = getState();
+      return { op, selection: st.selection, nodes: st.selection.map((id) => summary(st.doc, id, 1, true)) };
+    } else throw new Error('op must be make | options | expand | release | reverse | reverseStack');
+    const st = getState();
+    return { op, groups: groups.map((g) => ({ ...summary(st.doc, g, 0, true), blend: (st.doc.nodes[g] as any)?.data?.blend, children: getChildren(st.doc, g).length })) };
+  },
+  offsetPath(p) {
+    const ids = idsParam(p);
+    if (ids.length) getState().setSelection(ids);
+    const created = applyOffsetPath({ distance: p.distance ?? p.offset, join: p.join, miterLimit: p.miterLimit, mode: p.mode });
+    const st = getState();
+    return { created, nodes: created.map((id) => summary(st.doc, id, 0, true)) };
+  },
+  simplify(p) {
+    const ids = idsParam(p);
+    if (ids.length) getState().setSelection(ids);
+    const r = applySimplify({ tolerance: p.tolerance, cornerAngle: p.cornerAngle, corners: p.corners, straightLines: p.straightLines });
+    const st = getState();
+    return { ...r, nodes: r.ids.map((id) => summary(st.doc, id, 0, true)) };
+  },
+  effect(p) {
+    const s = getState();
+    const op = String(p.op ?? 'add');
+    const ids = idsParam(p).filter((id) => !!s.doc.nodes[id]);
+    if (!ids.length) throw new Error('effect needs node ids (or a selection)');
+    const list = (id: ID) => (getState().doc.nodes[id]?.effects ?? []).map((e, index) => ({ index, ...e }));
+    if (op === 'list') return { nodes: ids.map((id) => ({ id, effects: list(id) })) };
+    if (op === 'expand') {
+      s.setSelection(ids);
+      runCommand('object.expandAppearance');
+      const st = getState();
+      return { op, selection: st.selection, nodes: st.selection.map((id) => summary(st.doc, id, 0, true)) };
+    }
+    const type = typeof p.type === 'string' ? (p.type as EffectType) : undefined;
+    const params = p.params && typeof p.params === 'object' ? (p.params as Record<string, unknown>) : {};
+    if (op === 'add') {
+      if (!type) throw new Error('add needs an effect "type"');
+      const def = effectDef(type);
+      if (!def) throw new Error(`Unknown effect type "${type}"; known: ${EFFECT_DEFS.map((d) => d.type).join(', ')}`);
+      const effect = { ...def.defaults(), ...params, type, enabled: params.enabled !== false } as Effect;
+      applyEffect(effect, ids, p.replace ? { kind: 'replaceType' } : { kind: 'append' }, def.label);
+      return { op, nodes: ids.map((id) => ({ id, effects: list(id) })) };
+    }
+    if (op === 'update' || op === 'remove') {
+      let touched = 0;
+      s.updateDoc((d) => {
+        for (const id of ids) {
+          const n = d.nodes[id];
+          if (!n) continue;
+          const idx = typeof p.index === 'number' ? p.index : type ? n.effects.findIndex((e) => e.type === type) : n.effects.length - 1;
+          if (idx < 0 || !n.effects[idx]) continue;
+          if (op === 'remove') n.effects.splice(idx, 1);
+          else n.effects[idx] = { ...n.effects[idx], ...params, type: n.effects[idx].type } as Effect;
+          touched++;
+        }
+      }, op === 'remove' ? 'Remove Effect' : 'Edit Effect');
+      if (!touched) throw new Error('No matching effect (give "index" or "type")');
+      return { op, nodes: ids.map((id) => ({ id, effects: list(id) })) };
+    }
+    throw new Error('op must be add | update | remove | expand | list');
+  },
+  align(p) {
+    const s = getState();
+    const ids = idsParam(p);
+    if (ids.length) s.setSelection(ids);
+    if (getState().selection.length === 0) throw new Error('align needs a selection or ids');
+    const done = alignFromParams(p);
+    if (!done.length) throw new Error('Nothing to do: give h, v and/or distribute');
+    const st = getState();
+    return { done, nodes: st.selection.map((id) => summary(st.doc, id, 0, true)) };
+  },
+  pencil(p) {
+    const s = getState();
+    const raw = Array.isArray(p.points) ? p.points : [];
+    const pts: Vec[] = raw.map((q: any) => (Array.isArray(q) ? { x: Number(q[0]), y: Number(q[1]) } : { x: Number(q.x), y: Number(q.y) })).filter((q: Vec) => Number.isFinite(q.x) && Number.isFinite(q.y));
+    if (pts.length < 2) throw new Error('pencil needs at least two points');
+    const fidelity = Math.max(0.5, Math.min(20, Number(p.fidelity ?? 4)));
+    const smoothness = Math.max(0, Math.min(100, Number(p.smoothness ?? 25)));
+    const passes = Math.round(smoothness / 34);
+    const samples = smoothSamples(pts.map((q) => ({ x: q.x, y: q.y, pressure: 1 })), passes);
+    const closed = p.closed === true || (p.closed !== false && endsNearStart(samples, Number(p.closeDistance ?? 15)));
+    const fitted = fitPolyline(samples.map((q) => ({ x: q.x, y: q.y })), fidelity, closed);
+    if (!fitted) throw new Error('The points produced no geometry');
+    const fill = p.fill !== undefined ? toPaint(p.fill, s.appearance.fill) : p.fillStrokes ? clonePaint(s.appearance.fill) : ({ type: 'none' } as Paint);
+    let stroke = p.stroke !== undefined ? toStroke(p.stroke, s.appearance.stroke) : cloneStroke(s.appearance.stroke);
+    if (stroke.paint.type === 'none' && fill.type === 'none') stroke = { ...stroke, paint: { type: 'solid', color: '#000000', opacity: 1 } };
+    const parent = parentFor(p);
+    if (!parent) throw new Error('No layer to draw on');
+    let id: ID | null = null;
+    s.updateDoc((d) => {
+      id = addWorldPath(d, [fitted], { fill, stroke, name: p.name ?? 'Path', parent })?.id ?? null;
+    }, 'Pencil');
+    if (!id) throw new Error('Could not add the path');
+    if (p.select !== false) getState().setSelection([id]);
+    return { ...summary(getState().doc, id, 0, true), anchors: fitted.anchors.length, closed: fitted.closed };
+  },
+  pen(p) {
+    const s = getState();
+    const raw = Array.isArray(p.anchors) ? p.anchors : [];
+    if (raw.length < 2) throw new Error('pen needs at least two anchors: [{ x, y, handleIn?: {x,y}, handleOut?: {x,y} }]');
+    const vec = (v: any): Vec | null => (v && typeof v === 'object' && Number.isFinite(Number(v.x)) && Number.isFinite(Number(v.y)) ? { x: Number(v.x), y: Number(v.y) } : Array.isArray(v) && v.length === 2 ? { x: Number(v[0]), y: Number(v[1]) } : null);
+    const absolute = p.absoluteHandles === true;
+    const anchors = raw.map((a: any) => {
+      const point = vec(a.point) ?? vec(a) ?? vec([a.x, a.y]);
+      if (!point) throw new Error('Every anchor needs x, y');
+      let hin = vec(a.handleIn);
+      let hout = vec(a.handleOut);
+      if (absolute) {
+        if (hin) hin = { x: hin.x - point.x, y: hin.y - point.y };
+        if (hout) hout = { x: hout.x - point.x, y: hout.y - point.y };
+      }
+      const an = makeAnchorPt(point, hin, hout, a.kind === 'smooth' || a.kind === 'corner' ? a.kind : undefined);
+      if (Number.isFinite(Number(a.cornerRadius)) && Number(a.cornerRadius) > 0) an.cornerRadius = Number(a.cornerRadius);
+      return an;
+    });
+    const sp: SubPath = { anchors, closed: p.closed === true };
+    const parent = parentFor(p);
+    if (!parent) throw new Error('No layer to draw on');
+    const fill = p.fill !== undefined ? toPaint(p.fill, s.appearance.fill) : clonePaint(s.appearance.fill);
+    const stroke = p.stroke !== undefined ? toStroke(p.stroke, s.appearance.stroke) : cloneStroke(s.appearance.stroke);
+    let id: ID | null = null;
+    s.updateDoc((d) => {
+      id = addWorldPath(d, [sp], { fill, stroke, name: p.name ?? 'Path', parent, fillRule: p.fillRule })?.id ?? null;
+    }, 'Pen');
+    if (!id) throw new Error('Could not add the path');
+    if (p.select !== false) getState().setSelection([id]);
+    return summary(getState().doc, id, 0, true);
+  },
   corners(p) {
     const s = getState();
     const ids = idsParam(p).filter((id) => s.doc.nodes[id]?.type === 'path');
@@ -677,7 +868,7 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     const ops = ['unite', 'minusFront', 'intersect', 'exclude', 'minusBack', 'divide', 'trim', 'merge', 'crop', 'outline'];
     if (!ops.includes(p.op)) throw new Error(`op must be one of ${ops.join(', ')}`);
     const before = getState().docVersion;
-    runCommand(`pathfinder.${p.op}`);
+    runCommand(`pathfinder.${p.op}`, { cleanup: p.cleanup !== false });
     const s = getState();
     return { changed: s.docVersion !== before, selection: s.selection, result: s.selection.map((id) => summary(s.doc, id, 1, true)) };
   },

@@ -67,7 +67,7 @@ registerCommands([
     },
     enabled: hasBlend,
   },
-  { id: 'blend.options', label: 'Blend Options…', menu: 'Object/Blend', order: 510, separatorBefore: true, run: () => getState().openDialog('blendOptions', {}), enabled: (s) => hasBlend(s) || canMake(s) },
+  { id: 'blend.options', label: 'Blend Options…', menu: 'Object/Blend', order: 510, separatorBefore: true, run: (arg) => (arg && typeof arg === 'object' ? applyBlendOptions(arg as Record<string, unknown>) : getState().openDialog('blendOptions', {})), enabled: (s) => hasBlend(s) || canMake(s) },
   {
     id: 'blend.reverseSpine',
     label: 'Reverse Spine',
@@ -258,7 +258,30 @@ function BlendOptionsDialog({ close }: { close: () => void }) {
   );
 }
 
-registerDialog('blendOptions', ({ close }) => <BlendOptionsDialog close={close} />);
+/** Blend Options from parameters: existing blends of the selection get the options, otherwise a blend is made. */
+export function applyBlendOptions(params: Record<string, unknown>): ID[] {
+  const s = getState();
+  const opts: Partial<Omit<BlendSpec, 'sources'>> = {};
+  if (params.spacing === 'steps' || params.spacing === 'distance' || params.spacing === 'smooth') opts.spacing = params.spacing;
+  if (params.steps !== undefined) opts.steps = Math.max(1, Math.min(1000, Math.round(Number(params.steps))));
+  if (params.distance !== undefined) opts.distance = Math.max(0.5, Number(params.distance));
+  if (params.colors !== undefined) opts.colors = !!params.colors;
+  if (opts.steps !== undefined && !opts.spacing) opts.spacing = 'steps';
+  else if (opts.distance !== undefined && !opts.spacing) opts.spacing = 'distance';
+  const groups = targetGroups(s);
+  if (groups.length) {
+    s.updateDoc((d) => {
+      for (const g of groups) setBlendOptions(d, g, opts);
+    }, 'Blend Options');
+    lastOptions = { ...lastOptions, ...opts };
+    return groups;
+  }
+  const gid = makeBlendCommand(opts);
+  if (gid) lastOptions = { ...lastOptions, ...opts };
+  return gid ? [gid] : [];
+}
+
+registerDialog('blendOptions', ({ close }) => <BlendOptionsDialog close={close} />, { apply: applyBlendOptions });
 
 void when;
 void React;

@@ -6,7 +6,7 @@ import { translate } from '@/geometry/matrix';
 import { worldBounds, sortByPaintOrder } from '@/model/document';
 import { getState, type EditorState } from '@/store/store';
 import { applyTransform, transformTargets } from './apply';
-import { getTransformState, type AlignTo } from './store';
+import { getTransformState, useTransformStore, type AlignTo } from './store';
 
 export type AlignKind = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom';
 export type DistributeKind = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom';
@@ -275,6 +275,48 @@ export function distributeSpacingSelection(axis: Axis, mode: AlignTo = getTransf
 
 export function docOf(s: EditorState): Document {
   return s.doc;
+}
+
+/**
+ * Align / distribute from parameters (scripting): `{ h: 'left'|'center'|'right', v: 'top'|'middle'|'bottom',
+ * to: 'selection'|'artboard'|'key', key?: id, distribute?: 'h'|'v'|AlignKind, spacing?: number | 'auto' }`.
+ * Each step is one history entry. Returns the labels of the steps performed.
+ */
+export function alignFromParams(params: Record<string, unknown>): string[] {
+  const done: string[] = [];
+  const mode: AlignTo = params.to === 'artboard' || params.to === 'key' ? params.to : 'selection';
+  if (typeof params.key === 'string') useTransformStore.getState().setKeyObject(params.key);
+  const H: Record<string, AlignKind> = { left: 'left', center: 'hcenter', hcenter: 'hcenter', middle: 'hcenter', right: 'right' };
+  const V: Record<string, AlignKind> = { top: 'top', center: 'vcenter', vcenter: 'vcenter', middle: 'vcenter', bottom: 'bottom' };
+  if (typeof params.h === 'string') {
+    const k = H[params.h];
+    if (!k) throw new Error('h must be left | center | right');
+    alignSelection(k, mode);
+    done.push(ALIGN_LABELS[k]);
+  }
+  if (typeof params.v === 'string') {
+    const k = V[params.v];
+    if (!k) throw new Error('v must be top | middle | bottom');
+    alignSelection(k, mode);
+    done.push(ALIGN_LABELS[k]);
+  }
+  if (typeof params.distribute === 'string') {
+    const d = params.distribute;
+    if (d === 'h' || d === 'v') {
+      const spacing = params.spacing === undefined || params.spacing === 'auto' ? null : Number(params.spacing);
+      if (spacing === null && mode !== 'artboard' && params.spacing === undefined) {
+        // plain "distribute" = equal spacing between the objects' edges
+        distributeSpacingSelection(d, mode, null);
+      } else distributeSpacingSelection(d, mode, spacing);
+      done.push(d === 'h' ? 'Distribute horizontal spacing' : 'Distribute vertical spacing');
+    } else {
+      const k = (H[d] && (d === 'left' || d === 'right' || d === 'hcenter' || d === 'center') ? H[d] : V[d]) as DistributeKind | undefined;
+      if (!k) throw new Error('distribute must be h | v | left | center | right | top | middle | bottom');
+      distributeSelection(k, mode);
+      done.push(DISTRIBUTE_LABELS[k]);
+    }
+  }
+  return done;
 }
 
 /** Center the selection on the active artboard (one history step). */

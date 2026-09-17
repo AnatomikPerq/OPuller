@@ -3,8 +3,10 @@
  * commands (+ the small Average / Expand dialogs).
  */
 import React, { useEffect, useState } from 'react';
-import type { ID } from '@/model/types';
+import type { ID, SubPath } from '@/model/types';
+import { subpathArea } from '@/geometry/path';
 import { registerCommands, getCommand, when } from '@/commands/registry';
+import { applyDialog } from '@/ui/dialogs/registry';
 import { getState, type EditorState } from '@/store/store';
 import { topmostOf, descendants } from '@/model/document';
 import { registerDialog } from '@/ui/dialogs/registry';
@@ -41,7 +43,25 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Run a pathfinder operation on the selection. Returns true when the document changed. */
-export function applyPathfinder(op: PathfinderOp): boolean {
+/** Area (px²) below which a subpath of a boolean result is a sliver that gets dropped. */
+export const SLIVER_AREA = 0.25;
+
+/** Remove degenerate subpaths (tiny area, fewer than 2 anchors) from boolean results; keeps at least one subpath per result. */
+export function cleanupResults<T extends { subpaths: SubPath[] }>(results: T[], minArea = SLIVER_AREA): T[] {
+  return results
+    .map((r) => {
+      const kept = r.subpaths.filter((sp) => sp.anchors.length >= 2 && (!sp.closed || Math.abs(subpathArea(sp)) >= minArea));
+      return kept.length ? { ...r, subpaths: kept } : r;
+    })
+    .filter((r) => r.subpaths.length > 0);
+}
+
+export interface PathfinderOptions {
+  /** drop sliver subpaths (area < SLIVER_AREA px²) left behind by the boolean kernel (default true) */
+  cleanup?: boolean;
+}
+
+export function applyPathfinder(op: PathfinderOp, options: PathfinderOptions = {}): boolean {
   const s = getState();
   const def = pathfinderDef(op);
   const t = selectionTargets(s);
@@ -59,6 +79,7 @@ export function applyPathfinder(op: PathfinderOp): boolean {
     s.toast(`${def.label} failed on this geometry.`, 'error');
     return false;
   }
+  if (options.cleanup !== false) out.results = cleanupResults(out.results);
   if (!out.results.length) {
     s.toast('No result', 'info');
     return false;
@@ -95,8 +116,8 @@ registerCommands(
       menu: 'Object/Pathfinder',
       order: PF_ORDER[op],
       separatorBefore: op === 'divide',
-      run: () => {
-        applyPathfinder(op);
+      run: (arg) => {
+        applyPathfinder(op, arg && typeof arg === 'object' ? (arg as PathfinderOptions) : {});
       },
       enabled: minPaths(def.min),
     };
@@ -256,8 +277,9 @@ registerCommands([
   { id: 'path.join', label: 'Join', menu: 'Object/Path', shortcut: 'mod+j', order: 10, run: joinCommand, enabled: canJoin },
   { id: 'path.average', label: 'Average…', menu: 'Object/Path', shortcut: 'mod+alt+j', order: 11, run: () => getState().openDialog('averageAnchors'), enabled: canAverage },
   { id: 'path.outlineStroke', label: 'Outline Stroke', menu: 'Object/Path', order: 20, separatorBefore: true, run: outlineStrokeCommand, enabled: hasStrokedPath },
-  { id: 'path.offset', label: 'Offset Path…', menu: 'Object/Path', order: 21, run: () => getState().openDialog('offsetPath'), enabled: minPaths(1) },
-  { id: 'path.simplify', label: 'Simplify…', menu: 'Object/Path', order: 22, run: () => getState().openDialog('simplify'), enabled: minPaths(1) },
+  // with an argument (scripting) the dialogs apply their parameters directly; without one they open
+  { id: 'path.offset', label: 'Offset Path…', menu: 'Object/Path', order: 21, run: (arg) => (arg && typeof arg === 'object' ? applyDialog('offsetPath', arg as Record<string, unknown>) : getState().openDialog('offsetPath')), enabled: minPaths(1) },
+  { id: 'path.simplify', label: 'Simplify…', menu: 'Object/Path', order: 22, run: (arg) => (arg && typeof arg === 'object' ? applyDialog('simplify', arg as Record<string, unknown>) : getState().openDialog('simplify')), enabled: minPaths(1) },
   { id: 'path.addAnchors', label: 'Add Anchor Points', menu: 'Object/Path', order: 30, separatorBefore: true, run: addAnchorsCommand, enabled: minPaths(1) },
   { id: 'path.removeRedundant', label: 'Remove Redundant Points', menu: 'Object/Path', order: 31, run: removeRedundantCommand, enabled: minPaths(1) },
   { id: 'path.reverse', label: 'Reverse Path Direction', menu: 'Object/Path', order: 32, run: reverseCommand, enabled: minPaths(1) },

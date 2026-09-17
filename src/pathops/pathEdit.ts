@@ -842,7 +842,7 @@ export function cornerIndices(sp: SubPath, cornerDeg = 30): number[] {
 }
 
 /** Refit an anchor run (open) through densely sampled points. */
-function refitRun(anchors: Anchor[], tolerance: number, closed: boolean): Anchor[] {
+function refitRun(anchors: Anchor[], tolerance: number, closed: boolean, straightLines = true): Anchor[] {
   if (anchors.length < 2) return anchors;
   const pts = flattenSubPath({ anchors, closed }, 0.1);
   if (closed && pts.length > 1) pts.push({ ...pts[0] });
@@ -851,7 +851,7 @@ function refitRun(anchors: Anchor[], tolerance: number, closed: boolean): Anchor
   const first = pts[0];
   const last = pts[pts.length - 1];
   const len = Math.hypot(last.x - first.x, last.y - first.y);
-  if (!closed && len > 1e-9) {
+  if (straightLines && !closed && len > 1e-9) {
     let maxDev = 0;
     for (const p of pts) {
       const d = Math.abs((last.x - first.x) * (p.y - first.y) - (last.y - first.y) * (p.x - first.x)) / len;
@@ -878,7 +878,7 @@ function refitRun(anchors: Anchor[], tolerance: number, closed: boolean): Anchor
  * refitted with the given tolerance; corner anchors (direction changes above
  * `cornerDeg`) are preserved and the runs between them are fitted separately.
  */
-export function simplifySubPaths(sps: SubPath[], tolerance: number, cornerDeg = 30): SubPath[] {
+export function simplifySubPaths(sps: SubPath[], tolerance: number, cornerDeg = 30, straightLines = true): SubPath[] {
   return sps.map((sp) => {
     const n = sp.anchors.length;
     if (n < 3 && !(n === 2 && !sp.closed)) return sp;
@@ -889,7 +889,7 @@ export function simplifySubPaths(sps: SubPath[], tolerance: number, cornerDeg = 
         // smooth closed loop: fit as one closed run starting at the first anchor
         const run = sp.anchors.map(cloneAnchor);
         run.push(cloneAnchor(sp.anchors[0]));
-        const fitted = refitRun(run, tolerance, false);
+        const fitted = refitRun(run, tolerance, false, straightLines);
         const anchors = fitted.slice(0, -1);
         if (anchors.length >= 2) {
           anchors[0].handleIn = fitted[fitted.length - 1].handleIn;
@@ -915,7 +915,7 @@ export function simplifySubPaths(sps: SubPath[], tolerance: number, cornerDeg = 
     }
     const anchors: Anchor[] = [];
     for (const run of runs) {
-      const fitted = refitRun(run, tolerance, false);
+      const fitted = refitRun(run, tolerance, false, straightLines);
       fitted.forEach((a, i) => {
         if (i === 0 && anchors.length) {
           const last = anchors[anchors.length - 1];
@@ -939,7 +939,14 @@ export function simplifySubPaths(sps: SubPath[], tolerance: number, cornerDeg = 
   });
 }
 
-export function simplifyNodes(draft: Document, ids: ID[], tolerance: number): { before: number; after: number } {
+export interface SimplifyOptions {
+  /** direction change (degrees) above which an anchor is kept as a corner; 180 keeps none */
+  cornerAngle?: number;
+  /** turn runs that deviate less than the tolerance from a line into straight segments (default true) */
+  straightLines?: boolean;
+}
+
+export function simplifyNodes(draft: Document, ids: ID[], tolerance: number, opts: SimplifyOptions = {}): { before: number; after: number } {
   let before = 0;
   let after = 0;
   for (const id of ids) {
@@ -948,7 +955,7 @@ export function simplifyNodes(draft: Document, ids: ID[], tolerance: number): { 
     before += anchorCount(g.subpaths);
     let sps: SubPath[];
     try {
-      sps = simplifySubPaths(g.subpaths, tolerance).filter((sp) => sp.anchors.length >= 2);
+      sps = simplifySubPaths(g.subpaths, tolerance, opts.cornerAngle ?? 30, opts.straightLines !== false).filter((sp) => sp.anchors.length >= 2);
     } catch {
       after += anchorCount(g.subpaths);
       continue;

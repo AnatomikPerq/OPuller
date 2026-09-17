@@ -478,7 +478,7 @@ server.registerTool(
 
 server.registerTool(
   'opuller_run_command',
-  { title: 'Run command', description: 'Run any menu command by id (see opuller_list_commands), e.g. "object.group", "pathfinder.unite", "path.offset", "type.createOutlines", "view.fitArtboard".', inputSchema: { id: z.string(), arg: z.unknown().optional() } },
+  { title: 'Run command', description: 'Run any menu command by id (see opuller_list_commands), e.g. "object.group", "pathfinder.unite", "path.offset", "type.createOutlines", "view.fitArtboard". Dialog commands (path.offset, path.simplify, blend.options, pathfinder.*) apply the parameters given as arg without opening the dialog.', inputSchema: { id: z.string(), arg: z.unknown().optional() } },
   async ({ id, arg }) => text(await call('runCommand', { id, arg })),
 );
 
@@ -637,7 +637,7 @@ server.registerTool(
   {
     title: 'Transform',
     description: 'Move / scale / rotate nodes (default: selection). scale can be a number or {x,y}; rotate in degrees, positive = counter-clockwise on screen (Illustrator convention, same as the Rotate tool and the Transform panel); origin defaults to the selection centre.',
-    inputSchema: { ids: idsSchema, translate: z.object({ x: z.number(), y: z.number() }).optional(), scale: z.union([z.number(), z.object({ x: z.number(), y: z.number().optional() })]).optional(), rotate: z.number().optional().describe('degrees, counter-clockwise positive'), origin: z.object({ x: z.number(), y: z.number() }).optional(), matrix: z.object({ a: z.number(), b: z.number(), c: z.number(), d: z.number(), e: z.number(), f: z.number() }).optional() },
+    inputSchema: { ids: idsSchema, translate: z.object({ x: z.number(), y: z.number() }).optional(), scale: z.union([z.number(), z.object({ x: z.number(), y: z.number().optional() })]).optional(), rotate: z.number().optional().describe('degrees, counter-clockwise positive'), scaleStrokes: z.boolean().optional().describe('scale stroke widths with the object (default: the Scale Strokes preference)'), scaleEffects: z.boolean().optional().describe('scale effect sizes (default: same as scaleStrokes)'), scaleCorners: z.boolean().optional().describe('scale corner radii (default true)'), origin: z.object({ x: z.number(), y: z.number() }).optional(), matrix: z.object({ a: z.number(), b: z.number(), c: z.number(), d: z.number(), e: z.number(), f: z.number() }).optional() },
   },
   async (p) => text(await call('transform', p)),
 );
@@ -656,8 +656,94 @@ server.registerTool('opuller_arrange', { title: 'Arrange', description: 'Change 
 server.registerTool('opuller_move_to_layer', { title: 'Move to layer', description: 'Move nodes into a layer or group.', inputSchema: { ids: idsSchema, layerId: z.string() } }, async (p) => text(await call('moveToLayer', p)));
 
 server.registerTool(
+  'opuller_blend',
+  {
+    title: 'Blend',
+    description: 'Object > Blend without the dialog. op make (default; ids or the selection, at least two paths) creates a blend group with spacing "steps" (steps count), "distance" (px between steps) or "smooth"; options changes an existing blend; expand / release / reverse (spine) / reverseStack run the matching commands. Returns the blend group(s) with their child count (sources + steps).',
+    inputSchema: { op: z.enum(['make', 'options', 'expand', 'release', 'reverse', 'reverseStack']).optional(), ids: idsSchema, spacing: z.enum(['steps', 'distance', 'smooth']).optional(), steps: z.number().optional(), distance: z.number().optional(), colors: z.boolean().optional() },
+  },
+  async (p) => text(await call('blend', p)),
+);
+
+server.registerTool(
+  'opuller_offset_path',
+  {
+    title: 'Offset Path',
+    description: 'Object > Path > Offset Path without the dialog: distance (px, negative shrinks), join miter | round | bevel, miterLimit, mode "new" (a copy above the original, default) or "replace". Returns the created / replaced paths.',
+    inputSchema: { ids: idsSchema, distance: z.number(), join: z.enum(['miter', 'round', 'bevel']).optional(), miterLimit: z.number().optional(), mode: z.enum(['new', 'replace']).optional() },
+  },
+  async (p) => text(await call('offsetPath', p)),
+);
+
+server.registerTool(
+  'opuller_simplify',
+  {
+    title: 'Simplify',
+    description: 'Object > Path > Simplify without the dialog: tolerance (max deviation in px), cornerAngle (degrees above which anchors stay corners, default 30; corners:false keeps none), straightLines (turn near-straight runs into lines, default true). Returns anchor counts before / after.',
+    inputSchema: { ids: idsSchema, tolerance: z.number(), cornerAngle: z.number().optional(), corners: z.boolean().optional(), straightLines: z.boolean().optional() },
+  },
+  async (p) => text(await call('simplify', p)),
+);
+
+server.registerTool(
+  'opuller_effect',
+  {
+    title: 'Effects',
+    description:
+      'Live effects of nodes (default: selection). op add: type + params (missing params take the defaults; replace:true replaces an existing effect of that type); update: params merged into the effect chosen by index or type (last effect when neither); remove: by index or type; expand: Object > Expand Appearance; list: the effect lists. Types: dropShadow, innerShadow, blur, outerGlow, innerGlow, colorAdjust, roundCorners{radius}, warp{style,bend,horizontal,hDistort,vDistort}, zigZag{size,relative,ridges,smooth}, puckerBloat{amount -200..200}, roughen{size,relative,detail,smooth,seed}, transform{copies,dx,dy,scaleX,scaleY,angle,reflectX,reflectY,origin}, tweak{horizontal,vertical,relative,anchors,inControl,outControl,seed}, freeDistort{corners}, extrude, revolve, rotate3d. Effects apply in list order.',
+    inputSchema: { op: z.enum(['add', 'update', 'remove', 'expand', 'list']).optional(), ids: idsSchema, type: z.string().optional(), params: z.record(z.string(), z.unknown()).optional(), index: z.number().optional(), replace: z.boolean().optional() },
+  },
+  async (p) => text(await call('effect', p)),
+);
+
+server.registerTool(
+  'opuller_align',
+  {
+    title: 'Align / distribute',
+    description: 'Align panel from parameters (ids or the selection): h left | center | right, v top | middle | bottom, to selection (default) | artboard | key (key = id of the key object, else the topmost), distribute h | v (equal spacing between objects, spacing = px or "auto") or left | center | right | top | middle | bottom (equal distances between those edges / centres). Each step is one undo entry.',
+    inputSchema: { ids: idsSchema, h: z.enum(['left', 'center', 'right']).optional(), v: z.enum(['top', 'middle', 'bottom']).optional(), to: z.enum(['selection', 'artboard', 'key']).optional(), key: z.string().optional(), distribute: z.enum(['h', 'v', 'left', 'center', 'right', 'top', 'middle', 'bottom']).optional(), spacing: z.union([z.number(), z.literal('auto')]).optional() },
+  },
+  async (p) => text(await call('align', p)),
+);
+
+server.registerTool(
+  'opuller_pencil',
+  {
+    title: 'Pencil (fit a freehand line)',
+    description: 'Draw like the Pencil tool from a list of world points: the points are smoothed (smoothness 0..100) and fitted to a Bézier path with the given fidelity (max deviation px, 0.5..20). closed: true closes the path (default: closes when the end comes back within closeDistance of the start). fill defaults to none (fillStrokes: true uses the current fill), stroke to the current stroke. Unlike opuller_gesture nothing depends on the selection or tool options.',
+    inputSchema: { points: z.array(z.union([z.object({ x: z.number(), y: z.number() }), z.tuple([z.number(), z.number()])])), fidelity: z.number().optional(), smoothness: z.number().optional(), closed: z.boolean().optional(), closeDistance: z.number().optional(), fill: paintSchema.optional(), fillStrokes: z.boolean().optional(), stroke: strokeSchema.optional(), name: z.string().optional(), parent: z.string().optional(), select: z.boolean().optional() },
+  },
+  async (p) => text(await call('pencil', p)),
+);
+
+server.registerTool(
+  'opuller_pen',
+  {
+    title: 'Pen (path from anchors)',
+    description: 'Draw like the Pen tool: anchors [{ x, y, handleIn?: {x,y}, handleOut?: {x,y}, kind?: "smooth"|"corner", cornerRadius? }] in world units; handles are offsets relative to the anchor (absoluteHandles: true for absolute positions). closed closes the path. fill / stroke default to the current appearance.',
+    inputSchema: { anchors: z.array(z.object({ x: z.number(), y: z.number(), handleIn: z.object({ x: z.number(), y: z.number() }).optional(), handleOut: z.object({ x: z.number(), y: z.number() }).optional(), kind: z.enum(['smooth', 'corner']).optional(), cornerRadius: z.number().optional() })), closed: z.boolean().optional(), absoluteHandles: z.boolean().optional(), fill: paintSchema.optional(), stroke: strokeSchema.optional(), fillRule: z.enum(['nonzero', 'evenodd']).optional(), name: z.string().optional(), parent: z.string().optional(), select: z.boolean().optional() },
+  },
+  async (p) => text(await call('pen', p)),
+);
+
+server.registerTool(
+  'opuller_corners',
+  {
+    title: 'Round corners (live corners)',
+    description:
+      'Set the live corner radius of paths (Illustrator corner widgets): every corner of the given paths / selection, or only the anchors listed (indices, or {subpath, index}). The anchors stay sharp and editable; rendering, export and booleans use the rounded outline. Live rectangles get their corner radii set. radius 0 removes the rounding. Radii that do not fit are reduced to the room the neighbouring corners leave.',
+    inputSchema: { ids: idsSchema, radius: z.number(), anchors: z.array(z.union([z.number(), z.object({ subpath: z.number().optional(), index: z.number() })])).optional(), subpath: z.number().optional() },
+  },
+  async (p) => text(await call('corners', p)),
+);
+
+server.registerTool(
   'opuller_pathfinder',
-  { title: 'Pathfinder', description: 'Combine paths: unite, minusFront (top shapes cut from the bottom one), intersect, exclude, minusBack, divide, trim, merge, crop, outline. Works on ids or the selection; returns the resulting nodes.', inputSchema: { op: z.enum(['unite', 'minusFront', 'intersect', 'exclude', 'minusBack', 'divide', 'trim', 'merge', 'crop', 'outline']), ids: idsSchema } },
+  {
+    title: 'Pathfinder',
+    description: 'Combine paths: unite, minusFront (top shapes cut from the bottom one), intersect, exclude, minusBack, divide, trim, merge, crop, outline. Works on ids or the selection; returns the resulting nodes. cleanup (default true) drops sliver subpaths (< 0.25 px²) the boolean kernel leaves behind.',
+    inputSchema: { op: z.enum(['unite', 'minusFront', 'intersect', 'exclude', 'minusBack', 'divide', 'trim', 'merge', 'crop', 'outline']), ids: idsSchema, cleanup: z.boolean().optional() },
+  },
   async (p) => text(await call('pathfinder', p)),
 );
 

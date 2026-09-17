@@ -117,4 +117,21 @@ function SimplifyDialog({ close }: { close: () => void }) {
   );
 }
 
-registerDialog('simplify', ({ close }) => <SimplifyDialog close={close} />);
+/** Simplify from parameters (scripting / runCommand('path.simplify', params)). */
+export function applySimplify(params: Record<string, unknown>): { before: number; after: number; ids: string[] } {
+  const s = getState();
+  const tolerance = Number(params.tolerance ?? lastTolerance);
+  if (!Number.isFinite(tolerance) || tolerance <= 0) throw new Error('Simplify needs a positive "tolerance" (px)');
+  const cornerAngle = params.cornerAngle !== undefined ? Number(params.cornerAngle) : params.corners === false ? 180 : 30;
+  const ids = Array.isArray(params.ids) && params.ids.length ? selectionTargets({ ...s, selection: params.ids as string[] } as typeof s).ids : selectionTargets(s).ids;
+  if (!ids.length) throw new Error('Simplify needs a path selection');
+  let r = { before: 0, after: 0 };
+  s.updateDoc((d) => {
+    r = simplifyNodes(d, ids, tolerance, { cornerAngle, straightLines: params.straightLines !== false });
+  }, 'Simplify');
+  lastTolerance = tolerance;
+  getState().setSelectedAnchors([]);
+  return { ...r, ids };
+}
+
+registerDialog('simplify', ({ close }) => <SimplifyDialog close={close} />, { apply: applySimplify });

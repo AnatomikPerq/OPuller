@@ -99,7 +99,7 @@ function collectLeaves(d: Document, targets: ID[]): LeafRecord[] {
   return out;
 }
 
-function scaleEffect(e: Effect, k: number): Effect {
+export function scaleEffect(e: Effect, k: number): Effect {
   switch (e.type) {
     case 'dropShadow':
     case 'innerShadow':
