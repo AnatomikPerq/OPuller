@@ -161,6 +161,62 @@ test.describe('scripting tools', () => {
     expect(n2.subpaths[0].anchors[1].handleIn).toEqual({ x: 0, y: -50 });
   });
 
+  test('swatches: add, apply (linked global), update recolours, remove, libraries (plan item 15)', async ({ page }) => {
+    const list0 = await api(page, 'swatches', { op: 'list' });
+    const n0 = list0.swatches.length;
+    const added = await api(page, 'swatches', { op: 'add', name: 'Fox', color: '#e8762b', kind: 'global' });
+    expect(added.swatch).toMatchObject({ name: 'Fox', kind: 'global', paint: { type: 'solid', color: '#e8762b' } });
+    expect(await label(page)).toBe('New Swatch');
+    const r = await api(page, 'createShape', { kind: 'rect', x: 100, y: 100, width: 100, height: 100, fill: '#cccccc', stroke: 'none', name: 'R' });
+    const ap = await api(page, 'swatches', { op: 'apply', name: 'Fox', ids: [r.id], target: 'fill', tint: 50 });
+    expect(ap.paint.swatchId).toBe(added.swatch.id);
+    let n = await nodeById(page, r.id);
+    expect(n.fill.swatchId).toBe(added.swatch.id);
+    expect(n.fill.tint).toBe(50);
+    // editing the global swatch recolours the linked object
+    await api(page, 'swatches', { op: 'update', id: added.swatch.id, color: '#0044aa' });
+    n = await nodeById(page, r.id);
+    expect(n.fill.color).not.toBe('#e8762b');
+    const sel = await api(page, 'swatches', { op: 'select', name: 'Fox' });
+    expect(sel.selection).toEqual([r.id]);
+    await api(page, 'swatches', { op: 'rename', name: 'Fox', newName: 'Fox orange' });
+    expect((await api(page, 'swatches', { op: 'list' })).swatches.some((x: any) => x.name === 'Fox orange')).toBe(true);
+    const libs = await api(page, 'swatches', { op: 'libraries' });
+    expect(libs.libraries.length).toBeGreaterThan(0);
+    const before = (await api(page, 'swatches', { op: 'list' })).swatches.length;
+    await api(page, 'swatches', { op: 'addLibrary', library: libs.libraries[0].id });
+    expect((await api(page, 'swatches', { op: 'list' })).swatches.length).toBeGreaterThan(before);
+    await api(page, 'swatches', { op: 'remove', name: 'Fox orange' });
+    expect((await api(page, 'swatches', { op: 'list' })).swatches.some((x: any) => x.name === 'Fox orange')).toBe(false);
+    expect((await api(page, 'swatches', { op: 'list' })).swatches.length).toBeGreaterThanOrEqual(n0);
+    // the project keeps the palette
+    const json = await page.evaluate(async () => (await (window as any).__opuller.mcp.getProject({})).json as string);
+    expect(json).toContain('"swatches"');
+  });
+
+  test('fonts: list families, load a font file, use it, remove it (plan item 16)', async ({ page }) => {
+    const list = await api(page, 'fonts', { op: 'list' });
+    expect(list.families.some((f: any) => f.family === 'Inter' && f.outlines)).toBe(true);
+    expect(list.families.some((f: any) => f.source === 'system')).toBe(true);
+    // load a bundled TTF through the same path the MCP server uses (base64 bytes)
+    const b64 = await page.evaluate(async () => {
+      const res = await fetch('/node_modules/@fontsource/oswald/files/oswald-latin-400-normal.woff');
+      const buf = new Uint8Array(await res.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      return btoa(bin);
+    });
+    const loaded = await api(page, 'fonts', { op: 'load', name: 'Champion-Test.woff', base64: b64 });
+    expect(loaded.loaded.family).toBeTruthy();
+    const fam = loaded.loaded.family as string;
+    const after = await api(page, 'fonts', { op: 'list' });
+    expect(after.uploaded.some((u: any) => u.family === fam)).toBe(true);
+    const t = await api(page, 'createText', { x: 100, y: 200, text: 'Champion', fontFamily: fam, fontSize: 40, fill: '#000000' });
+    expect((await nodeById(page, t.id)).style.fontFamily).toBe(fam);
+    await api(page, 'fonts', { op: 'remove', family: fam });
+    expect((await api(page, 'fonts', { op: 'list' })).uploaded.some((u: any) => u.family === fam)).toBe(false);
+  });
+
   test('transform scale flags and pathfinder cleanup (plan items 12, 14)', async ({ page }) => {
     const rect = await api(page, 'createShape', { kind: 'rect', x: 100, y: 100, width: 100, height: 100, radii: [10, 10, 10, 10], fill: '#cccccc', stroke: { color: '#000000', width: 4 }, name: 'R' });
     await api(page, 'effect', { op: 'add', ids: [rect.id], type: 'dropShadow', params: { dx: 5, dy: 5, blur: 4 } });

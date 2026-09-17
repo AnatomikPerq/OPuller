@@ -26,7 +26,7 @@ import { addWorldPath } from '@/tools/freehand/apply';
 import { anchor as makeAnchorPt } from '@/geometry/path';
 import { scaleFactor } from '@/geometry/matrix';
 import { produce } from 'immer';
-import type { Effect, SubPath } from '@/model/types';
+import type { Effect, SubPath, Swatch } from '@/model/types';
 import { allTools, getTool } from '@/tools/registry';
 import { insertionParent } from '@/tools/shapes/tool';
 import { exportSvg } from '@/io/svgExport';
@@ -1224,6 +1224,98 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       return { added: act.addWholeBrushLibrary(), available: lib.map((e) => ({ id: e.id, kind: e.kind })) };
     }
     throw new Error(`Unknown brushes op "${op}"`);
+  },
+  async swatches(p) {
+    const act = await import('@/color/actions');
+    const sw = await import('@/color/swatches');
+    const libs = await import('@/color/libraries');
+    const { linkedPaint, isGlobalSwatch } = await import('@/color/globals');
+    const s = getState();
+    const op = String(p.op ?? 'list');
+    const describe = (x: Swatch) => ({ id: x.id, name: x.name, kind: x.kind ?? 'process', paint: x.paint, cmyk: x.cmyk });
+    const find = (): Swatch => {
+      const st = getState();
+      const byId = typeof p.id === 'string' ? st.doc.swatches.find((x) => x.id === p.id) : undefined;
+      const byName = typeof p.name === 'string' ? st.doc.swatches.find((x) => x.name === p.name) : undefined;
+      const hit = byId ?? byName;
+      if (!hit) throw new Error(`No swatch ${p.id ? `with id "${p.id}"` : `named "${p.name}"`}`);
+      return hit;
+    };
+    if (op === 'list') return { colorMode: s.doc.colorMode, swatches: s.doc.swatches.map(describe) };
+    if (op === 'libraries') return { libraries: libs.SWATCH_LIBRARIES.map((l) => ({ id: l.id, name: l.name, count: l.colors.length, kind: l.kind ?? 'process' })) };
+    if (op === 'addLibrary') {
+      const n = act.addLibrary(String(p.library ?? p.id ?? ''));
+      return { added: n, swatches: getState().doc.swatches.map(describe) };
+    }
+    if (op === 'add') {
+      const paint = sw.sanitizePaint(p.paint !== undefined ? toPaint(p.paint, s.appearance.fill) : p.color !== undefined ? toPaint(p.color, s.appearance.fill) : null);
+      if (!paint) throw new Error('add needs a paint or color');
+      const kind = p.kind === 'global' || p.kind === 'spot' ? p.kind : undefined;
+      const cmyk = p.cmyk && typeof p.cmyk === 'object' ? { c: Number(p.cmyk.c ?? 0), m: Number(p.cmyk.m ?? 0), y: Number(p.cmyk.y ?? 0), k: Number(p.cmyk.k ?? 0) } : undefined;
+      const created = act.addSwatch(paint, typeof p.name === 'string' ? p.name : undefined, { kind, cmyk, apply: !!p.apply });
+      return { swatch: describe(created) };
+    }
+    if (op === 'remove') {
+      const hit = find();
+      act.deleteSwatches([hit.id]);
+      return { removed: hit.id, swatches: getState().doc.swatches.map(describe) };
+    }
+    if (op === 'rename') {
+      const hit = find();
+      if (typeof p.newName !== 'string') throw new Error('rename needs newName');
+      act.renameSwatch(hit.id, p.newName);
+      return { swatch: describe(getState().doc.swatches.find((x) => x.id === hit.id)!) };
+    }
+    if (op === 'update') {
+      const hit = find();
+      const paint = p.paint !== undefined ? sw.sanitizePaint(toPaint(p.paint, hit.paint)) : p.color !== undefined ? sw.sanitizePaint(toPaint(p.color, hit.paint)) : null;
+      if (paint) act.updateSwatchPaint(hit.id, paint, p.updateObjects !== false, true, p.cmyk ?? undefined);
+      if (p.kind === 'process' || p.kind === 'global' || p.kind === 'spot') act.setSwatchKind(hit.id, p.kind);
+      return { swatch: describe(getState().doc.swatches.find((x) => x.id === hit.id)!) };
+    }
+    if (op === 'apply') {
+      const hit = find();
+      const ids = idsParam(p);
+      if (ids.length) s.setSelection(ids);
+      const target = p.target === 'stroke' ? 'stroke' : 'fill';
+      const tint = p.tint !== undefined ? Math.max(0, Math.min(100, Number(p.tint))) : 100;
+      act.applySwatch(hit, target, tint);
+      const st = getState();
+      return { applied: hit.id, target, tint, paint: isGlobalSwatch(hit) && hit.paint.type === 'solid' ? linkedPaint(hit, tint, hit.paint.opacity) : hit.paint, selection: st.selection, appearance: st.appearance };
+    }
+    if (op === 'select') {
+      const hit = find();
+      const n = act.selectObjectsUsing(hit.paint, hit.id);
+      return { selected: n, selection: getState().selection };
+    }
+    throw new Error('op must be list | add | remove | rename | update | apply | select | libraries | addLibrary');
+  },
+  async fonts(p) {
+    const f = await import('@/text/fonts');
+    const op = String(p.op ?? 'list');
+    const describe = (d: import('@/text/fonts').FontFamilyDef) => ({ family: d.family, category: d.category, source: d.source, outlines: d.outlines, faces: d.faces.map((x) => ({ weight: x.weight, style: x.style })) });
+    if (op === 'list') {
+      // system fonts: the browser cannot enumerate them without a permission prompt; the fixed list is what the picker offers
+      return { families: f.listFamilies().map(describe), uploaded: f.uploadedFonts().map((u) => ({ id: u.id, family: u.family, weight: u.weight, style: u.style, fileName: u.fileName, outlines: u.parsable })) };
+    }
+    if (op === 'load') {
+      const name = String(p.name ?? 'font.ttf');
+      const b64 = String(p.base64 ?? '');
+      if (!b64) throw new Error('load needs the font file as base64 (opuller_fonts file=...)');
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const rec = await f.uploadFont(new File([bytes], name));
+      return { loaded: { id: rec.id, family: rec.family, weight: rec.weight, style: rec.style, outlines: rec.parsable } };
+    }
+    if (op === 'remove') {
+      const list = f.uploadedFonts();
+      const hit = list.find((u) => u.id === p.id || u.family === p.family);
+      if (!hit) throw new Error('No uploaded font with that id / family');
+      await f.removeUploadedFont(hit.id);
+      return { removed: hit.id };
+    }
+    throw new Error('op must be list | load | remove');
   },
   async patterns(p) {
     const ops = await import('@/patterns/ops');

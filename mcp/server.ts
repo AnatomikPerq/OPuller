@@ -1003,6 +1003,35 @@ server.registerTool(
 );
 
 server.registerTool(
+  'opuller_swatches',
+  {
+    title: 'Swatches',
+    description:
+      'The document palette (Swatches panel). op list (default); add {name, paint | color, kind process|global|spot, cmyk, apply}; update {id | name, paint | color, kind, updateObjects}; rename {id | name, newName}; remove {id | name}; apply {id | name, target fill|stroke, tint 0..100, ids} applies the swatch to the selection / ids (global and spot swatches stay linked, so editing the swatch recolours the objects); select {id | name} selects the objects using it; libraries / addLibrary {library} for the built-in libraries.',
+    inputSchema: { op: z.enum(['list', 'add', 'remove', 'rename', 'update', 'apply', 'select', 'libraries', 'addLibrary']).optional(), id: z.string().optional(), name: z.string().optional(), newName: z.string().optional(), paint: paintSchema.optional(), color: z.string().optional(), kind: z.enum(['process', 'global', 'spot']).optional(), cmyk: z.object({ c: z.number(), m: z.number(), y: z.number(), k: z.number() }).optional(), apply: z.boolean().optional(), updateObjects: z.boolean().optional(), target: z.enum(['fill', 'stroke']).optional(), tint: z.number().optional(), ids: idsSchema, library: z.string().optional() },
+  },
+  async (p) => text(await call('swatches', p)),
+);
+
+server.registerTool(
+  'opuller_fonts',
+  {
+    title: 'Fonts',
+    description: 'op list (default): the families the Character panel offers (bundled web fonts with their faces, uploaded fonts, the fixed list of common system fonts; "outlines" tells whether Create Outlines / AI export can outline the family). op load {file}: load a TTF / OTF / WOFF / WOFF2 font file from disk into the editor (kept in the browser, available to opuller_create_text fontFamily and Create Outlines). op remove {id | family} drops an uploaded font.',
+    inputSchema: { op: z.enum(['list', 'load', 'remove']).optional(), file: z.string().optional(), id: z.string().optional(), family: z.string().optional() },
+  },
+  async (p) => {
+    if (p.op === 'load') {
+      if (!p.file) throw new Error('load needs a file path');
+      const abs = path.resolve(p.file);
+      const bytes = await fs.readFile(abs);
+      return text(await call('fonts', { op: 'load', name: path.basename(abs), base64: bytes.toString('base64') }, 60_000));
+    }
+    return text(await call('fonts', p));
+  },
+);
+
+server.registerTool(
   'opuller_projects',
   {
     title: 'Project library',
