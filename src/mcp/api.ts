@@ -3,7 +3,7 @@
  * `window.__opuller.mcp`. Every method takes one params object and returns
  * JSON-serialisable data. All coordinates are world units (px).
  */
-import type { Document, ID, Node, PathNode, TextNode, Paint, StrokeStyle, LiveShape, Rect, Vec, Matrix, TextStyle, ImageNode } from '@/model/types';
+import type { Document, ID, Node, PathNode, TextNode, Paint, StrokeStyle, LiveShape, Rect, Vec, Matrix, TextStyle, ImageNode, AnchorRef } from '@/model/types';
 import { isContainer } from '@/model/types';
 import { getState, setState, useStore } from '@/store/store';
 import { makeShape, makePath, makeText, makeImage, newId, clonePaint, cloneStroke } from '@/model/nodes';
@@ -13,6 +13,7 @@ import { parseSvgPathData, pathToSvgD } from '@/geometry/path';
 import { rectUnion } from '@/geometry/vec';
 import { allCommands, runCommand, getCommand, isEnabled } from '@/commands/registry';
 import { appearanceTargets } from '@/commands/appearance';
+import { setCornerRadii } from '@/tools/pathEditing/corners';
 import { allTools, getTool } from '@/tools/registry';
 import { insertionParent } from '@/tools/shapes/tool';
 import { exportSvg } from '@/io/svgExport';
@@ -283,7 +284,7 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     const doc = getState().doc;
     const b = worldBounds(doc, p.id);
     const out: any = { ...n, bounds: b };
-    if (n.type === 'path') out.d = pathToSvgD(worldSubPaths(doc, p.id));
+    if (n.type === 'path') out.d = pathToSvgD(worldSubPaths(doc, p.id, { liveCorners: true }));
     return out;
   },
   findNodes(p) {
@@ -645,6 +646,29 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       for (const id of ids) moveNode(d, id, p.layerId);
     }, 'Move to Layer');
     return { ok: true };
+  },
+  corners(p) {
+    const s = getState();
+    const ids = idsParam(p).filter((id) => s.doc.nodes[id]?.type === 'path');
+    if (!ids.length) throw new Error('corners needs path ids (or a path selection)');
+    const radius = Number(p.radius);
+    if (!Number.isFinite(radius) || radius < 0) throw new Error('radius must be a number >= 0 (local units)');
+    // anchors: [{subpath, index}] or plain indices of subpath 0; default = every corner of the path(s)
+    const refs: AnchorRef[] = [];
+    if (Array.isArray(p.anchors)) {
+      for (const id of ids) {
+        for (const a of p.anchors) {
+          if (typeof a === 'number') refs.push({ nodeId: id, subpath: Number(p.subpath ?? 0), index: a });
+          else if (a && typeof a === 'object') refs.push({ nodeId: id, subpath: Number(a.subpath ?? p.subpath ?? 0), index: Number(a.index) });
+        }
+      }
+    }
+    let count = 0;
+    s.updateDoc((d) => {
+      count = setCornerRadii(d, ids, radius, refs.length ? refs : undefined);
+    }, 'Round Corners');
+    const st = getState();
+    return { ids, radius, corners: count, nodes: ids.map((id) => summary(st.doc, id, 0, true)) };
   },
   pathfinder(p) {
     const ids = idsParam(p);

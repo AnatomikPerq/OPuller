@@ -69,7 +69,7 @@ function finish(ctx: ToolContext, g: Gesture) {
     const n = s.doc.nodes[id] as PathNode;
     if (!n || n.type !== 'path' || !paintEquals(n.fill, paint)) continue;
     if (!rectsIntersect(worldBounds(s.doc, id), areaBounds)) continue;
-    const wsps = worldSubPaths(s.doc, id).filter((sp) => sp.closed);
+    const wsps = worldSubPaths(s.doc, id, { liveCorners: true }).filter((sp) => sp.closed);
     if (!wsps.length) continue;
     let touches = false;
     try {
@@ -86,7 +86,7 @@ function finish(ctx: ToolContext, g: Gesture) {
       for (const id of candidates) {
         const n = d.nodes[id] as PathNode;
         if (!n) continue;
-        const wsps = worldSubPaths(d, id);
+        const wsps = worldSubPaths(d, id, { liveCorners: true });
         const sub = booleanOp('subtract', { subpaths: wsps.filter((sp) => sp.closed), fillRule: n.fillRule }, { subpaths: area, fillRule: 'nonzero' });
         result.ids.push(...replaceNodeGeometry(d, id, sub.concat(wsps.filter((sp) => !sp.closed)), false));
       }
@@ -98,7 +98,7 @@ function finish(ctx: ToolContext, g: Gesture) {
     const target = candidates[candidates.length - 1]; // top-most
     const geoms = candidates.map((id) => {
       const n = s.doc.nodes[id] as PathNode;
-      return { subpaths: worldSubPaths(s.doc, id).filter((sp) => sp.closed), fillRule: n.fillRule };
+      return { subpaths: worldSubPaths(s.doc, id, { liveCorners: true }).filter((sp) => sp.closed), fillRule: n.fillRule };
     });
     let union: SubPath[];
     try {

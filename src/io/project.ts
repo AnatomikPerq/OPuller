@@ -310,7 +310,10 @@ function validAnchor(v: unknown): Anchor | null {
     const o = obj(h);
     return typeof o.x === 'number' && typeof o.y === 'number' && Number.isFinite(o.x) && Number.isFinite(o.y) ? { x: o.x, y: o.y } : null;
   };
-  return { point: { x: p.x, y: p.y }, handleIn: vec(a.handleIn), handleOut: vec(a.handleOut), kind: a.kind === 'smooth' ? 'smooth' : 'corner' };
+  const out: Anchor = { point: { x: p.x, y: p.y }, handleIn: vec(a.handleIn), handleOut: vec(a.handleOut), kind: a.kind === 'smooth' ? 'smooth' : 'corner' };
+  // live corner radius (optional, positive finite number)
+  if (typeof a.cornerRadius === 'number' && Number.isFinite(a.cornerRadius) && a.cornerRadius > 0) out.cornerRadius = a.cornerRadius;
+  return out;
 }
 
 function validSubPaths(v: unknown): SubPath[] {

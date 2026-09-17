@@ -3,6 +3,7 @@
  * values for multi-selection. Edits regenerate the geometry via refreshLiveShape.
  */
 import React, { useState } from 'react';
+import { clampRectRadii } from '@/geometry/corners';
 import { Link, Unlink, SquareRoundCorner } from 'lucide-react';
 import type { ID, LiveShape, PathNode } from '@/model/types';
 import { useStore, getState } from '@/store/store';
@@ -49,7 +50,8 @@ export function ShapeSection({ ids, kind }: { ids: ID[]; kind: Kind }) {
         const r = [...s.radii] as [number, number, number, number];
         if (linkRadii) r.fill(Math.max(0, v));
         else r[i] = Math.max(0, v);
-        return { ...s, radii: r };
+        // the fields show what the geometry uses: a corner may take its whole edges minus its neighbour
+        return { ...s, radii: clampRectRadii(s.width, s.height, r) };
       });
     return (
       <>

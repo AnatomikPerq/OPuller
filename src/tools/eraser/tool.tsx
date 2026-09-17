@@ -78,7 +78,7 @@ export function eraseArea(ctx: ToolContext, area: SubPath[], split: boolean): ID
         result.ids.push(id);
         continue;
       }
-      const wsps = worldSubPaths(d, id).filter((sp) => sp.anchors.length >= 2);
+      const wsps = worldSubPaths(d, id, { liveCorners: true }).filter((sp) => sp.anchors.length >= 2);
       const closed = wsps.filter((sp) => sp.closed);
       const open = wsps.filter((sp) => !sp.closed);
       const filled = n.fill.type !== 'none' && closed.length > 0;

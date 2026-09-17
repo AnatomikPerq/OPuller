@@ -12,6 +12,7 @@ import { liveShapeSubPaths } from '@/geometry/shapes';
 import { newId } from './nodes';
 import { brushPad } from '@/brushes/geometry';
 import { effectiveSubPaths } from '@/canvas/effectiveGeometry';
+import { applyLiveCornersAll, hasLiveCorners } from '@/geometry/corners';
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -378,7 +379,18 @@ export function bakeTransform(doc: Document, id: ID): void {
 
 /** Regenerate geometry from live shape params (call after editing `shape`). */
 export function refreshLiveShape(n: PathNode): void {
-  if (n.shape) n.subpaths = liveShapeSubPaths(n.shape);
+  if (!n.shape) return;
+  const before = n.subpaths;
+  n.subpaths = liveShapeSubPaths(n.shape);
+  // live corners set on the anchors of a polygon / star survive a parameter change
+  if (before.length === n.subpaths.length) {
+    for (let i = 0; i < before.length; i++) {
+      const a = before[i].anchors;
+      const b = n.subpaths[i].anchors;
+      if (a.length !== b.length) continue;
+      for (let j = 0; j < a.length; j++) if (a[j].cornerRadius) b[j].cornerRadius = a[j].cornerRadius;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -395,7 +407,7 @@ export function localBounds(doc: Document, id: ID): Rect | null {
     case 'path': {
       const c = leafBoundsCache.get(n);
       if (c !== undefined) return c;
-      const b = pathBounds(n.effects.some((e) => e.enabled && e.type !== 'roundCorners') ? effectiveSubPaths(n) : n.subpaths);
+      const b = pathBounds(n.effects.some((e) => e.enabled && e.type !== 'roundCorners') || hasLiveCorners(n.subpaths) ? effectiveSubPaths(n) : n.subpaths);
       leafBoundsCache.set(n, b);
       return b;
     }
@@ -441,7 +453,7 @@ export function worldBounds(doc: Document, id: ID): Rect | null {
   const wm = worldMatrix(doc, id);
   if (n.type === 'path') {
     if (isIdentity(wm)) return localBounds(doc, id);
-    const geo = n.effects.some((e) => e.enabled && e.type !== 'roundCorners') ? effectiveSubPaths(n) : n.subpaths;
+    const geo = n.effects.some((e) => e.enabled && e.type !== 'roundCorners') || hasLiveCorners(n.subpaths) ? effectiveSubPaths(n) : n.subpaths;
     return pathBounds(transformSubPaths(geo, wm));
   }
   if (n.type === 'group' || n.type === 'layer') {
@@ -510,11 +522,18 @@ export function nodeCenter(doc: Document, id: ID): Vec | null {
 // ---------------------------------------------------------------------------
 
 /** World-space subpaths of a path node. */
-export function worldSubPaths(doc: Document, id: ID): SubPath[] {
+/**
+ * World-space geometry of a path. By default the raw anchors (editing tools keep the anchor
+ * structure); `{ liveCorners: true }` bakes `anchor.cornerRadius` first — what destructive
+ * operations (booleans, cutting, erasing, blends) must work on so the rounded outline the
+ * user sees is what gets combined.
+ */
+export function worldSubPaths(doc: Document, id: ID, opts: { liveCorners?: boolean } = {}): SubPath[] {
   const n = doc.nodes[id];
   if (!n || n.type !== 'path') return [];
   const wm = worldMatrix(doc, id);
-  return isIdentity(wm) ? cloneSubPaths(n.subpaths) : transformSubPaths(n.subpaths, wm);
+  const local = opts.liveCorners ? applyLiveCornersAll(n.subpaths) : n.subpaths;
+  return isIdentity(wm) ? cloneSubPaths(local) : transformSubPaths(local, wm);
 }
 
 /** Replace a path node's geometry with world-space subpaths (transform reset). */

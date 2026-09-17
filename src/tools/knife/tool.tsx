@@ -33,7 +33,7 @@ const CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(
 export function cutNodeWithKnife(draft: import('@/model/types').Document, id: ID, knife: SubPath): ID[] | null {
   const n = draft.nodes[id] as PathNode | undefined;
   if (!n || n.type !== 'path') return null;
-  const world = worldSubPaths(draft, id);
+  const world = worldSubPaths(draft, id, { liveCorners: true });
   const closed = world.filter((sp) => sp.closed && sp.anchors.length >= 3);
   const open = world.filter((sp) => !sp.closed || sp.anchors.length < 3);
   const filled = n.fill.type !== 'none' && closed.length > 0;

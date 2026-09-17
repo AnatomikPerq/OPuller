@@ -123,7 +123,7 @@ export const pathEraserTool: Tool = {
     const doc = ctx.state.doc;
     const sampler = new StrokeSampler(1 / ctx.zoom);
     sampler.add(e.world, e.pressure);
-    gesture = { sampler, targets: ids.map((id) => ({ id, sps: worldSubPaths(doc, id) })) };
+    gesture = { sampler, targets: ids.map((id) => ({ id, sps: worldSubPaths(doc, id, { liveCorners: true }) })) };
     ctx.setStatus('Erasing path');
     ctx.requestOverlay();
   },

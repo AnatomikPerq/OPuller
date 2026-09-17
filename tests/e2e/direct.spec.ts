@@ -436,7 +436,8 @@ test.describe('direct selection tool', () => {
     await moveWorld(page, 150, 200);
     await expect(page.locator('.overlay-svg .direct-overlay path')).toHaveCount(1);
     await moveWorld(page, 600, 600);
-    await expect(page.locator('.overlay-svg .direct-overlay')).toHaveCount(0);
+    // the highlight is gone; the corner widgets of the selected paths stay
+    await expect(page.locator('.overlay-svg .direct-overlay path')).toHaveCount(0);
   });
 
   test('locked and hidden paths are not editable', async ({ page }) => {

@@ -12,7 +12,7 @@ import {
   arcToCubics,
   isLine,
 } from './bezier';
-import { applyToPoint, applyToVector } from './matrix';
+import { applyToPoint, applyToVector, scaleFactor } from './matrix';
 import { add, sub, rectUnion, rectFromPointList, dist, len, normalize, mul } from './vec';
 
 // ---------------------------------------------------------------------------
@@ -29,7 +29,9 @@ export function anchor(point: Vec, handleIn: Vec | null = null, handleOut: Vec |
 }
 
 export function cloneAnchor(a: Anchor): Anchor {
-  return anchor(a.point, a.handleIn, a.handleOut, a.kind);
+  const c = anchor(a.point, a.handleIn, a.handleOut, a.kind);
+  if (a.cornerRadius) c.cornerRadius = a.cornerRadius;
+  return c;
 }
 
 export function cloneSubPath(sp: SubPath): SubPath {
@@ -416,12 +418,15 @@ export function pathControlBounds(subpaths: SubPath[]): Rect | null {
 }
 
 export function transformAnchor(a: Anchor, m: Matrix): Anchor {
-  return {
+  const out: Anchor = {
     point: applyToPoint(m, a.point),
     handleIn: a.handleIn ? applyToVector(m, a.handleIn) : null,
     handleOut: a.handleOut ? applyToVector(m, a.handleOut) : null,
     kind: a.kind,
   };
+  // a live corner radius scales with the (mean) scale of the matrix
+  if (a.cornerRadius) out.cornerRadius = a.cornerRadius * scaleFactor(m);
+  return out;
 }
 
 export function transformSubPath(sp: SubPath, m: Matrix): SubPath {

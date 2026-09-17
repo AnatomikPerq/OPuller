@@ -213,7 +213,7 @@ export class LiquifySession {
       for (const [id, flags] of this.targets) {
         const n = d.nodes[id];
         if (!n || n.type !== 'path') continue;
-        const sps = worldSubPaths(d, id);
+        const sps = worldSubPaths(d, id, { liveCorners: true });
         const r = deformSubPaths(sps, params, flags.length === sps.length ? flags : undefined);
         if (r.changed) {
           setWorldSubPaths(d, id, r.sps);
@@ -262,7 +262,7 @@ export class LiquifySession {
       for (const [id, flags] of this.targets) {
         const n = d.nodes[id];
         if (!n || n.type !== 'path' || !flags.length) continue;
-        const sps = worldSubPaths(d, id);
+        const sps = worldSubPaths(d, id, { liveCorners: true });
         if (sps.length !== flags.length) continue;
         setWorldSubPaths(
           d,

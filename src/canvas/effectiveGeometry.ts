@@ -5,6 +5,7 @@
  */
 import type { PathNode, SubPath, Effect, Rect } from '@/model/types';
 import { roundCorners } from '@/geometry/shapes';
+import { applyLiveCornersAll } from '@/geometry/corners';
 import { pathBounds } from '@/geometry/path';
 
 /** Geometry effects map subpaths within a frame (the bounds of the object the effect is applied to). */
@@ -36,9 +37,18 @@ export function applyGeometryEffects(sps: SubPath[], effects: Effect[], frame: R
   return cur;
 }
 
-/** Path geometry after its own geometry effects (round corners, warp, ...). */
+/**
+ * Path geometry after its live corners (`anchor.cornerRadius`, applied first — they are part
+ * of the object like Illustrator's corner widgets) and its own geometry effects (round
+ * corners, warp, ...), in list order.
+ */
 export function effectiveSubPaths(n: PathNode): SubPath[] {
-  return applyGeometryEffects(n.subpaths, n.effects, null);
+  return applyGeometryEffects(applyLiveCornersAll(n.subpaths), n.effects, null);
+}
+
+/** Path geometry with live corners baked and no effects (what destructive operations work on). */
+export function baseSubPaths(n: PathNode): SubPath[] {
+  return applyLiveCornersAll(n.subpaths);
 }
 
 /** Whether any enabled effect in the list changes geometry (registered geometry effects). */

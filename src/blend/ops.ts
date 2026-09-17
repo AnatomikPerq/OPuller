@@ -110,8 +110,8 @@ function stepCount(doc: Document, spec: BlendSpec, a: ID, b: ID): number {
 
 /** Interpolated node between two path sources at t (world geometry). */
 function interpolateNode(doc: Document, a: PathNode, b: PathNode, t: number): { node: PathNode; world: SubPath[] } {
-  let from = worldSubPaths(doc, a.id);
-  let to = worldSubPaths(doc, b.id);
+  let from = worldSubPaths(doc, a.id, { liveCorners: true });
+  let to = worldSubPaths(doc, b.id, { liveCorners: true });
   // orient both the same way so shapes do not twist through zero area
   if (from.length === 1 && to.length === 1 && Math.sign(pathArea(from) || 1) !== Math.sign(pathArea(to) || 1)) {
     to = [{ ...to[0], anchors: [...to[0].anchors].reverse().map((an) => ({ ...an, handleIn: an.handleOut, handleOut: an.handleIn })) }];

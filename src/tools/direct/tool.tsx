@@ -49,6 +49,7 @@ import { directCursor } from '../pathEditing/cursors';
 import { AnchorHighlight, HandleHighlight, SegmentHighlight, HL } from '../pathEditing/overlay';
 import { convertSelectedAnchors } from '../pathEditing/register';
 import { cubicPoint } from '@/geometry/bezier';
+import { selectionCornerWidgets, hitCornerWidget, widgetWorldPosition, radiusForPointer, setCornerRadiusWorld, type CornerWidget } from '../pathEditing/corners';
 
 // ---------------------------------------------------------------------------
 // Gesture state
@@ -66,9 +67,12 @@ type Gesture =
   | { kind: 'anchors'; start: Vec; base: Document; refs: AnchorRef[]; primary: AnchorRef | null; primaryStart: Vec | null; wholeNodes: ID[]; bounds: Rect; snap: SnapSession }
   | { kind: 'handle'; base: Document; ref: HandleRef; anchorWorld: Vec; moved: boolean }
   | { kind: 'segment'; start: Vec; base: Document; seg: SegmentRef; t: number; mode: 'translate' | 'reshape'; bounds: Rect; snap: SnapSession; grab: Vec }
-  | { kind: 'objects'; start: Vec; base: Document; ids: ID[]; bounds: Rect; snap: SnapSession };
+  | { kind: 'objects'; start: Vec; base: Document; ids: ID[]; bounds: Rect; snap: SnapSession }
+  | { kind: 'corner'; base: Document; widgets: CornerWidget[]; primary: CornerWidget; moved: boolean };
 
 let gesture: Gesture = { kind: 'none' };
+/** corner widget under the pointer (drawn highlighted) */
+let hoverWidget: CornerWidget | null = null;
 let hover: EditHit | null = null;
 let hoverKey = '';
 /** segment selected by clicking on it (drawn highlighted, used by segment drags) */
@@ -196,11 +200,33 @@ function finalizeObjects(ctx: ToolContext, ids: ID[]) {
 // Pointer handlers (exported so the Pen tool can delegate while Ctrl is held)
 // ---------------------------------------------------------------------------
 
+/** Corner widgets of the selection and the one under a screen point (null when none). */
+function widgetAt(ctx: ToolContext, screen: Vec): { widgets: CornerWidget[]; hit: CornerWidget | null } {
+  const s = ctx.state;
+  const widgets = selectionCornerWidgets(s.doc, s.selection, s.selectedAnchors);
+  return { widgets, hit: widgets.length ? hitCornerWidget(widgets, screen, ctx.worldToScreen, ctx.zoom) : null };
+}
+
+/** Widgets a drag on `hit` changes: all shown widgets when anchors are selected, otherwise every corner of that path (Illustrator). */
+function affectedWidgets(ctx: ToolContext, widgets: CornerWidget[], hit: CornerWidget): CornerWidget[] {
+  const s = ctx.state;
+  if (s.selectedAnchors.length) return widgets;
+  return widgets.filter((w) => w.nodeId === hit.nodeId);
+}
+
 function pointerDown(e: ToolPointerEvent, ctx: ToolContext): void {
   if (e.button !== 0) return;
   const s = ctx.state;
   if (s.editingTextId) s.setEditingText(null);
   const ids = selectedPaths(ctx);
+  // live corner widgets sit on top of everything else
+  const cw = widgetAt(ctx, e.screen);
+  if (cw.hit) {
+    setHover(ctx, null);
+    setGesture({ kind: 'corner', base: s.doc, widgets: affectedWidgets(ctx, cw.widgets, cw.hit), primary: cw.hit, moved: false });
+    ctx.setCursor(directCursor('none'));
+    return;
+  }
   const hit = findEditHit(ctx, e.world, { ids, handles: true, anyObject: true, anchorsOfHit: true, fills: true });
   setHover(ctx, null);
 
@@ -291,6 +317,18 @@ function pointerMove(e: ToolPointerEvent, ctx: ToolContext): void {
 
   if (g.kind === 'none') {
     const ids = selectedPaths(ctx);
+    const cw = widgetAt(ctx, e.screen);
+    if ((cw.hit?.key ?? null) !== (hoverWidget?.key ?? null)) {
+      hoverWidget = cw.hit;
+      ctx.requestOverlay();
+    }
+    if (cw.hit) {
+      setHover(ctx, null);
+      s.setHover(null);
+      ctx.setCursor(directCursor('none'));
+      ctx.setStatus(`Corner radius ${formatLength(cw.hit.radius, s.prefs.units)}: drag to round the corner, double-click for options`);
+      return;
+    }
     const hit = findEditHit(ctx, e.world, { ids, handles: true, anyObject: true, anchorsOfHit: true, fills: true });
     setHover(ctx, hit);
     if (!hit) {
@@ -324,6 +362,19 @@ function pointerMove(e: ToolPointerEvent, ctx: ToolContext): void {
 
   if (g.kind === 'marquee') {
     useOverlayStore.getState().setMarquee(rectFromPoints(g.start, e.world));
+    return;
+  }
+
+  if (g.kind === 'corner') {
+    const r = radiusForPointer(g.primary, e.world, ctx.zoom);
+    g.moved = true;
+    s.replaceDoc(
+      produce(g.base, (d) => {
+        for (const w of g.widgets) setCornerRadiusWorld(d, w.nodeId, w.target, Math.min(r, w.maxRadius));
+      }),
+    );
+    useOverlayStore.getState().setHud({ screen: e.screen, text: `Corners: ${formatLength(r, s.prefs.units)}` });
+    ctx.requestOverlay();
     return;
   }
 
@@ -476,6 +527,8 @@ function pointerUp(e: ToolPointerEvent, ctx: ToolContext): void {
     ctx.commit(g.mode === 'translate' ? 'Move Segment' : 'Reshape Segment');
   } else if (g.kind === 'objects') {
     finalizeObjects(ctx, g.ids);
+  } else if (g.kind === 'corner') {
+    if (g.moved) ctx.commit('Round Corners');
   }
   pointerMove(e, ctx);
 }
@@ -491,6 +544,14 @@ function cancel(ctx: ToolContext): void {
 function doubleClick(e: ToolPointerEvent, ctx: ToolContext): void {
   const s = ctx.state;
   const ids = selectedPaths(ctx);
+  const cw = widgetAt(ctx, e.screen);
+  if (cw.hit) {
+    const w = cw.hit;
+    // the dialog edits the corners the drag would have edited
+    const targets = affectedWidgets(ctx, cw.widgets, w);
+    s.openDialog('corners', { targets: targets.map((t) => ({ nodeId: t.nodeId, target: t.target })), radius: w.radius });
+    return;
+  }
   const hit = findEditHit(ctx, e.world, { ids, handles: false, anyObject: true, anchorsOfHit: true, fills: false });
   if (hit && hit.kind === 'segment') {
     let ref: AnchorRef | null = null;
@@ -579,6 +640,18 @@ function overlay(ctx: ToolContext): React.ReactNode {
   const s = ctx.state;
   const items: React.ReactNode[] = [];
   const g = gesture;
+  // live corner widgets (Illustrator: a small circle inside every corner of the selection)
+  const widgets = g.kind === 'corner' ? g.widgets : selectionCornerWidgets(s.doc, s.selection, s.selectedAnchors);
+  for (const w of widgets) {
+    const p = ctx.worldToScreen(widgetWorldPosition(w, ctx.zoom));
+    const active = g.kind === 'corner' ? true : hoverWidget?.key === w.key;
+    items.push(
+      <g key={`cw-${w.key}`} className="corner-widget" data-testid="corner-widget" data-corner={w.key} pointerEvents="none">
+        <circle cx={p.x} cy={p.y} r={active ? 5.5 : 4.5} fill={active ? HL : '#ffffff'} stroke={HL} strokeWidth={1.25} />
+        <circle cx={p.x} cy={p.y} r={1.5} fill={active ? '#ffffff' : HL} />
+      </g>,
+    );
+  }
   if (selectedSegment && getSubPath(s.doc, selectedSegment)) {
     items.push(<SegmentHighlight key="selseg" ctx={ctx} ref={selectedSegment} width={3} />);
   }
@@ -619,7 +692,7 @@ export const directTool: Tool = {
   group: 'select',
   order: 11,
   cursor: 'default',
-  hint: 'Click anchors, handles or segments to edit them. Shift adds, Alt-click converts an anchor, double-click a segment to add an anchor.',
+  hint: 'Click anchors, handles or segments to edit them. Shift adds, Alt-click converts an anchor, double-click a segment to add an anchor. Drag a corner widget (the small circle inside a corner) to round it.',
   showSelectionOverlay: 'anchors',
   defaults: { straightSegments: 'move' },
   Options: DirectOptions,
@@ -628,6 +701,7 @@ export const directTool: Tool = {
     setGesture({ kind: 'none' });
     hover = null;
     hoverKey = '';
+    hoverWidget = null;
     selectedSegment = null;
   },
   deactivate(ctx) {
@@ -635,6 +709,7 @@ export const directTool: Tool = {
     setGesture({ kind: 'none' });
     hover = null;
     hoverKey = '';
+    hoverWidget = null;
     selectedSegment = null;
     clearTransient(ctx);
   },

@@ -47,7 +47,7 @@ export function makeLivePaint(doc: Document, ids: ID[]): ID | null {
   const set = computeFaceSet(doc, unique);
   // edges: every source subpath split at intersections with the others
   const edges: Array<{ sps: SubPath[]; stroke: StrokeStyle; source: ID }> = [];
-  const geoms = set.geoms.length ? set.geoms : unique.map((id) => ({ id, subpaths: worldSubPaths(doc, id) }));
+  const geoms = set.geoms.length ? set.geoms : unique.map((id) => ({ id, subpaths: worldSubPaths(doc, id, { liveCorners: true }) }));
   for (const g of geoms) {
     const node = doc.nodes[g.id];
     if (!node || node.type !== 'path') continue;

@@ -480,6 +480,12 @@ export interface Anchor {
   handleOut: Vec | null;
   /** corner (independent handles) vs smooth (handles collinear) */
   kind: 'corner' | 'smooth';
+  /**
+   * Live corner (Illustrator's corner widget): the corner at this anchor is rendered rounded
+   * with this radius while the anchor itself stays the sharp vertex. Applied before effects
+   * (`effectiveSubPaths`); absent / 0 = sharp.
+   */
+  cornerRadius?: number;
 }
 
 export interface SubPath {

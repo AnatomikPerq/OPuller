@@ -30,7 +30,7 @@ export const MIN_AREA = 0.05;
 export function worldGeom(doc: Document, id: ID): PathGeom | null {
   const node = doc.nodes[id];
   if (!node || node.type !== 'path') return null;
-  const subpaths = worldSubPaths(doc, id).filter((sp) => sp.anchors.length >= 2);
+  const subpaths = worldSubPaths(doc, id, { liveCorners: true }).filter((sp) => sp.anchors.length >= 2);
   if (!subpaths.length) return null;
   return { id, subpaths, fillRule: node.fillRule, node, scale: scaleFactor(worldMatrix(doc, id)) || 1 };
 }

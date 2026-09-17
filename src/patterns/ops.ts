@@ -251,7 +251,7 @@ export function expandPatternFill(doc: Document, nodeId: ID): ID | null {
   const index = indexInParent(doc, nodeId);
   const bounds = worldBounds(doc, nodeId);
   if (!bounds) return null;
-  const clip = makePath(worldSubPaths(doc, nodeId), { name: n.name, fill: { type: 'none' }, stroke: noStroke(), fillRule: n.fillRule });
+  const clip = makePath(worldSubPaths(doc, nodeId, { liveCorners: true }), { name: n.name, fill: { type: 'none' }, stroke: noStroke(), fillRule: n.fillRule });
   const group = makeGroup([], { name: `${n.name} (pattern)`, opacity: n.opacity, blendMode: n.blendMode, effects: n.effects });
   const pw = parentWorldMatrix(doc, nodeId);
   const inv = invert(pw);
@@ -292,7 +292,7 @@ export function expandPatternFill(doc: Document, nodeId: ID): ID | null {
   }
   // stroke stays on a copy of the original path on top
   if (n.stroke.paint.type !== 'none' && n.stroke.width > 0) {
-    const strokeCopy = makePath(worldSubPaths(doc, nodeId), { name: `${n.name} stroke`, fill: { type: 'none' }, stroke: deepClone(n.stroke), fillRule: n.fillRule });
+    const strokeCopy = makePath(worldSubPaths(doc, nodeId, { liveCorners: true }), { name: `${n.name} stroke`, fill: { type: 'none' }, stroke: deepClone(n.stroke), fillRule: n.fillRule });
     strokeCopy.transform = inv;
     addNode(doc, strokeCopy, group.id);
   }
