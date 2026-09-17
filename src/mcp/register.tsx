@@ -54,12 +54,13 @@ function BridgeIndicator() {
   const connected = useBridgeStore((s) => s.connected);
   const requests = useBridgeStore((s) => s.requests);
   const last = useBridgeStore((s) => s.lastMethod);
+  const ports = useBridgeStore((s) => s.ports);
   if (!enabled) return null;
   return (
     <button
       type="button"
       className={`status-item mcp-indicator ${connected ? 'on' : ''}`}
-      title={connected ? `AI connected via MCP (${requests} calls${last ? `, last: ${last}` : ''})` : `AI bridge waiting for the MCP server on ${BRIDGE_URL}. Run "npm run mcp" or connect Claude with the .mcp.json config.`}
+      title={connected ? `AI connected via MCP on port${ports.length > 1 ? 's' : ''} ${ports.join(', ')} (${requests} calls${last ? `, last: ${last}` : ''})` : `AI bridge waiting for the MCP server on ${BRIDGE_URL}. Run "npm run mcp" or connect Claude with the .mcp.json config.`}
       onClick={() => getState().openDialog('mcpSetup', {})}
       data-testid="mcp-indicator"
     >

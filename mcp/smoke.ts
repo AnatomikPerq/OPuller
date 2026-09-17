@@ -6,10 +6,27 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_BRIDGE_PORT } from './registry.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Busy-port scenario: hold the default bridge port with a plain TCP server so the MCP
+ * server must fall back to the next port of the range; the editor tab has to find it
+ * through /__opuller/bridge-ports within a few seconds. Skipped when the port is already
+ * taken by something else (another MCP session) — that exercises the same path anyway.
+ */
+const blocker = await new Promise<net.Server | null>((resolve) => {
+  const srv = net.createServer();
+  srv.once('error', () => resolve(null));
+  srv.listen(DEFAULT_BRIDGE_PORT, '127.0.0.1', () => resolve(srv));
+});
+console.log(blocker ? `port ${DEFAULT_BRIDGE_PORT} blocked by the smoke test` : `port ${DEFAULT_BRIDGE_PORT} already busy`);
+
+const t0 = Date.now();
 const transport = new StdioClientTransport({ command: process.execPath, args: [path.join(here, 'server.ts')], stderr: 'inherit' });
 const client = new Client({ name: 'opuller-smoke', version: '0.1.0' });
 await client.connect(transport);
@@ -32,7 +49,10 @@ async function callText(name: string, args: Record<string, unknown> = {}): Promi
 }
 
 const status = await callText('opuller_status');
-console.log('document:', status.document.name, 'artboards:', status.document.artboards.length, 'tool:', status.activeTool);
+const elapsed = Date.now() - t0;
+console.log('document:', status.document.name, 'artboards:', status.document.artboards.length, 'tool:', status.activeTool, `(first answer after ${elapsed} ms)`);
+if (elapsed > 10_000) throw new Error(`opuller_status took ${elapsed} ms with the default port busy (expected <= 10 s)`);
+blocker?.close();
 
 const circle = await callText('opuller_create_shape', { kind: 'circle', cx: 300, cy: 300, r: 120, fill: '#1da1f2', stroke: 'none', name: 'smoke-circle' });
 console.log('created', circle.id, circle.bounds);

@@ -15,11 +15,17 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { BRIDGE_PORTS, DEFAULT_BRIDGE_PORT, registerServer, unregisterServer } from './registry.ts';
 
-const PORT = Number(process.env.OPULLER_BRIDGE_PORT ?? 5187);
+const REQUESTED_PORT = process.env.OPULLER_BRIDGE_PORT ? Number(process.env.OPULLER_BRIDGE_PORT) : null;
+/** Ports to try, in order: a pinned OPULLER_BRIDGE_PORT only, otherwise the 5187–5197 range. */
+const PORT_CANDIDATES: number[] = REQUESTED_PORT ? [REQUESTED_PORT] : BRIDGE_PORTS;
 const EDITOR_URL = process.env.OPULLER_URL ?? 'http://localhost:5180';
 const CALL_TIMEOUT = 60_000;
 const WAIT_FOR_EDITOR = 15_000;
+/** How long a tool call waits for the bridge to bind a port before giving up on this call. */
+const WAIT_FOR_BRIDGE = 4_000;
 
 /**
  * Browser origins allowed to attach as an editor session. Any web page open in the
@@ -78,36 +84,43 @@ function activeSession(): Session | null {
   return best;
 }
 
-let wss: WebSocketServer | null = null;
-let wsError: string | null = null;
+// ---------------------------------------------------------------------------
+// WebSocket bridge: bind the first free port of the range, keep retrying forever
+// ---------------------------------------------------------------------------
 
-function startWebSocketServer(): void {
-  try {
-    wss = new WebSocketServer({
-      host: '127.0.0.1',
-      port: PORT,
-      verifyClient: ({ origin }, done) => {
-        const ok = originAllowed(origin);
-        if (!ok) log(`rejected editor connection from origin ${origin}`);
-        done(ok, 403, 'Forbidden origin');
-      },
-    });
-  } catch (err: any) {
-    wsError = String(err?.message ?? err);
-    log('WebSocket server failed:', wsError);
-    return;
-  }
-  wss.on('error', (err) => {
+let wss: WebSocketServer | null = null;
+/** The port the bridge is listening on (null until bound). */
+let boundPort: number | null = null;
+/** Last bind failure, shown in the "no editor" error until the bridge is up. */
+let wsError: string | null = null;
+let bridgeLoop: Promise<void> | null = null;
+const bridgeWaiters: Array<() => void> = [];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function attachSessionHandlers(server: WebSocketServer): void {
+  server.on('error', (err) => {
+    // errors after `listening` (rare) — keep the message for diagnostics
     wsError = String((err as Error).message ?? err);
     log('WebSocket server error:', wsError);
   });
-  wss.on('listening', () => log(`bridge listening on ws://127.0.0.1:${PORT}`));
-  wss.on('connection', (ws) => {
+  server.on('connection', (ws) => {
     ws.on('message', (raw) => {
       let msg: any;
       try {
         msg = JSON.parse(String(raw));
       } catch {
+        return;
+      }
+      if (msg.type === 'probe') {
+        // another OPuller MCP server asking whether this port is ours (see probePort)
+        try {
+          ws.send(JSON.stringify({ type: 'probe-ack', name: 'opuller-mcp', pid: process.pid, port: boundPort }));
+        } catch {
+          /* ignore */
+        }
         return;
       }
       if (msg.type === 'hello') {
@@ -133,9 +146,193 @@ function startWebSocketServer(): void {
   });
 }
 
+/** Try to bind one port. Resolves 'ok' (server kept), 'inuse' or 'error' (server closed). */
+function tryListen(port: number): Promise<'ok' | 'inuse' | 'error'> {
+  return new Promise((resolve) => {
+    let server: WebSocketServer;
+    try {
+      server = new WebSocketServer({
+        host: '127.0.0.1',
+        port,
+        verifyClient: ({ origin }, done) => {
+          const ok = originAllowed(origin);
+          if (!ok) log(`rejected editor connection from origin ${origin}`);
+          done(ok, 403, 'Forbidden origin');
+        },
+      });
+    } catch (err: any) {
+      wsError = String(err?.message ?? err);
+      resolve('error');
+      return;
+    }
+    const onError = (err: any) => {
+      server.removeAllListeners();
+      try {
+        server.close();
+      } catch {
+        /* ignore */
+      }
+      wsError = String(err?.message ?? err);
+      resolve(err?.code === 'EADDRINUSE' ? 'inuse' : 'error');
+    };
+    server.once('error', onError);
+    server.once('listening', () => {
+      server.off('error', onError);
+      wss = server;
+      boundPort = port;
+      wsError = null;
+      attachSessionHandlers(server);
+      resolve('ok');
+    });
+  });
+}
+
+/**
+ * Ask whoever holds `port` whether it is another OPuller MCP server: connect as a client
+ * and send a probe. Resolves the answering pid, or null when nothing answers in time.
+ */
+function probePort(port: number, timeout = 700): Promise<number | null> {
+  return new Promise((resolve) => {
+    let done = false;
+    let ws: WebSocket | null = null;
+    const finish = (v: number | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(t);
+      try {
+        ws?.close();
+      } catch {
+        /* ignore */
+      }
+      resolve(v);
+    };
+    const t = setTimeout(() => finish(null), timeout);
+    try {
+      ws = new WebSocket(`ws://127.0.0.1:${port}`);
+    } catch {
+      finish(null);
+      return;
+    }
+    ws.on('open', () => ws!.send(JSON.stringify({ type: 'probe' })));
+    ws.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(String(raw));
+        if (msg?.type === 'probe-ack' && msg.name === 'opuller-mcp') finish(Number(msg.pid) || -1);
+      } catch {
+        /* ignore */
+      }
+    });
+    ws.on('error', () => finish(null));
+    ws.on('close', () => finish(null));
+  });
+}
+
+/** "pid 1234 (node.exe)" for the process listening on `port`, via netstat / lsof; '' when unknown. */
+async function describeOccupant(port: number): Promise<string> {
+  const run = (cmd: string, args: string[]) =>
+    new Promise<string>((resolve) => {
+      execFile(cmd, args, { timeout: 3000, windowsHide: true }, (err, stdout) => resolve(err ? '' : String(stdout)));
+    });
+  try {
+    let pid = 0;
+    if (process.platform === 'win32') {
+      const out = await run('netstat', ['-ano', '-p', 'tcp']);
+      for (const line of out.split(/\r?\n/)) {
+        const m = /^\s*TCP\s+(\S+):(\d+)\s+\S+\s+LISTENING\s+(\d+)/.exec(line);
+        if (m && Number(m[2]) === port) {
+          pid = Number(m[3]);
+          break;
+        }
+      }
+      if (!pid) return '';
+      const list = await run('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH']);
+      const name = /^"([^"]+)"/.exec(list.trim())?.[1];
+      return `pid ${pid}${name ? ` (${name})` : ''}`;
+    }
+    const out = await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t']);
+    pid = Number(out.trim().split(/\s+/)[0]);
+    if (!pid) return '';
+    const name = (await run('ps', ['-p', String(pid), '-o', 'comm='])).trim();
+    return `pid ${pid}${name ? ` (${name})` : ''}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Bind the bridge: walk the candidate ports; a port held by another OPuller server is
+ * skipped at once, a port held by something else is retried once a second later (it may
+ * be a dying process) before moving on. Never gives up — an EADDRINUSE at start-up must
+ * not disable the bridge for the whole session.
+ */
+async function bindBridge(): Promise<void> {
+  const delays = [1000, 2000, 5000, 10000];
+  let round = 0;
+  const stubbornRetries = new Map<number, number>();
+  while (!wss) {
+    let firstBusy: number | null = null;
+    for (const port of PORT_CANDIDATES) {
+      if (wss) return;
+      const r = await tryListen(port);
+      if (r === 'ok') break;
+      if (r === 'inuse') {
+        firstBusy ??= port;
+        const other = await probePort(port);
+        if (other !== null) {
+          log(`port ${port} is used by another OPuller MCP server (pid ${other}); trying the next one`);
+          continue;
+        }
+        if (!stubbornRetries.has(port) && PORT_CANDIDATES.length > 1) {
+          // give a foreign occupant a moment to go away before hopping ports
+          stubbornRetries.set(port, 1);
+          log(`port ${port} is busy; retrying in 1s`);
+          await sleep(1000);
+          const again = await tryListen(port);
+          if (again === 'ok') break;
+        }
+        continue;
+      }
+      log(`bind on ${port} failed: ${wsError}`);
+    }
+    if (wss) break;
+    const who = firstBusy !== null ? await describeOccupant(firstBusy) : '';
+    const range = PORT_CANDIDATES.length > 1 ? `${PORT_CANDIDATES[0]}–${PORT_CANDIDATES[PORT_CANDIDATES.length - 1]}` : String(PORT_CANDIDATES[0]);
+    wsError = `cannot bind ws://127.0.0.1:${range}${who ? ` (port ${firstBusy} is held by ${who})` : ''}. Stop the process holding the port or set OPULLER_BRIDGE_PORT; the server keeps retrying.`;
+    const delay = delays[Math.min(round++, delays.length - 1)];
+    log(`${wsError} Next attempt in ${delay / 1000}s.`);
+    await sleep(delay);
+  }
+  registerServer(boundPort!);
+  log(`bridge listening on ws://127.0.0.1:${boundPort}${boundPort !== PORT_CANDIDATES[0] ? ` (port ${PORT_CANDIDATES[0]} was busy)` : ''}`);
+  for (const w of bridgeWaiters.splice(0)) w();
+}
+
+/** Start (or resume) the bind loop and wait up to `ms` for a bound port. */
+async function ensureBridge(ms: number): Promise<boolean> {
+  if (wss) return true;
+  if (!bridgeLoop) {
+    bridgeLoop = bindBridge().finally(() => {
+      bridgeLoop = null;
+    });
+  }
+  if (ms <= 0) return false;
+  await new Promise<void>((resolve) => {
+    const t = setTimeout(resolve, ms);
+    bridgeWaiters.push(() => {
+      clearTimeout(t);
+      resolve();
+    });
+  });
+  return wss !== null;
+}
+
 async function waitForEditor(ms: number): Promise<Session> {
   const s = activeSession();
   if (s) return s;
+  const bound = await ensureBridge(WAIT_FOR_BRIDGE);
+  if (!bound) {
+    throw new Error(`The MCP bridge has no WebSocket port yet: ${wsError ?? 'still binding'} Retry in a few seconds.`);
+  }
   await new Promise<void>((resolve) => {
     const t = setTimeout(resolve, ms);
     waiters.push(() => {
@@ -145,8 +342,12 @@ async function waitForEditor(ms: number): Promise<Session> {
   });
   const s2 = activeSession();
   if (!s2) {
+    const hint =
+      boundPort !== DEFAULT_BRIDGE_PORT
+        ? ` This server listens on ws://127.0.0.1:${boundPort} (the default port was busy); the dev server tells the page about it through /__opuller/bridge-ports, a built copy needs ?bridgePort=${boundPort} in its URL.`
+        : '';
     throw new Error(
-      `No OPuller editor is connected.${wsError ? ` (bridge error: ${wsError})` : ''} Open ${EDITOR_URL} in a browser (start it with "npm run dev" in the OPuller folder). The page connects to ws://127.0.0.1:${PORT} automatically; check Window > AI Bridge (MCP) is enabled.`,
+      `No OPuller editor is connected. Open ${EDITOR_URL} in a browser (start it with "npm run dev" in the OPuller folder). The page connects to ws://127.0.0.1:${boundPort} automatically; check Window > AI Bridge (MCP) is enabled.${hint}`,
     );
   }
   return s2;
@@ -747,7 +948,17 @@ server.registerPrompt(
 
 // ---------------------------------------------------------------------------
 
-startWebSocketServer();
+void ensureBridge(0);
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+  process.on(sig, () => {
+    unregisterServer();
+    process.exit(0);
+  });
+}
+process.on('exit', () => unregisterServer());
+// the WebSocket server keeps the event loop alive: leave when the MCP client goes away
+process.stdin.on('end', () => process.exit(0));
+process.stdin.on('close', () => process.exit(0));
 const transport = new StdioServerTransport();
 await server.connect(transport);
 log('MCP server ready (stdio)');

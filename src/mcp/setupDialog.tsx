@@ -16,6 +16,7 @@ function McpSetupDialog({ close }: { close: () => void }) {
   const enabled = useBridgeStore((s) => s.enabled);
   const connected = useBridgeStore((s) => s.connected);
   const requests = useBridgeStore((s) => s.requests);
+  const ports = useBridgeStore((s) => s.ports);
   const setEnabled = useBridgeStore((s) => s.setEnabled);
   const copy = async (text: string) => {
     try {
@@ -43,7 +44,7 @@ function McpSetupDialog({ close }: { close: () => void }) {
       <Row gap={10} align="center">
         <Checkbox checked={enabled} onChange={setEnabled} label="Enable the AI bridge in this browser" />
         <span className={connected ? 'small' : 'small muted'} data-testid="mcp-status">
-          {connected ? `Connected · ${requests} calls served` : enabled ? `Waiting for the MCP server on ${BRIDGE_URL}…` : 'Disabled'}
+          {connected ? `Connected on port${ports.length > 1 ? 's' : ''} ${ports.join(', ')} · ${requests} calls served` : enabled ? `Waiting for the MCP server on ${BRIDGE_URL}…` : 'Disabled'}
         </span>
       </Row>
       <p className="small">
@@ -52,7 +53,7 @@ function McpSetupDialog({ close }: { close: () => void }) {
       </p>
       <ol className="small">
         <li>
-          Keep this tab open (dev server or a built copy). The bridge connects to <code>{BRIDGE_URL}</code> automatically.
+          Keep this tab open (dev server or a built copy). The bridge connects to <code>{BRIDGE_URL}</code> automatically; when that port is taken the server moves to the next one (5187–5197) and the dev server tells the page where it is. A built copy needs <code>?bridgePort=5188</code> in its URL instead.
         </li>
         <li>
           Register the server with your AI client. For Claude Code the repository already contains <code>.mcp.json</code>; for other clients use this config:

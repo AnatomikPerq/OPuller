@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
+import { livePorts } from './mcp/registry';
 
 /**
  * Security headers of the production nginx config (deploy/nginx-opuller-headers.conf), applied
@@ -39,8 +40,28 @@ function publicDirIndex(): Plugin {
   };
 }
 
+/**
+ * `/__opuller/bridge-ports` → `{ ports: [5187, ...] }`: the WebSocket ports of the OPuller MCP
+ * servers currently running on this machine (mcp/registry.ts). The AI bridge in the page polls
+ * it so a server that had to skip a busy port is still found; a built copy served elsewhere
+ * has no such endpoint and falls back to the default port.
+ */
+function bridgePorts(): Plugin {
+  return {
+    name: 'opuller-bridge-ports',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if ((req.url ?? '').split('?')[0] !== '/__opuller/bridge-ports') return next();
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(JSON.stringify({ ports: livePorts() }));
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), publicDirIndex()],
+  plugins: [react(), publicDirIndex(), bridgePorts()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
