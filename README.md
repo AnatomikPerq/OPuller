@@ -93,7 +93,10 @@ every command and tool, simulate mouse gestures and look at the result as an ima
    `opuller_place_file` (PDF / AI / EPS / SVG / images), `opuller_symbols`,
    `opuller_brushes`, `opuller_patterns`, `opuller_gradients`, `opuller_livepaint`,
    `opuller_graphs`, `opuller_perspective`, `opuller_liquify`, `opuller_image_trace`,
-   `opuller_save_project` and more —
+   `opuller_pen` / `opuller_pencil` (paths from anchors or freehand points), `opuller_corners`
+   (live corners), `opuller_effect` (every live effect incl. Zig Zag, Pucker & Bloat, Roughen,
+   Transform, Tweak, Warp), `opuller_blend`, `opuller_offset_path`, `opuller_simplify`,
+   `opuller_align`, `opuller_swatches`, `opuller_fonts`, `opuller_save_project` and more —
    `opuller_status`, `opuller_list_tools` and `opuller_list_commands` describe the editor.
 
 Command-line helpers: `npm run mcp:smoke` (end-to-end check) and
