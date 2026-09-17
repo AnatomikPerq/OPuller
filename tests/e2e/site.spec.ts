@@ -61,6 +61,7 @@ test.describe('public site', () => {
     const sitemap = await page.request.get('/sitemap.xml');
     expect(sitemap.headers()['content-type']).toMatch(/xml/);
     const xml = await sitemap.text();
+    expect(xml).toContain('xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"');
     for (const p of ['/', ...PAGES.map((x) => x.path)]) expect(xml).toContain(`<loc>https://opuller.huhusova67.online${p}</loc>`);
     for (const file of ['/og.png', '/screenshot.png', '/site.css', '/manifest.webmanifest', '/favicon-48.png']) expect((await page.request.get(file)).ok(), file).toBeTruthy();
   });
