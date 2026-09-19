@@ -252,12 +252,32 @@ async function fontFor(cache: Map<string, Promise<OutlineFont | null>>, st: Text
   return f;
 }
 
+/**
+ * SVG path data of an opentype.js path. Its own toPathData() is not used: opentype.js 2.0 rounds
+ * through a string ("<fraction>e+4") and prints NaN for coordinates whose fractional part is so
+ * small that it stringifies in exponent notation (e.g. 125 × 0.072), which truncated glyphs.
+ */
+export function glyphPathData(p: { commands: Array<{ type: string; x?: number; y?: number; x1?: number; y1?: number; x2?: number; y2?: number }> }): string {
+  const n = (v: number | undefined) => {
+    const r = Math.round((v ?? 0) * 1e4) / 1e4;
+    return r === 0 ? '0' : String(r);
+  };
+  let d = '';
+  for (const c of p.commands) {
+    if (c.type === 'M' || c.type === 'L') d += `${c.type}${n(c.x)} ${n(c.y)}`;
+    else if (c.type === 'Q') d += `Q${n(c.x1)} ${n(c.y1)} ${n(c.x)} ${n(c.y)}`;
+    else if (c.type === 'C') d += `C${n(c.x1)} ${n(c.y1)} ${n(c.x2)} ${n(c.y2)} ${n(c.x)} ${n(c.y)}`;
+    else if (c.type === 'Z') d += 'Z';
+  }
+  return d;
+}
+
 function glyphSubPaths(font: OutlineFont, ch: string, size: number, m: Matrix): SubPath[] {
   const g = font.glyphFor(ch);
   if (!g) return [];
   let d = '';
   try {
-    d = g.glyph.getPath(0, 0, size).toPathData(4);
+    d = glyphPathData(g.glyph.getPath(0, 0, size));
   } catch {
     return [];
   }

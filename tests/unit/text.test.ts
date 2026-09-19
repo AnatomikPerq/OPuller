@@ -249,3 +249,25 @@ describe('outline helpers', () => {
     expect(pathTextStart({ ...n, pathOffset: 0.5, style: { ...n.style, textAlign: 'center' } }, l, 200)).toBeCloseTo(100 - l.lines[0].width / 2, 5);
   });
 });
+
+describe('glyph outlines', () => {
+  it('serialises opentype.js paths without the NaN that toPathData prints for tiny fractions', async () => {
+    const { glyphPathData } = await import('@/text/outline');
+    const { parseSvgPathData } = await import('@/geometry/path');
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const opentype = await import('opentype.js');
+    // Montserrat Bold "а" (U+0430) has a point at x = 125 units; at 72 px that is 125 × 0.072 =
+    // 9.000000000000002, whose fraction stringifies as 1.77e-15 and made opentype.js emit NaN
+    const buf = fs.readFileSync(path.resolve(process.cwd(), 'node_modules/@fontsource/montserrat/files/montserrat-cyrillic-700-normal.woff'));
+    const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    const p = font.charToGlyph('а').getPath(0, 0, 72);
+    expect(p.toPathData(4)).toContain('NaN'); // the library bug this guards against
+    const d = glyphPathData(p);
+    expect(d).not.toContain('NaN');
+    const sps = parseSvgPathData(d);
+    expect(sps).toHaveLength(2); // the bowl and its counter
+    expect(Math.min(...sps.map((sp) => sp.anchors.length))).toBeGreaterThan(4);
+    expect(glyphPathData({ commands: [{ type: 'M', x: 1e-7, y: -2.00004 }, { type: 'Q', x1: 0.5, y1: 0.5, x: 3, y: 4 }, { type: 'Z' }] })).toBe('M0 -2Q0.5 0.5 3 4Z');
+  });
+});
