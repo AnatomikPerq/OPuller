@@ -246,11 +246,14 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
   (`scripts/illustrator/ai.mjs`, `runJsx`) whenever a feature should be measured against Illustrator
   rather than guessed.
 * Lesson fixtures: `tests/e2e/lessons.spec.ts` builds `tests/e2e/lessons/lessons.ts` (owl, kitten,
-  rowan — scripted through `window.__opuller.mcp`) and compares the render with
+  rowan, landscape, fox — the five Illustrator practicals of the course, scripted through
+  `window.__opuller.mcp`; builders may be async) and compares the render with
   `tests/e2e/lessons/baseline/*.png` (OPuller's own render, IoU ≥ 0.95; `UPDATE_LESSONS=1` rewrites
   them after an intended rendering change) and with `tests/e2e/lessons/illustrator/*.png` —
   Illustrator's render of the exported .ai, written by `tests/e2e/lessons-illustrator.spec.ts`
-  (`ILLUSTRATOR=1`, needs Illustrator). Comparison helpers live in `tests/e2e/lessons/compare.ts`.
+  (`ILLUSTRATOR=1`, needs Illustrator). Comparison helpers live in `tests/e2e/lessons/compare.ts`;
+  `node scripts/run-lesson.mjs <name> [out.png]` builds one lesson in the open editor tab for
+  iterating on a builder without the spec.
 * E2E: `tests/e2e/<feature>.spec.ts` with helpers from `tests/e2e/helpers.ts`
   (`openApp`, `drawRect`, `dragWorld`, `clickWorld`, `selectTool`, `getState`,
   `withStore`, `runCommand`, `nodeById`, `worldBounds`). `window.__opuller` exposes

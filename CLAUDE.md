@@ -23,6 +23,7 @@ node scripts/illustrator/ai.mjs 'return app.version'   # run ExtendScript in the
 node scripts/illustrator/warp-fixtures.mjs             # re-sample Effect > Warp from Illustrator into tests/fixtures/warp/
 node scripts/illustrator/render-file.mjs in.ai out.png --scale 1.3333   # render a file with Illustrator (px docs are 72/96 pt)
 ILLUSTRATOR=1 npx playwright test tests/e2e/lessons-illustrator.spec.ts  # rebuild the Illustrator renders of the lessons
+node scripts/run-lesson.mjs landscape out.png   # build one lesson (tests/e2e/lessons/lessons.ts) in the open editor and render it
 ```
 
 Adobe Illustrator 2026 is installed on this machine: when a behaviour should match Illustrator,
