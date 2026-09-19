@@ -21,6 +21,8 @@ node scripts/gen-shortcuts.mjs   # refresh the shortcut tables in public/guide/i
 node scripts/gen-og.mjs          # refresh public/og.png + public/screenshot.png (needs the dev server)
 node scripts/illustrator/ai.mjs 'return app.version'   # run ExtendScript in the installed Illustrator (COM)
 node scripts/illustrator/warp-fixtures.mjs             # re-sample Effect > Warp from Illustrator into tests/fixtures/warp/
+node scripts/illustrator/render-file.mjs in.ai out.png --scale 1.3333   # render a file with Illustrator (px docs are 72/96 pt)
+ILLUSTRATOR=1 npx playwright test tests/e2e/lessons-illustrator.spec.ts  # rebuild the Illustrator renders of the lessons
 ```
 
 Adobe Illustrator 2026 is installed on this machine: when a behaviour should match Illustrator,

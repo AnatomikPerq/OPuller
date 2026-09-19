@@ -11,7 +11,7 @@
 import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -52,7 +52,7 @@ function __json(v) {
 }
 `;
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const code = process.argv.slice(2).join(' ') || 'return app.version;';
   runJsx(code).then((r) => console.log(r), (e) => { console.error(e.message); process.exit(1); });
 }

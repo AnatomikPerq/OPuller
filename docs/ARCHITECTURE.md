@@ -64,7 +64,8 @@ scripts/        gen-icons.mjs (favicon set), gen-og.mjs (social card + screensho
                 running editor), gen-shortcuts.mjs (guide shortcut tables from the registries)
   illustrator/  bridge to an installed Adobe Illustrator (Windows COM): run-jsx.ps1 / ai.mjs run
                 ExtendScript and return its result; warp-fixtures.mjs samples Effect > Warp into
-                tests/fixtures/warp/*.json (lattice images + expanded outlines per style/bend/axis/distortion)
+                tests/fixtures/warp/*.json (lattice images + expanded outlines per style/bend/axis/distortion);
+                render-file.mjs renders an .ai/.svg/.pdf with Illustrator to PNG (reference renders)
 deploy/         nginx server block + security-header snippet for the production site
 tests/
   unit/         vitest (jsdom)          -> `npm test`
@@ -246,8 +247,10 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
   rather than guessed.
 * Lesson fixtures: `tests/e2e/lessons.spec.ts` builds `tests/e2e/lessons/lessons.ts` (owl, kitten,
   rowan — scripted through `window.__opuller.mcp`) and compares the render with
-  `tests/e2e/lessons/baseline/*.png` (IoU ≥ 0.95); `UPDATE_LESSONS=1` rewrites the baselines after an
-  intended rendering change.
+  `tests/e2e/lessons/baseline/*.png` (OPuller's own render, IoU ≥ 0.95; `UPDATE_LESSONS=1` rewrites
+  them after an intended rendering change) and with `tests/e2e/lessons/illustrator/*.png` —
+  Illustrator's render of the exported .ai, written by `tests/e2e/lessons-illustrator.spec.ts`
+  (`ILLUSTRATOR=1`, needs Illustrator). Comparison helpers live in `tests/e2e/lessons/compare.ts`.
 * E2E: `tests/e2e/<feature>.spec.ts` with helpers from `tests/e2e/helpers.ts`
   (`openApp`, `drawRect`, `dragWorld`, `clickWorld`, `selectTool`, `getState`,
   `withStore`, `runCommand`, `nodeById`, `worldBounds`). `window.__opuller` exposes
