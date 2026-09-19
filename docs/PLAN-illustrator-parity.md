@@ -66,7 +66,7 @@
 - **Тест.** e2e: треугольник → радиус вершины 9 → warp bulge 40 → вершина скруглена.
 
 ### 7. Нет эффектов Distort & Transform: Zig Zag, Roughen, Pucker & Bloat, Transform, Tweak
-- **Статус.** СДЕЛАНО (bef3c86). Zig Zag, Pucker & Bloat, Roughen, Transform, Tweak — живые эффекты с диалогами, Expand, проект; unit-тест плана проходит.
+- **Статус.** СДЕЛАНО (bef3c86). Zig Zag, Pucker & Bloat, Roughen, Transform, Tweak — живые эффекты с диалогами, Expand, проект; unit-тест плана проходит. Pucker & Bloat и Zig Zag сверены с Illustrator 2026 и пересчитаны по его модели (`tests/fixtures/effects/*.json`, `scripts/illustrator/effect-fixtures.mjs`, расхождение ≤ 0.01 px): у Illustrator «ridges per segment» = число пиков на сегмент (не 2n−1), узлы контура тоже смещаются, ручки Pucker & Bloat идут от центра на тот же процент. Roughen/Tweak случайны (сверить можно только статистически), Transform — аффинный, Round Corners и Offset Path ещё не сверялись.
 - **Симптом.** Рот котёнка (Zig Zag: size 4, ridges 3, smooth) пришлось рисовать вручную. Эти эффекты встречаются почти в каждом уроке Illustrator.
 - **Где.** Новый модуль `src/distort/` (регистрация через `registerGeometryEffect` + `registerExpander`, диалог через `registerDialog`).
 - **Исправить.** Реализовать в порядке частоты: Zig Zag (size абс./отн., ridges per segment, smooth/corner) → Pucker & Bloat → Roughen (size, detail, smooth/corner, seed) → Transform (копии, сдвиг, масштаб, поворот, отражение) → Tweak. Все — как живые эффекты с Expand Appearance.

@@ -27,9 +27,10 @@ test.describe('distort and 3D effects', () => {
     expect(s.past[s.past.length - 1].label).toBe('Zig Zag');
     let n = await nodeById(page, id);
     expect(n.effects[0]).toMatchObject({ type: 'zigZag', size: 4, ridges: 3, smooth: false });
-    // rendered outline: 4 anchors + 4 segments × 5 peaks = 24 points; bounds grow by the peak size
+    // rendered outline: 4 anchors + 4 segments × 3 peaks = 16 points (Illustrator: ridges = peaks per segment,
+    // the corners take part in the zig zag too); bounds grow by the peak size
     let d = (await page.locator(`.document-layer g[data-id="${id}"] path`).first().getAttribute('d')) ?? '';
-    expect(d.split('L').length - 1).toBe(24); // 24 line segments around the closed outline
+    expect(d.split('L').length - 1).toBe(16); // 16 line segments around the closed outline
     let b = (await worldBounds(page, id))!;
     expect(b.x).toBeCloseTo(96, 3);
     expect(b.width).toBeCloseTo(208, 3);
@@ -42,7 +43,7 @@ test.describe('distort and 3D effects', () => {
     d = (await page.locator(`.document-layer g[data-id="${id}"] path`).first().getAttribute('d')) ?? '';
     expect(d).toContain('C');
     b = (await worldBounds(page, id))!;
-    expect(b.y).toBeLessThan(60); // petals bulge beyond the original top edge (100)
+    expect(b.y).toBeCloseTo(75, 3); // the top petal peaks at y = 75, beyond the original top edge (100), as in Illustrator
     await set([{ type: 'roughen', enabled: true, size: 3, relative: false, detail: 10, smooth: false, seed: 5 }]);
     d = (await page.locator(`.document-layer g[data-id="${id}"] path`).first().getAttribute('d')) ?? '';
     expect(d.split('L').length).toBeGreaterThan(40);

@@ -5,7 +5,7 @@
  */
 import type { SubPath, Anchor, Vec, Rect, Matrix, ZigZagEffect, PuckerBloatEffect, RoughenEffect, TransformEffect, TweakEffect } from '@/model/types';
 import { subpathToCubics, segmentCount, absHandleIn, absHandleOut, anchor as makeAnchor, transformSubPath } from '@/geometry/path';
-import { cubicPoint, cubicDerivative, cubicLength, cubicTAtLength, type Cubic } from '@/geometry/bezier';
+import { cubicPoint, cubicDerivative, cubicLength, cubicTAtLength, cubicSplit, type Cubic } from '@/geometry/bezier';
 import { compose, translate, scale as scaleM, rotate as rotateM } from '@/geometry/matrix';
 
 function norm(v: Vec): Vec {
@@ -54,53 +54,145 @@ function smoothThrough(points: Vec[], closed: boolean, tension = 1 / 3): Anchor[
 // ---------------------------------------------------------------------------
 
 /**
- * Zig Zag: every segment gets `ridges` peaks — 2·ridges − 1 points spaced evenly along it
- * (by arc length), offset alternately to the left and right of the path by `size`
- * (absolute, or a percentage of the segment length when `relative`). Corner points give
- * a saw tooth, smooth points a wave. The original anchors stay in place.
+ * Zig Zag, as Illustrator does it (measured through scripts/illustrator/effect-fixtures.mjs,
+ * fixtures in tests/fixtures/effects/zigZag.json). Every segment gets `ridges` peaks at equal
+ * arc-length spacing s = L / (ridges + 1), and the anchors take part as well: all points of the
+ * result — anchors and peaks alike — are pushed off the path alternately (the first anchor to
+ * one side, the next point to the other, …) by `size` along the local normal. A peak's normal
+ * is the curve normal; an anchor's is the weighted mean of the normals of its two sides, the
+ * weight of a straight side being its spacing s and of a curved side the length of the handle
+ * its first (last) Bézier piece keeps after the split — a corner between a short and a long
+ * edge therefore leans towards the long one. Smooth mode adds handles: s/2 along the path on
+ * straight sides, the handles of the pieces between the peaks (de Casteljau) on curved sides,
+ * so a circle stays a circle at size 0; a handle that sits on its anchor counts as straight.
+ * (Illustrator itself puts the very last point of a closed path slightly off; that is not
+ * reproduced.) `relative` keeps OPuller's meaning — size as % of the segment length — because
+ * Illustrator's dialog bakes its relative size into an absolute amount.
  */
 export function zigZagSubPath(sp: SubPath, e: ZigZagEffect): SubPath {
   const segs = segmentCount(sp);
   const ridges = Math.max(0, Math.round(e.ridges));
   if (segs < 1 || ridges === 0 || !(Math.abs(e.size) > 1e-9)) return sp;
+  const n = sp.anchors.length;
   const cubics = subpathToCubics(sp);
+  const EPS = 1e-9;
+  const len = (v: Vec) => Math.hypot(v.x, v.y);
+  const sub = (a: Vec, b: Vec): Vec => ({ x: a.x - b.x, y: a.y - b.y });
+  const perp = (d: Vec): Vec => ({ x: -d.y, y: d.x });
+
+  /** One segment split at its peaks: the pieces between consecutive points (a straight segment keeps `pieces` empty). */
+  interface Seg {
+    straight: boolean;
+    dir: Vec; // unit direction of a straight segment
+    spacing: number;
+    amp: number;
+    peaks: Vec[];
+    normals: Vec[]; // unit normal at every peak
+    pieces: Cubic[]; // ridges + 1 pieces for a curved segment
+  }
+  const segments: Seg[] = cubics.map((c) => {
+    const straight = len(sub(c.p1, c.p0)) < EPS && len(sub(c.p3, c.p2)) < EPS;
+    const L = cubicLength(c, 0.01);
+    const spacing = L / (ridges + 1);
+    const amp = e.relative ? (L * e.size) / 100 : e.size;
+    const dir = norm(sub(c.p3, c.p0));
+    const peaks: Vec[] = [];
+    const normals: Vec[] = [];
+    const pieces: Cubic[] = [];
+    if (straight || L < EPS) {
+      for (let k = 1; k <= ridges; k++) {
+        peaks.push({ x: c.p0.x + dir.x * spacing * k, y: c.p0.y + dir.y * spacing * k });
+        normals.push(perp(dir));
+      }
+    } else {
+      // split at the arc-length-uniform parameters, piece by piece (de Casteljau)
+      let rest = c;
+      for (let k = 1; k <= ridges; k++) {
+        const t = cubicTAtLength(rest, spacing);
+        const [left, right] = cubicSplit(rest, t);
+        pieces.push(left);
+        peaks.push(right.p0);
+        normals.push(perp(tangentAt(c, cubicTAtLength(c, spacing * k))));
+        rest = right;
+      }
+      pieces.push(rest);
+    }
+    return { straight, dir, spacing, amp, peaks, normals, pieces };
+  });
+
+  /** Tangent direction, weight and smooth-mode handle of the side of an anchor that starts segment s (out) or ends it (in). */
+  const side = (s: number, out: boolean): { dir: Vec; weight: number; handle: Vec | null; degenerate: boolean } => {
+    const g = segments[s];
+    if (g.straight) return { dir: out ? g.dir : { x: -g.dir.x, y: -g.dir.y }, weight: g.spacing, handle: null, degenerate: true };
+    const piece = out ? g.pieces[0] : g.pieces[g.pieces.length - 1];
+    const a = out ? piece.p0 : piece.p3;
+    const h1 = sub(out ? piece.p1 : piece.p2, a);
+    if (len(h1) > EPS) return { dir: norm(h1), weight: len(h1), handle: h1, degenerate: false };
+    // a handle on its anchor: the direction and weight come from the next control point, the smooth handle is spacing / 2
+    const h2 = sub(out ? piece.p2 : piece.p1, a);
+    return { dir: norm(h2), weight: len(h2), handle: null, degenerate: true };
+  };
+
   const points: Vec[] = [];
-  /** path tangent at a peak (null for the original anchors) */
-  const peakTangent: Array<Vec | null> = [];
-  const spacing: number[] = [];
+  const normals: Vec[] = [];
+  const handleIn: Array<Vec | null> = [];
+  const handleOut: Array<Vec | null> = [];
+  const pushAnchor = (i: number) => {
+    const p = sp.anchors[i].point;
+    const hasIn = sp.closed || i > 0;
+    const hasOut = sp.closed || i < n - 1;
+    const sIn = hasIn ? side((i - 1 + segs) % segs, false) : null;
+    const sOut = hasOut ? side(i % segs, true) : null;
+    // unit normals of both sides (the incoming side's tangent points back along the path), weighted
+    let nx = 0;
+    let ny = 0;
+    if (sIn) {
+      const t = { x: -sIn.dir.x, y: -sIn.dir.y };
+      nx += -t.y * sIn.weight;
+      ny += t.x * sIn.weight;
+    }
+    if (sOut) {
+      nx += -sOut.dir.y * sOut.weight;
+      ny += sOut.dir.x * sOut.weight;
+    }
+    const nrm = norm({ x: nx, y: ny });
+    const tangent = { x: nrm.y, y: -nrm.x };
+    points.push(p);
+    normals.push(nrm);
+    const spacingIn = hasIn ? segments[(i - 1 + segs) % segs].spacing : 0;
+    const spacingOut = hasOut ? segments[i % segs].spacing : 0;
+    handleIn.push(!sIn ? null : sIn.degenerate ? { x: -tangent.x * spacingIn * 0.5, y: -tangent.y * spacingIn * 0.5 } : sIn.handle);
+    handleOut.push(!sOut ? null : sOut.degenerate ? { x: tangent.x * spacingOut * 0.5, y: tangent.y * spacingOut * 0.5 } : sOut.handle);
+  };
+  const amps: number[] = [];
   for (let s = 0; s < segs; s++) {
-    const c = cubics[s];
-    const len = cubicLength(c, 0.05);
-    const amp = e.relative ? (len * e.size) / 100 : e.size;
-    points.push(c.p0);
-    peakTangent.push(null);
-    const count = 2 * ridges - 1;
-    spacing.push(len / (count + 1));
-    if (len < 1e-9) continue;
-    for (let k = 1; k <= count; k++) {
-      const t = cubicTAtLength(c, (len * k) / (count + 1));
-      const p = cubicPoint(c, t);
-      const tg = tangentAt(c, t);
-      const sign = k % 2 === 1 ? 1 : -1;
-      // left normal (−ty, tx): peaks alternate sides starting to the left of the travel direction
-      points.push({ x: p.x - tg.y * amp * sign, y: p.y + tg.x * amp * sign });
-      peakTangent.push(tg);
-      spacing.push(len / (count + 1));
+    pushAnchor(s);
+    amps.push(s === 0 ? segments[0].amp : (segments[s - 1].amp + segments[s].amp) / 2);
+    const g = segments[s];
+    for (let k = 0; k < ridges; k++) {
+      points.push(g.peaks[k]);
+      normals.push(g.normals[k]);
+      amps.push(g.amp);
+      if (g.straight) {
+        handleIn.push({ x: -g.dir.x * g.spacing * 0.5, y: -g.dir.y * g.spacing * 0.5 });
+        handleOut.push({ x: g.dir.x * g.spacing * 0.5, y: g.dir.y * g.spacing * 0.5 });
+      } else {
+        handleIn.push(sub(g.pieces[k].p2, g.pieces[k].p3));
+        handleOut.push(sub(g.pieces[k + 1].p1, g.pieces[k + 1].p0));
+      }
     }
   }
   if (!sp.closed) {
-    points.push(cubics[segs - 1].p3);
-    peakTangent.push(null);
-    spacing.push(spacing[spacing.length - 1]);
+    pushAnchor(n - 1);
+    amps.push(segments[segs - 1].amp);
   }
-  if (!e.smooth) return { anchors: points.map((p) => makeAnchor(p)), closed: sp.closed };
-  // wave: peaks run parallel to the path, the original anchors cross it (Catmull-Rom through their neighbours)
-  const anchors = smoothThrough(points, sp.closed);
-  points.forEach((p, i) => {
-    const tg = peakTangent[i];
-    if (!tg) return;
-    const h = { x: tg.x * spacing[i] * 0.5, y: tg.y * spacing[i] * 0.5 };
-    anchors[i] = makeAnchor(p, { x: -h.x, y: -h.y }, h, 'smooth');
+  const anchors = points.map((p, i) => {
+    const sign = i % 2 === 0 ? -1 : 1;
+    const q = { x: p.x + normals[i].x * amps[i] * sign, y: p.y + normals[i].y * amps[i] * sign };
+    if (!e.smooth) return makeAnchor(q, null, null, 'corner');
+    const hin = handleIn[i];
+    const hout = handleOut[i];
+    return makeAnchor(q, hin, hout, kindFor(hin, hout));
   });
   return { anchors, closed: sp.closed };
 }
@@ -113,39 +205,37 @@ export function zigZagSubPaths(sps: SubPath[], e: ZigZagEffect): SubPath[] {
 // Pucker & Bloat
 // ---------------------------------------------------------------------------
 
+/** Anchor kind from its handles: smooth when both exist and are opposite and collinear. */
+function kindFor(hin: Vec | null, hout: Vec | null): 'corner' | 'smooth' {
+  if (!hin || !hout) return 'corner';
+  const dot = hin.x * hout.x + hin.y * hout.y;
+  const cross = hin.x * hout.y - hin.y * hout.x;
+  return dot < 0 && Math.abs(cross) <= 1e-6 * Math.hypot(hin.x, hin.y) * Math.hypot(hout.x, hout.y) ? 'smooth' : 'corner';
+}
+
 /**
- * Pucker & Bloat: anchors move towards the centre by `amount` % of their distance
- * (bloat, positive) while every segment bulges outward through the point its midpoint
- * reaches when pushed away from the centre by the same percentage; pucker (negative)
- * does the opposite — anchors out, segments in. Bloat 100 % turns a square into a
- * four-petal flower, 200 % sends the anchors through the centre (Illustrator's range).
+ * Pucker & Bloat, exactly as Illustrator does it (measured through scripts/illustrator/
+ * effect-fixtures.mjs, fixtures in tests/fixtures/effects/puckerBloat.json): with C the
+ * centre of the object's tight bounds and a = amount / 100, every anchor moves towards C
+ * (P′ = P + a·(C − P)) while every handle end moves away from it by the same factor
+ * (H′ = H + a·(H − C)); a handle that sits on its anchor ends up at P − a·(C − P), so a
+ * square's corners grow the diagonal "petal" handles. Bloat (positive) rounds segments
+ * outward, pucker (negative) draws them inward, 200 % sends the anchors through the centre.
  */
 export function puckerBloatSubPath(sp: SubPath, amount: number, centre: Vec): SubPath {
   const a = amount / 100;
-  const n = sp.anchors.length;
-  if (n < 2 || Math.abs(a) < 1e-9) return sp;
-  const moved = sp.anchors.map((an) => ({ x: an.point.x + (centre.x - an.point.x) * a, y: an.point.y + (centre.y - an.point.y) * a }));
-  const segs = segmentCount(sp);
-  const handleOut: Array<Vec | null> = new Array(n).fill(null);
-  const handleIn: Array<Vec | null> = new Array(n).fill(null);
-  for (let s = 0; s < segs; s++) {
-    const i = s;
-    const j = (s + 1) % n;
-    const p0 = sp.anchors[i].point;
-    const p3 = sp.anchors[j].point;
-    // midpoint of the original segment (its curve midpoint for curved segments)
-    const c: Cubic = { p0, p1: absHandleOut(sp.anchors[i]), p2: absHandleIn(sp.anchors[j]), p3 };
-    const m = cubicPoint(c, 0.5);
-    const target = { x: m.x + (m.x - centre.x) * a, y: m.y + (m.y - centre.y) * a };
-    const mid = { x: (moved[i].x + moved[j].x) / 2, y: (moved[i].y + moved[j].y) / 2 };
-    const d = norm({ x: m.x - centre.x, y: m.y - centre.y });
-    const dir = Math.hypot(d.x, d.y) > 0 ? d : norm({ x: -(p3.y - p0.y), y: p3.x - p0.x });
-    // B(0.5) = mid + 0.75·L·dir for parallel handles of length L along dir
-    const L = ((target.x - mid.x) * dir.x + (target.y - mid.y) * dir.y) / 0.75;
-    handleOut[i] = { x: dir.x * L, y: dir.y * L };
-    handleIn[j] = { x: dir.x * L, y: dir.y * L };
-  }
-  const anchors = moved.map((p, i) => makeAnchor(p, handleIn[i], handleOut[i], 'corner'));
+  if (sp.anchors.length < 2 || Math.abs(a) < 1e-9) return sp;
+  const anchors = sp.anchors.map((an) => {
+    const p = an.point;
+    const moved = { x: p.x + (centre.x - p.x) * a, y: p.y + (centre.y - p.y) * a };
+    const handle = (h: Vec | null): Vec => {
+      const abs = h ? { x: p.x + h.x, y: p.y + h.y } : p;
+      return { x: abs.x + (abs.x - centre.x) * a - moved.x, y: abs.y + (abs.y - centre.y) * a - moved.y };
+    };
+    const hin = handle(an.handleIn);
+    const hout = handle(an.handleOut);
+    return makeAnchor(moved, hin, hout, kindFor(hin, hout));
+  });
   return { anchors, closed: sp.closed };
 }
 

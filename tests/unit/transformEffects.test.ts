@@ -9,18 +9,17 @@ import type { ZigZagEffect, RoughenEffect, TransformEffect, TweakEffect } from '
 const frame = { x: 0, y: 0, width: 100, height: 100 };
 
 describe('Zig Zag', () => {
-  it('a 100 px segment with size 4 and 3 ridges gives 7 anchors with peaks at ±4 (plan item 7)', () => {
+  it('a 100 px segment with size 4 and 3 ridges gives 3 peaks between the two ends, all alternating ±4 (Illustrator, plan item 7)', () => {
     const line = polylineSubPath([{ x: 0, y: 0 }, { x: 100, y: 0 }], false);
     const e: ZigZagEffect = { type: 'zigZag', enabled: true, size: 4, relative: false, ridges: 3, smooth: false };
     const out = zigZagSubPath(line, e);
-    expect(out.anchors).toHaveLength(7);
+    expect(out.anchors).toHaveLength(5);
     expect(out.closed).toBe(false);
-    const ys = out.anchors.map((a) => a.point.y);
-    expect(ys[0]).toBe(0);
-    expect(ys[6]).toBe(0);
-    expect(ys.slice(1, 6).map((y) => Math.round(y))).toEqual([4, -4, 4, -4, 4]);
-    // peaks are evenly spaced along the segment
-    expect(out.anchors.map((a) => Math.round(a.point.x * 100) / 100)).toEqual([0, 16.67, 33.33, 50, 66.67, 83.33, 100]);
+    // the end anchors take part in the zig zag: the first one goes to one side, every next point to the other
+    const ys = out.anchors.map((a) => Math.round(a.point.y));
+    expect(ys).toEqual([-4, 4, -4, 4, -4]);
+    // peaks are evenly spaced along the segment (spacing = length / (ridges + 1))
+    expect(out.anchors.map((a) => Math.round(a.point.x * 100) / 100)).toEqual([0, 25, 50, 75, 100]);
     // corner points: no handles
     expect(out.anchors.every((a) => !a.handleIn && !a.handleOut)).toBe(true);
   });
@@ -28,11 +27,12 @@ describe('Zig Zag', () => {
   it('smooth points make a wave with handles along the path; relative size scales with the segment', () => {
     const line = polylineSubPath([{ x: 0, y: 0 }, { x: 100, y: 0 }], false);
     const smooth = zigZagSubPath(line, { type: 'zigZag', enabled: true, size: 4, relative: false, ridges: 3, smooth: true });
-    expect(smooth.anchors).toHaveLength(7);
+    expect(smooth.anchors).toHaveLength(5);
     const peak = smooth.anchors[1];
     expect(peak.kind).toBe('smooth');
     expect(Math.abs(peak.handleOut!.y)).toBeLessThan(1e-9); // tangent parallel to the baseline at a peak
-    expect(peak.handleOut!.x).toBeGreaterThan(0);
+    expect(peak.handleOut!.x).toBeCloseTo(12.5, 6); // half the spacing on a straight segment
+    expect(smooth.anchors[0].handleOut!.x).toBeCloseTo(12.5, 6);
     const rel = zigZagSubPath(line, { type: 'zigZag', enabled: true, size: 10, relative: true, ridges: 1, smooth: false });
     expect(rel.anchors).toHaveLength(3);
     expect(Math.abs(rel.anchors[1].point.y)).toBeCloseTo(10, 6); // 10 % of 100
@@ -42,8 +42,10 @@ describe('Zig Zag', () => {
     const sq = rectSubPath(100, 100);
     const out = zigZagSubPath(sq, { type: 'zigZag', enabled: true, size: 5, relative: false, ridges: 2, smooth: false });
     expect(out.closed).toBe(true);
-    expect(out.anchors).toHaveLength(4 + 4 * 3);
-    expect(out.anchors[0].point).toEqual({ x: 0, y: 0 });
+    expect(out.anchors).toHaveLength(4 + 4 * 2);
+    // a corner is pushed along the bisector of its two edges (outward here, by the full size)
+    expect(out.anchors[0].point.x).toBeCloseTo(-5 / Math.SQRT2, 6);
+    expect(out.anchors[0].point.y).toBeCloseTo(-5 / Math.SQRT2, 6);
     const b = pathBounds([out])!;
     expect(b.width).toBeCloseTo(110, 6);
     expect(b.height).toBeCloseTo(110, 6);
@@ -61,11 +63,12 @@ describe('Pucker & Bloat', () => {
       expect(a.point.x).toBeCloseTo(50, 6);
       expect(a.point.y).toBeCloseTo(50, 6);
     }
-    // the top segment's midpoint reaches (50, −50): the original midpoint (50, 0) pushed away from the centre by 100 %
+    // handles move the other way: a corner handle ends up at P − (C − P), so the top petal peaks at y = −25 (as in Illustrator)
+    expect(out.anchors[0].handleOut).toEqual({ x: -100, y: -100 });
     const c = subpathToCubics(out)[0];
     const m = cubicPoint(c, 0.5);
     expect(m.x).toBeCloseTo(50, 6);
-    expect(m.y).toBeCloseTo(-50, 6);
+    expect(m.y).toBeCloseTo(-25, 6);
   });
 
   it('pucker pulls the segments in and pushes the anchors out; 0 % is identity', () => {
@@ -73,7 +76,7 @@ describe('Pucker & Bloat', () => {
     const out = puckerBloatSubPath(sq, -50, { x: 50, y: 50 });
     expect(out.anchors[0].point.x).toBeCloseTo(-25, 6); // corner moved outward by 50 % of its distance
     const m = cubicPoint(subpathToCubics(out)[0], 0.5);
-    expect(m.y).toBeCloseTo(25, 6); // top edge midpoint moved half way to the centre
+    expect(m.y).toBeCloseTo(12.5, 6); // the top edge dips towards the centre (handles at P − a·(C − P))
     expect(puckerBloatSubPath(sq, 0, { x: 50, y: 50 })).toBe(sq);
   });
 });
