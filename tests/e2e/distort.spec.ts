@@ -85,15 +85,16 @@ test.describe('distort and 3D effects', () => {
     // an arch lifts the middle: the visual bounds grow upwards
     const b = (await worldBounds(page, id))!;
     expect(b.y).toBeLessThan(100);
-    // the canvas path has many anchors (subdivided curve)
+    // the four straight edges become four cubics (the warp is one Bézier patch, as in Illustrator)
     const d = await page.locator(`.document-layer g[data-id="${id}"] path`).first().getAttribute('d');
-    expect((d ?? '').split('C').length).toBeGreaterThan(8);
+    expect((d ?? '').split('C').length).toBe(5);
     // expand appearance bakes the geometry and drops the effect
     await runCommand(page, 'object.expandAppearance');
     n = await nodeById(page, id);
     expect(n.effects).toHaveLength(0);
     expect(n.shape).toBeUndefined();
-    expect(n.subpaths[0].anchors.length).toBeGreaterThan(8);
+    expect(n.subpaths[0].anchors.length).toBe(4);
+    expect(n.subpaths[0].anchors.every((a: { handleIn: unknown; handleOut: unknown }) => a.handleIn && a.handleOut)).toBe(true);
   });
 
   test('envelope with mesh wraps the selection, Mesh tool drags a point, release restores', async ({ page }) => {

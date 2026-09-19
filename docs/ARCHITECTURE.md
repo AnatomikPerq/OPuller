@@ -62,6 +62,9 @@ public/         static files copied into the build as-is: icons, manifest, robot
                 site pages features/, guide/, ai/ (each an index.html; served at /<page>/)
 scripts/        gen-icons.mjs (favicon set), gen-og.mjs (social card + screenshot from the
                 running editor), gen-shortcuts.mjs (guide shortcut tables from the registries)
+  illustrator/  bridge to an installed Adobe Illustrator (Windows COM): run-jsx.ps1 / ai.mjs run
+                ExtendScript and return its result; warp-fixtures.mjs samples Effect > Warp into
+                tests/fixtures/warp/*.json (lattice images + expanded outlines per style/bend/axis/distortion)
 deploy/         nginx server block + security-header snippet for the production site
 tests/
   unit/         vitest (jsdom)          -> `npm test`
@@ -236,6 +239,11 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
 * `npm run typecheck` (tsc) must pass. Run it after every file you write.
 * Unit tests: `tests/unit/<area>.test.ts` (vitest, jsdom). Pure geometry/model logic
   belongs here.
+* Illustrator fixtures: `tests/unit/warpFixtures.test.ts` checks `src/distort/warp.ts` against
+  `tests/fixtures/warp/*.json` (Illustrator's own output, regenerated with
+  `node scripts/illustrator/warp-fixtures.mjs` when Illustrator is installed). Use the same bridge
+  (`scripts/illustrator/ai.mjs`, `runJsx`) whenever a feature should be measured against Illustrator
+  rather than guessed.
 * Lesson fixtures: `tests/e2e/lessons.spec.ts` builds `tests/e2e/lessons/lessons.ts` (owl, kitten,
   rowan — scripted through `window.__opuller.mcp`) and compares the render with
   `tests/e2e/lessons/baseline/*.png` (IoU ≥ 0.95); `UPDATE_LESSONS=1` rewrites the baselines after an

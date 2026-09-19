@@ -19,7 +19,13 @@ node mcp/call.ts <tool> '<json>'   # call one MCP tool (e.g. render the artboard
 npm run preview      # serve dist/ on :5181 with the production security headers (CSP check)
 node scripts/gen-shortcuts.mjs   # refresh the shortcut tables in public/guide/index.html (needs the dev server)
 node scripts/gen-og.mjs          # refresh public/og.png + public/screenshot.png (needs the dev server)
+node scripts/illustrator/ai.mjs 'return app.version'   # run ExtendScript in the installed Illustrator (COM)
+node scripts/illustrator/warp-fixtures.mjs             # re-sample Effect > Warp from Illustrator into tests/fixtures/warp/
 ```
+
+Adobe Illustrator 2026 is installed on this machine: when a behaviour should match Illustrator,
+measure it there through `scripts/illustrator/ai.mjs` (`runJsx`, ES3 ExtendScript, `return` a
+string; `JSX_JSON` serialises objects) instead of guessing, and keep the samples as fixtures.
 
 Playwright starts its own dev server when none is running and kills it afterwards; when you
 use the Browser pane, restart the preview (`.claude/launch.json` → `opuller-dev`) after a

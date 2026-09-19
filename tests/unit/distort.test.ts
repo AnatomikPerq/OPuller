@@ -15,7 +15,9 @@ describe('warp', () => {
     expect(top.y).toBeLessThan(0);
     const side = warpUnit('arch', 100, 0, 0, 200, 100);
     expect(side.y).toBeCloseTo(0, 6);
-    expect(warpUnit('arch', 0, 0.3, 0.7, 200, 100)).toEqual({ x: 60, y: 70 });
+    const id = warpUnit('arch', 0, 0.3, 0.7, 200, 100);
+    expect(id.x).toBeCloseTo(60, 9);
+    expect(id.y).toBeCloseTo(70, 9);
     for (const style of ['arc', 'flag', 'fish', 'twist', 'fisheye', 'squeeze', 'rise', 'bulge'] as const) {
       const p = warpUnit(style, 0, 0.25, 0.75, 200, 100);
       expect(p.x, style).toBeCloseTo(50, 6);
@@ -26,10 +28,15 @@ describe('warp', () => {
   it('warps subpaths smoothly with subdivision and honours the vertical axis', () => {
     const e: WarpEffect = { type: 'warp', enabled: true, style: 'arc', bend: 60, horizontal: true, hDistort: 0, vDistort: 0 };
     const out = warpSubPaths([rectSubPath(200, 100)], e, frame);
-    expect(out[0].anchors.length).toBeGreaterThan(8);
+    // straight edges along the axes map to single cubics (four anchors, like Illustrator's Expand)
+    expect(out[0].anchors.length).toBe(4);
+    expect(out[0].anchors.every((a) => a.kind === 'corner')).toBe(true);
     expect(out[0].closed).toBe(true);
     const b = pathBounds(out)!;
     expect(b.height).toBeGreaterThan(100);
+    // curves are subdivided before their control points are mapped
+    const round = warpSubPaths([ellipseSubPath(100, 50, 100, 50)], e, frame);
+    expect(round[0].anchors.length).toBeGreaterThan(8);
     const vertical = warpMap({ ...e, horizontal: false }, frame)({ x: 100, y: 50 });
     expect(Number.isFinite(vertical.x)).toBe(true);
     // horizontal distortion is perspective along the horizontal axis: the right side grows taller

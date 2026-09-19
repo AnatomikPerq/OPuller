@@ -29,11 +29,22 @@ function subdivide(cubics: Cubic[], step: number): Cubic[] {
   return out;
 }
 
-/** Map a subpath through `fn`, subdividing segments longer than `step`. */
-export function mapSubPath(sp: SubPath, fn: PointMap, step: number): SubPath {
-  const cubics = subdivide(subpathToCubics(sp), step);
-  if (!cubics.length) return { anchors: sp.anchors.map((a) => ({ point: fn(a.point), handleIn: null, handleOut: null, kind: 'corner' as const })), closed: sp.closed };
-  const mapped = cubics.map((c) => ({ p0: fn(c.p0), p1: fn(c.p1), p2: fn(c.p2), p3: fn(c.p3) }));
+/** Optional exact image of a whole segment; returning null falls back to subdivision. */
+export type ExactSegment = (c: Cubic) => Cubic | null;
+
+/**
+ * Map a subpath through `fn`, subdividing segments longer than `step`. Segments for which
+ * `exact` knows the precise image (e.g. straight edges along a warp's axes) are kept as one cubic.
+ */
+export function mapSubPath(sp: SubPath, fn: PointMap, step: number, exact?: ExactSegment): SubPath {
+  const source = subpathToCubics(sp);
+  if (!source.length) return { anchors: sp.anchors.map((a) => ({ point: fn(a.point), handleIn: null, handleOut: null, kind: 'corner' as const })), closed: sp.closed };
+  const mapped: Cubic[] = [];
+  for (const c of source) {
+    const direct = exact?.(c);
+    if (direct) mapped.push(direct);
+    else for (const piece of subdivide([c], step)) mapped.push({ p0: fn(piece.p0), p1: fn(piece.p1), p2: fn(piece.p2), p3: fn(piece.p3) });
+  }
   const anchors: Anchor[] = [];
   mapped.forEach((c, i) => {
     const prev = mapped[i - 1];
@@ -45,15 +56,21 @@ export function mapSubPath(sp: SubPath, fn: PointMap, step: number): SubPath {
   for (const a of anchors) {
     if (a.handleIn && Math.hypot(a.handleIn.x, a.handleIn.y) < 1e-6) a.handleIn = null;
     if (a.handleOut && Math.hypot(a.handleOut.x, a.handleOut.y) < 1e-6) a.handleOut = null;
+    // smooth only where the handles continue each other (a mapped corner keeps its kink)
     if (!a.handleIn || !a.handleOut) a.kind = 'corner';
+    else {
+      const cross = a.handleIn.x * a.handleOut.y - a.handleIn.y * a.handleOut.x;
+      const dot = a.handleIn.x * a.handleOut.x + a.handleIn.y * a.handleOut.y;
+      if (dot > 0 || Math.abs(cross) > 1e-3 * Math.hypot(a.handleIn.x, a.handleIn.y) * Math.hypot(a.handleOut.x, a.handleOut.y)) a.kind = 'corner';
+    }
   }
   return { anchors, closed: sp.closed };
 }
 
 /** Map subpaths through `fn`; the subdivision step is derived from the frame diagonal. */
-export function mapSubPaths(sps: SubPath[], fn: PointMap, frame: Rect, divisions = 24): SubPath[] {
+export function mapSubPaths(sps: SubPath[], fn: PointMap, frame: Rect, divisions = 24, exact?: ExactSegment): SubPath[] {
   const step = Math.max(0.5, Math.hypot(frame.width, frame.height) / divisions);
-  return sps.map((sp) => mapSubPath(sp, fn, step));
+  return sps.map((sp) => mapSubPath(sp, fn, step, exact));
 }
 
 /** Normalised coordinates of a point inside the frame (0..1). */
