@@ -7,8 +7,10 @@
  */
 import paper from 'paper';
 import { PaperOffset } from 'paperjs-offset';
-import type { SubPath, Vec, FillRule, Matrix } from '@/model/types';
-import { anchor, hasHandle, inferAnchorKind } from './path';
+import type { SubPath, Anchor, Vec, FillRule, Matrix } from '@/model/types';
+import { anchor, hasHandle, inferAnchorKind, subpathToCubics } from './path';
+import { isLine, type Cubic } from './bezier';
+import { offsetCubic, cubicTangent } from './offsetCurve';
 
 let initialized = false;
 
@@ -170,28 +172,198 @@ export function uniteAll(geoms: PathGeometry[]): SubPath[] {
   return out;
 }
 
-/** Offset a path outline by `distance` (positive = outward). */
+/**
+ * paperjs-offset measures a miter by the distance from an offset corner to the miter tip
+ * (offset × tan(φ/2), φ the turning angle); Illustrator and PostScript use the miter length
+ * over the line width, 1 / sin(θ/2) = 1 / cos(φ/2). Same corner is mitered iff
+ * tan(φ/2) ≤ √(limit² − 1), so that is the limit paperjs-offset gets.
+ */
+function paperMiterLimit(limit: number | undefined, fallback: number): number {
+  const l = Math.max(1, limit ?? fallback);
+  return Math.sqrt(l * l - 1);
+}
+
+/**
+ * Offset a path outline by `distance` (positive = outward), like Object > Path > Offset Path:
+ * closed subpaths grow or shrink; an open subpath becomes the closed outline around it —
+ * both sides at `distance` with flat ends (Illustrator; the sign only matters for closed ones).
+ * The miter limit is Illustrator's (see paperMiterLimit); the fixture test
+ * tests/e2e/offset-illustrator.spec.ts compares the outlines with Illustrator's.
+ */
 export function offsetPath(
   subpaths: SubPath[],
   distance: number,
   opts: { join?: 'miter' | 'round' | 'bevel'; miterLimit?: number; fillRule?: FillRule } = {},
 ): SubPath[] {
   ensurePaper();
-  const item = subpathsToPaper(subpaths, opts.fillRule ?? 'nonzero');
-  try {
-    const res = PaperOffset.offset(item as any, distance, {
-      join: opts.join ?? 'miter',
-      limit: opts.miterLimit ?? 10,
-      insert: false,
-    });
-    const out = paperToSubPaths(res as paper.Item);
-    (res as paper.Item).remove();
+  const closed = subpaths.filter((sp) => sp.closed);
+  const open = subpaths.filter((sp) => !sp.closed && sp.anchors.length >= 2);
+  const out: SubPath[] = [];
+  if (closed.length) {
+    const item = subpathsToPaper(closed, opts.fillRule ?? 'nonzero');
+    try {
+      const res = PaperOffset.offset(item as any, distance, {
+        join: opts.join ?? 'miter',
+        limit: paperMiterLimit(opts.miterLimit, 4),
+        insert: false,
+      });
+      out.push(...paperToSubPaths(res as paper.Item));
+      (res as paper.Item).remove();
+    } catch {
+      out.push(...closed);
+    }
     item.remove();
+  }
+  // open subpaths: the outline around the path; Illustrator rounds the ends too when the join is round
+  for (const sp of open) out.push(...strokeRegion(sp, Math.abs(distance), { join: opts.join ?? 'miter', miterLimit: opts.miterLimit ?? 4, cap: (opts.join ?? 'miter') === 'round' ? 'round' : 'butt' }));
+  return out;
+}
+
+/**
+ * The closed region within `halfWidth` of a subpath, as Illustrator's Offset Path of an open
+ * path and Outline Stroke draw it. Both one-sided offsets (`offsetCubic`, exact at the ends)
+ * are chained segment by segment: at a corner the outer side gets its join — the miter tip
+ * within the limit (PostScript's 1 / sin(θ/2) ≤ limit), a straight bevel otherwise, an arc for
+ * round — while the inner side is simply connected, which leaves a small loop; an open path's
+ * chains are closed by the caps, a closed path's form two rings. The loops fall out of one
+ * self-union under the nonzero rule (paper.js resolves the crossings), so inner corners and
+ * bends tighter than the offset come out right without trimming by hand.
+ */
+export function strokeRegion(
+  sp: SubPath,
+  halfWidth: number,
+  opts: { join: 'miter' | 'round' | 'bevel'; miterLimit: number; cap: 'butt' | 'round' | 'square' },
+): SubPath[] {
+  const d = Math.abs(halfWidth);
+  const cubics = subpathToCubics(sp).filter((c) => !isLine(c) || Math.hypot(c.p3.x - c.p0.x, c.p3.y - c.p0.y) > 1e-9);
+  if (!cubics.length || d <= 0) return [];
+  const n = cubics.length;
+  const sub = (a: Vec, b: Vec): Vec => ({ x: a.x - b.x, y: a.y - b.y });
+  const mk = (p: Vec, hin: Vec | null, hout: Vec | null): Anchor => anchor(p, hin && (hin.x || hin.y) ? hin : null, hout && (hout.x || hout.y) ? hout : null);
+  /** anchors of a chain of cubics (handles relative), open at both ends */
+  const chain = (cs: Cubic[]): Anchor[] => {
+    const out: Anchor[] = [mk(cs[0].p0, null, sub(cs[0].p1, cs[0].p0))];
+    cs.forEach((c, i) => out.push(mk(c.p3, sub(c.p2, c.p3), cs[i + 1] ? sub(cs[i + 1].p1, cs[i + 1].p0) : null)));
+    return out;
+  };
+  /** arc of radius d around `centre` from `from` to `to` (the shorter way), as anchors with handles */
+  const arc = (centre: Vec, from: Vec, to: Vec): Anchor[] => {
+    const a0 = Math.atan2(from.y - centre.y, from.x - centre.x);
+    let sweep = Math.atan2(to.y - centre.y, to.x - centre.x) - a0;
+    while (sweep <= -Math.PI) sweep += 2 * Math.PI;
+    while (sweep > Math.PI) sweep -= 2 * Math.PI;
+    const steps = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2)));
+    const step = sweep / steps;
+    const h = (4 / 3) * Math.tan(step / 4) * d;
+    const out: Anchor[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + step * i;
+      const p = { x: centre.x + Math.cos(a) * d, y: centre.y + Math.sin(a) * d };
+      const t = { x: -Math.sin(a) * h, y: Math.cos(a) * h };
+      out.push(mk(p, i > 0 ? { x: -t.x, y: -t.y } : null, i < steps ? t : null));
+    }
+    return out;
+  };
+  /**
+   * Connect the end `last` of one side chain to the start `next` of the following one at the
+   * corner between cubics `a` and `b`. Returns the anchors to insert between them, or null when
+   * the tangent is continuous and the two ends coincide (merge them instead).
+   */
+  const connect = (a: Cubic, b: Cubic, last: Anchor, next: Anchor, sign: 1 | -1): Anchor[] | null => {
+    const t1 = cubicTangent(a, 1);
+    const t2 = cubicTangent(b, 0);
+    const turn = t1.x * t2.y - t1.y * t2.x;
+    if (Math.abs(turn) < 1e-9 && t1.x * t2.x + t1.y * t2.y > 0) return null;
+    // the path turns towards its left normal when turn > 0 (y down); the outer side is the other one
+    const outer = sign === 1 ? turn < 0 : turn > 0;
+    last.handleOut = null;
+    next.handleIn = null;
+    if (!outer) return [];
+    const p = a.p3;
+    if (opts.join === 'round') {
+      const full = arc(p, last.point, next.point);
+      last.handleOut = full[0].handleOut;
+      next.handleIn = full[full.length - 1].handleIn;
+      return full.slice(1, -1);
+    }
+    if (opts.join !== 'miter') return [];
+    const cosTheta = -(t1.x * t2.x + t1.y * t2.y);
+    const sinHalf = Math.sqrt(Math.max(0, (1 - cosTheta) / 2));
+    if (sinHalf < 1e-9 || 1 / sinHalf > Math.max(1, opts.miterLimit)) return [];
+    const n1 = unitVec(sub(last.point, p));
+    const n2 = unitVec(sub(next.point, p));
+    const bis = unitVec({ x: n1.x + n2.x, y: n1.y + n2.y });
+    return [mk({ x: p.x + (bis.x * d) / sinHalf, y: p.y + (bis.y * d) / sinHalf }, null, null)];
+  };
+  const sideChain = (sign: 1 | -1): Anchor[] => {
+    const parts = cubics.map((c) => chain(offsetCubic(c, sign * d)));
+    const out: Anchor[] = [...parts[0]];
+    for (let i = 1; i < n; i++) {
+      const last = out[out.length - 1];
+      const between = connect(cubics[i - 1], cubics[i], last, parts[i][0], sign);
+      if (between === null) {
+        last.handleOut = parts[i][0].handleOut;
+        out.push(...parts[i].slice(1));
+      } else out.push(...between, ...parts[i]);
+    }
+    if (sp.closed && n > 0) {
+      const last = out[out.length - 1];
+      const between = connect(cubics[n - 1], cubics[0], last, out[0], sign);
+      if (between === null) {
+        out[0].handleIn = last.handleIn;
+        out.pop();
+      } else out.push(...between);
+    }
+    return out;
+  };
+  const left = sideChain(1);
+  const right = sideChain(-1).reverse().map((a) => mk(a.point, a.handleOut, a.handleIn));
+  let outline: SubPath[];
+  if (sp.closed) {
+    outline = [
+      { anchors: left, closed: true },
+      { anchors: right, closed: true },
+    ];
+  } else {
+    const first = cubics[0].p0;
+    const last = cubics[n - 1].p3;
+    const t0 = cubicTangent(cubics[0], 0);
+    const t1 = cubicTangent(cubics[n - 1], 1);
+    const cap = (end: Vec, out: Vec, from: Anchor, to: Anchor): Anchor[] => {
+      if (opts.cap === 'round') {
+        const mid = { x: end.x + out.x * d, y: end.y + out.y * d };
+        const a1 = arc(end, from.point, mid);
+        const a2 = arc(end, mid, to.point);
+        from.handleOut = a1[0].handleOut;
+        to.handleIn = a2[a2.length - 1].handleIn;
+        return [...a1.slice(1, -1), mk(mid, a1[a1.length - 1].handleIn, a2[0].handleOut), ...a2.slice(1, -1)];
+      }
+      from.handleOut = null;
+      to.handleIn = null;
+      if (opts.cap === 'square') return [mk({ x: from.point.x + out.x * d, y: from.point.y + out.y * d }, null, null), mk({ x: to.point.x + out.x * d, y: to.point.y + out.y * d }, null, null)];
+      return [];
+    };
+    const endCap = cap(last, t1, left[left.length - 1], right[0]);
+    const startCap = cap(first, { x: -t0.x, y: -t0.y }, right[right.length - 1], left[0]);
+    outline = [{ anchors: [...left, ...endCap, ...right, ...startCap], closed: true }];
+  }
+  // one self-union resolves the inner-corner loops, crossings of the two sides and the ring orientation
+  const item = subpathsToPaper(outline, 'nonzero');
+  try {
+    const res = item.unite(item, { insert: false });
+    const out = paperToSubPaths(res);
+    res.remove();
     return out;
   } catch {
+    return outline;
+  } finally {
     item.remove();
-    return subpaths;
   }
+}
+
+function unitVec(v: Vec): Vec {
+  const l = Math.hypot(v.x, v.y);
+  return l > 1e-12 ? { x: v.x / l, y: v.y / l } : { x: 0, y: 0 };
 }
 
 /** Convert a stroke into a filled outline (Outline Stroke). */
@@ -201,28 +373,10 @@ export function outlineStroke(
   opts: { cap?: 'butt' | 'round' | 'square'; join?: 'miter' | 'round' | 'bevel'; miterLimit?: number } = {},
 ): SubPath[] {
   ensurePaper();
-  const out: SubPath[] = [];
-  for (const sp of subpaths) {
-    const item = subpathToPaper(sp);
-    try {
-      const res = PaperOffset.offsetStroke(item as any, width / 2, {
-        cap: opts.cap === 'round' ? 'round' : 'butt',
-        join: opts.join ?? 'miter',
-        limit: opts.miterLimit ?? 10,
-        insert: false,
-      });
-      out.push(...paperToSubPaths(res as paper.Item));
-      (res as paper.Item).remove();
-    } catch {
-      /* ignore failed segment */
-    }
-    item.remove();
-  }
-  if (out.length > 1) {
-    // merge overlapping pieces
-    return uniteAll([{ subpaths: out, fillRule: 'nonzero' }]);
-  }
-  return out;
+  const regions = subpaths.filter((sp) => sp.anchors.length >= 2).map((sp) => strokeRegion(sp, width / 2, { cap: opts.cap ?? 'butt', join: opts.join ?? 'miter', miterLimit: opts.miterLimit ?? 10 }));
+  if (regions.length === 1) return regions[0];
+  // merge overlapping pieces
+  return uniteAll(regions.filter((r) => r.length).map((r) => ({ subpaths: r, fillRule: 'nonzero' as const })));
 }
 
 /**

@@ -9,6 +9,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { puckerBloatSubPaths, zigZagSubPaths } from '@/distort/transformEffects';
 import { pathBounds } from '@/geometry/path';
+import { roundCornersEffect } from '@/geometry/roundCornersEffect';
 import type { SubPath, Anchor } from '@/model/types';
 
 type FixtureAnchor = [number, number, number, number, number, number]; // x y inx iny outx outy (absolute)
@@ -86,6 +87,21 @@ describe('Zig Zag matches Illustrator', () => {
       // mode) and writes dangling handles at the ends of open paths; neither is compared
       const d = compare(ours, c.outlines[0], (i, n) => (shape.closed ? (i === n - 1 ? 'all' : 'none') : i === 0 ? 'in' : i === n - 1 ? 'out' : 'none'));
       if (typeof d === 'string' || d > 0.05) failures.push(`${c.shape} ${JSON.stringify(c.params)}: ${typeof d === 'string' ? d : `${d.toFixed(3)} px`}`);
+    }
+    expect(failures).toEqual([]);
+  });
+});
+
+describe('Round Corners (effect) matches Illustrator', () => {
+  const fx = load('roundCorners');
+  it.skipIf(!fx)(`anchors and handles of every fixture case (${fx?.cases.length ?? 0})`, () => {
+    const failures: string[] = [];
+    for (const c of fx!.cases) {
+      if (c.error) continue;
+      const shape = fx!.shapes[c.shape];
+      const ours = roundCornersEffect(toSubPath(shape), Number(c.params.radius));
+      const d = compare(ours, c.outlines[0]);
+      if (typeof d === 'string' || d > 0.01) failures.push(`${c.shape} radius ${c.params.radius}: ${typeof d === 'string' ? d : `${d.toFixed(3)} px`}`);
     }
     expect(failures).toEqual([]);
   });

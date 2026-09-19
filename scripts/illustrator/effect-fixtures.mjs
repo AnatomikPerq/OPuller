@@ -51,6 +51,8 @@ export const SHAPES = {
   // two curves meeting at an anchor with unequal handles, and a line meeting a curve that starts with a handle
   kink: { closed: false, anchors: [[0, 0, 0, 0, 100, 0], [200, 100, 200, 0, 250, 150], [400, 100, 300, 200, 400, 100]] },
   lcurve: { closed: false, anchors: [[0, 100], [100, 100, 100, 100, 100, 40], [200, 100, 200, 0, 200, 100]] },
+  // a bare corner followed by a curve whose far handle makes chord ≠ control leg (Round Corners limits)
+  hook: { closed: false, anchors: [[0, 0], [300, 0, 100, -200, 300, 0], [300, 200]] },
 };
 
 function circle(cx, cy, rx, ry = rx) {

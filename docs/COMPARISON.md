@@ -188,7 +188,7 @@ Image Trace. То же API — в консоли `window.__opuller.mcp`.
 | Живые углы (corner widget, Direct Selection) | инструмент Direct Selection (A): кружок внутри каждого угла — тянуть; двойной клик — диалог Corners; Object → Path → Corners… | `opuller_corners {ids, radius, anchors?}`, `opuller_pen {anchors:[{…, cornerRadius}]}` |
 | Effect → Distort & Transform → Zig Zag / Pucker & Bloat / Roughen / Transform / Tweak | те же пункты меню Effect → Distort & Transform; панель Appearance правит параметры | `opuller_effect {op:"add", type:"zigZag"|"puckerBloat"|"roughen"|"transform"|"tweak", params}` |
 | Effect → Warp (Arc, Bulge, …) | Effect → Distort & Transform → Warp… | `opuller_effect {type:"warp", params:{style, bend, horizontal, hDistort, vDistort}}` |
-| Effect → Stylize → Round Corners | Effect → Stylize → Round Corners (работает и после варпа) | `opuller_effect {type:"roundCorners", params:{radius}}` |
+| Effect → Stylize → Round Corners | Effect → Stylize → Round Corners (модель Illustrator для «голых» углов; после варпа скругляет изломы касательных) | `opuller_effect {type:"roundCorners", params:{radius}}` |
 | Object → Expand Appearance | Object → Expand Appearance | `opuller_effect {op:"expand"}` |
 | Rotate (R), угол +26° | инструмент Rotate / диалог Transform → Rotate; плюс = против часовой | `opuller_transform {rotate: 26}` (против часовой) |
 | Scale + «Scale Strokes & Effects», «Scale Corners» | Preferences → Scale strokes; диалог Transform | `opuller_transform {scale, scaleStrokes, scaleEffects, scaleCorners}` |
@@ -219,7 +219,14 @@ Image Trace. То же API — в консоли `window.__opuller.mcp`.
   ручки кусков Безье после разбиения. Не воспроизводится только сдвиг последней точки замкнутого
   контура (артефакт Illustrator, < 1 px в режиме Corner). «Relative» в Zig Zag Illustrator
   пересчитывает в абсолютную величину ещё в диалоге, поэтому в OPuller это по-прежнему % длины
-  сегмента. Roughen, Tweak, Transform, Round Corners, Offset Path пока не сверялись.
+  сегмента. Round Corners (эффект) и Offset Path тоже сняты с Illustrator: эффект скругляет только
+  «голые» углы без ручек — срез на `radius` по каждой стороне (не больше половины стороны, если
+  сосед тоже скругляется, и всей стороны иначе; сросшиеся срезы дают один узел с двумя ручками),
+  ручки 0.55 среза к бывшему углу; после варпа в OPuller эффект по-прежнему скругляет изломы
+  касательных (виджет-подобно), у Illustrator там артефакт. Offset Path: замкнутые контуры через
+  paperjs-offset с лимитом угла по правилу PostScript (1/sin(θ/2) ≤ limit, как в Illustrator),
+  открытые превращаются в замкнутый обвод вокруг линии (концы плоские, при round — круглые), все
+  80 случаев фикстуры совпадают в пределах 0.5 px. Roughen, Tweak случайны, Transform — аффинный.
 * Эффекты применяются в порядке списка панели Appearance (как в Illustrator); живые углы
   (corner widget) — до эффектов.
 * Углы поворота везде против часовой стрелки; файлы проектов формата 1 (угол узора,

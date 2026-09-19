@@ -227,6 +227,13 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
   `smoothPath`, `flattenPath`, `fitPoints` (freehand → Bézier), `containsPoint`,
   `intersections`, `interpolatePaths`, `reorient`. All work in one coordinate space —
   use `worldSubPaths(doc, id)` / `setWorldSubPaths(doc, id, sps)` from model/document.
+  `offsetPath` offsets closed subpaths with paperjs-offset (miter limit converted to
+  Illustrator's 1 / sin(θ/2) rule) and turns open ones into the outline around them like
+  Illustrator; `outlineStroke` and that outline are built by `strokeRegion` from
+  `geometry/offsetCurve.ts` (`offsetCubic`: one-sided Bézier offset, exact at the ends, pure)
+  plus joins/caps and one self-union. `geometry/roundCornersEffect.ts` is Illustrator's
+  Round Corners *effect* (bare corners cut at the radius, 0.55 handles); `geometry/corners.ts`
+  stays the live-corner (true arc) maths.
 * `model/document.ts`: tree ops (`addNode`, `removeNode`, `moveNode`, `cloneSubtree`,
   `groupNodes`, `ungroupNode`), queries (`descendants`, `ancestors`, `paintOrder`,
   `selectableNodes`, `topmostOf`, `sortByPaintOrder`), transforms (`worldMatrix`,
@@ -247,7 +254,8 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
   rather than guessed. `tests/unit/effectFixtures.test.ts` does the same for the Distort & Transform
   effects with `tests/fixtures/effects/<effect>.json` (expanded outlines of reference shapes,
   sampled by `node scripts/illustrator/effect-fixtures.mjs <effect> --params …`; the LiveEffect XML
-  names and dictionary keys are listed in that script).
+  names and dictionary keys are listed in that script). Offset Path needs paper.js, so its fixture
+  is compared in the browser by `tests/e2e/offset-illustrator.spec.ts` (outline distance ≤ 0.5 px).
 * Lesson fixtures: `tests/e2e/lessons.spec.ts` builds `tests/e2e/lessons/lessons.ts` (owl, kitten,
   rowan, landscape, fox — the five Illustrator practicals of the course, scripted through
   `window.__opuller.mcp`; builders may be async) and compares the render with
