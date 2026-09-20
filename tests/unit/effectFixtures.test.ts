@@ -8,9 +8,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { puckerBloatSubPaths, zigZagSubPaths } from '@/distort/transformEffects';
+import { warpSubPaths } from '@/distort/warp';
+import { subpathToCubics } from '@/geometry/path';
+import { cubicPoint } from '@/geometry/bezier';
 import { pathBounds } from '@/geometry/path';
 import { roundCornersEffect } from '@/geometry/roundCornersEffect';
-import type { SubPath, Anchor } from '@/model/types';
+import type { SubPath, Anchor, WarpEffect, WarpStyle } from '@/model/types';
 
 type FixtureAnchor = [number, number, number, number, number, number]; // x y inx iny outx outy (absolute)
 interface Fixture {
@@ -104,5 +107,65 @@ describe('Round Corners (effect) matches Illustrator', () => {
       if (typeof d === 'string' || d > 0.01) failures.push(`${c.shape} radius ${c.params.radius}: ${typeof d === 'string' ? d : `${d.toFixed(3)} px`}`);
     }
     expect(failures).toEqual([]);
+  });
+});
+
+describe('Warp of oblique and curved segments matches Illustrator', () => {
+  const fx = load('warp-shapes');
+  const STYLES: WarpStyle[] = ['arc', 'arcLower', 'arcUpper', 'arch', 'bulge', 'shellLower', 'shellUpper', 'flag', 'wave', 'fish', 'rise', 'fisheye', 'inflate', 'squeeze', 'twist'];
+  /** polyline of a subpath's outline (16 samples per cubic) */
+  const flatten = (sp: SubPath): Array<[number, number]> => {
+    const pts: Array<[number, number]> = [];
+    for (const c of subpathToCubics(sp)) for (let i = 0; i <= 16; i++) { const p = cubicPoint(c, i / 16); pts.push([p.x, p.y]); }
+    return pts;
+  };
+  const distance = (a: Array<[number, number]>, b: Array<[number, number]>) => {
+    let worst = 0;
+    for (const p of a) {
+      let best = Infinity;
+      for (let i = 1; i < b.length; i++) {
+        const [ax, ay] = b[i - 1];
+        const [bx, by] = b[i];
+        const dx = bx - ax;
+        const dy = by - ay;
+        const l2 = dx * dx + dy * dy;
+        const t = l2 ? Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / l2)) : 0;
+        best = Math.min(best, Math.hypot(p[0] - ax - dx * t, p[1] - ay - dy * t));
+      }
+      worst = Math.max(worst, best);
+    }
+    return worst;
+  };
+  // straight segments come out exactly (Illustrator fits the cubic through four mapped points; a
+  // 0.1 px difference of the map, as in the twist, shows up ×5 in the handles);
+  // for curved segments Illustrator's pieces sit within ~1 px of the exact image and ours within
+  // ~0.1 px, so their handles differ by a few px while the outlines agree to about a pixel
+  it.skipIf(!fx)(`every case: outline within 0.6 px (straight) / 2 px (curved), same anchors in most cases (${fx?.cases.length ?? 0} cases)`, () => {
+    const failures: string[] = [];
+    let sameCount = 0;
+    let cases = 0;
+    for (const c of fx!.cases) {
+      if (c.error) continue;
+      cases++;
+      const sp = toSubPath(fx!.shapes[c.shape]);
+      const frame = pathBounds([sp])!;
+      const e: WarpEffect = { type: 'warp', enabled: true, style: STYLES[Number(c.params.style ?? 1) - 1], bend: Number(c.params.bend ?? 0), horizontal: !c.params.vertical, hDistort: Number(c.params.hDistort ?? 0), vDistort: Number(c.params.vDistort ?? 0) };
+      const [ours] = warpSubPaths([sp], e, frame);
+      const theirs = c.outlines[0];
+      const theirSp = toSubPath({ closed: theirs.closed, anchors: theirs.anchors });
+      const curved = sp.anchors.some((an) => an.handleIn || an.handleOut);
+      const d = Math.max(distance(flatten(ours), flatten(theirSp)), distance(flatten(theirSp), flatten(ours)));
+      if (d > (curved ? 2 : 0.6)) failures.push(`${c.shape} ${JSON.stringify(c.params)}: outline ${d.toFixed(3)} px`);
+      // the same anchors (Illustrator split the same segments at the same places)?
+      const samePoints = ours.anchors.length === theirs.anchors.length && ours.anchors.every((an, i) => Math.hypot(an.point.x - theirs.anchors[i][0], an.point.y - theirs.anchors[i][1]) < 0.5);
+      if (samePoints) {
+        sameCount++;
+        const a = compare(ours, theirs);
+        if (typeof a === 'string' || a > (curved ? 5 : 1)) failures.push(`${c.shape} ${JSON.stringify(c.params)}: anchors ${typeof a === 'string' ? a : `${a.toFixed(3)} px`}`);
+      }
+    }
+    expect(failures).toEqual([]);
+    // Illustrator's own split decisions are borderline in a few cases; the structure agrees in most
+    expect(sameCount / cases).toBeGreaterThanOrEqual(0.7);
   });
 });

@@ -34,9 +34,10 @@ describe('warp', () => {
     expect(out[0].closed).toBe(true);
     const b = pathBounds(out)!;
     expect(b.height).toBeGreaterThan(100);
-    // curves are subdivided before their control points are mapped
+    // curves are fitted piecewise: each quarter of the ellipse is halved where one cubic cannot follow the warp
     const round = warpSubPaths([ellipseSubPath(100, 50, 100, 50)], e, frame);
-    expect(round[0].anchors.length).toBeGreaterThan(8);
+    expect(round[0].anchors.length).toBeGreaterThanOrEqual(8);
+    expect(round[0].anchors.length).toBeLessThanOrEqual(16);
     const vertical = warpMap({ ...e, horizontal: false }, frame)({ x: 100, y: 50 });
     expect(Number.isFinite(vertical.x)).toBe(true);
     // horizontal distortion is perspective along the horizontal axis: the right side grows taller

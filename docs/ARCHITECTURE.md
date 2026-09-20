@@ -252,7 +252,7 @@ groups → `<clipPath>`; arrowheads → `<marker>`; text → `<text>/<tspan>` (o
   `node scripts/illustrator/warp-fixtures.mjs` when Illustrator is installed). Use the same bridge
   (`scripts/illustrator/ai.mjs`, `runJsx`) whenever a feature should be measured against Illustrator
   rather than guessed. `tests/unit/effectFixtures.test.ts` does the same for the Distort & Transform
-  effects with `tests/fixtures/effects/<effect>.json` (expanded outlines of reference shapes,
+  effects and the warp's segment fitting (`warp-shapes.json`) with `tests/fixtures/effects/<effect>.json` (expanded outlines of reference shapes,
   sampled by `node scripts/illustrator/effect-fixtures.mjs <effect> --params …`; the LiveEffect XML
   names and dictionary keys are listed in that script). Offset Path needs paper.js, so its fixture
   is compared in the browser by `tests/e2e/offset-illustrator.spec.ts` (outline distance ≤ 0.5 px).

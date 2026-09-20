@@ -27,7 +27,7 @@
  * Pure maths: no React, no paper.js, so vitest can compare it with the fixtures.
  */
 import type { Rect, Vec, WarpEffect, WarpStyle, SubPath } from '@/model/types';
-import { toUnit, fromUnit, mapSubPaths, type PointMap } from './map';
+import { toUnit, fromUnit, fitSubPaths, type PointMap } from './map';
 import type { Cubic } from '@/geometry/bezier';
 
 export const WARP_STYLES: Array<{ id: WarpStyle; label: string }> = [
@@ -416,7 +416,9 @@ export function warpSubPaths(sps: SubPath[], effect: WarpEffect, frame: Rect): S
     const out = evalWarpNet(net, u.x, u.y);
     return { x: frame.x + out.x, y: frame.y + out.y };
   };
-  return mapSubPaths(sps, fn, frame, 24, warpExactSegment(net, frame));
+  // axis-aligned straight edges are exact iso-curves; everything else is fitted the way Illustrator
+  // expands it (one cubic through four mapped points, halved while it misses by > 0.2 px)
+  return fitSubPaths(sps, fn, warpExactSegment(net, frame));
 }
 
 export { fromUnit };

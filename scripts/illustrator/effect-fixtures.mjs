@@ -13,6 +13,7 @@
  *   roundCorners "Adobe Round Corners"       R radius <pt>
  *   offsetPath   "Adobe Offset Path"         R ofst <pt> I jntp 0|1|2 (round, bevel, miter) R mlim <limit>
  *   tweak        "Adobe Scribble and Tweak"  R horz R vert R ahor R aver I absoluteness B anch B in B out
+ *   warp         "Adobe Deform"              R DeformValue <bend/100> R DeformHoriz R DeformVert I DeformStyle 1..15 B Rotate 0|1
  *
  * Coordinates in the output are screen-oriented (y down), in points = px of the reference
  * shapes (the document is created in points).
@@ -28,6 +29,7 @@ export const EFFECTS = {
   roughen: { name: 'Adobe Roughen', params: (p) => `R size ${p.size} R asiz ${p.relSize ?? 0} R dtal ${p.detail} R roundness ${p.smooth ? 1 : 0} I absoluteness ${p.relative ? 0 : 1} ` },
   roundCorners: { name: 'Adobe Round Corners', params: (p) => `R radius ${p.radius} ` },
   offsetPath: { name: 'Adobe Offset Path', params: (p) => `R ofst ${p.offset} I jntp ${{ round: 0, bevel: 1, miter: 2 }[p.join ?? 'miter']} R mlim ${p.miterLimit ?? 4} ` },
+  warp: { name: 'Adobe Deform', params: (p) => `R DeformValue ${(p.bend ?? 0) / 100} R DeformHoriz ${(p.hDistort ?? 0) / 100} R DeformVert ${(p.vDistort ?? 0) / 100} I DeformStyle ${p.style ?? 1} B Rotate ${p.vertical ? 1 : 0} ` },
   tweak: { name: 'Adobe Scribble and Tweak', params: (p) => `R horz ${p.horizontal} R vert ${p.vertical} R ahor ${p.horizontal} R aver ${p.vertical} I absoluteness ${p.relative ? 0 : 1} B anch ${p.anchors === false ? 0 : 1} B in ${p.inControl === false ? 0 : 1} B out ${p.outControl === false ? 0 : 1} ` },
 };
 

@@ -115,18 +115,20 @@ describe('corner rounding by tangent break (plan item 6)', () => {
     expect(open.anchors).toHaveLength(4);
   });
 
-  it('rounds the tip of a triangle after a warp (dense smooth anchors, corners spanning several segments)', () => {
+  it('rounds the tip of a triangle after a warp (curved sides with a tangent break at the tip)', () => {
     const tri = triangle();
     const e: WarpEffect = { type: 'warp', enabled: true, style: 'bulge', bend: 40, horizontal: false, hDistort: -10, vDistort: 0 };
     const warped = warpSubPaths([tri], e, pathBounds([tri])!)[0];
-    expect(segmentCount(warped)).toBeGreaterThan(20);
+    // the warp writes one cubic per side, like Illustrator's Expand (halved only where a cubic cannot follow)
+    expect(segmentCount(warped)).toBeLessThanOrEqual(6);
+    expect(segmentCount(warped)).toBeGreaterThanOrEqual(3);
     const sharpTip = tipY(warped);
     const rounded = roundCorners(warped, 9);
     // the tip moved down by roughly the sagitta of a 9 px circle in a ~53° corner (≈ 9 / sin(θ/2) − 9 ≈ 11 px)
     expect(tipY(rounded) - sharpTip).toBeGreaterThan(6);
     expect(tipY(rounded) - sharpTip).toBeLessThan(16);
-    // the rest of the outline is untouched apart from the three corners
-    expect(rounded.anchors.length).toBeGreaterThan(warped.anchors.length - 30);
+    // three corners rounded: two anchors each
+    expect(rounded.anchors.length).toBe(warped.anchors.length + 3);
     expect(rounded.closed).toBe(true);
     // no anchor coincides with the sharp tip any more
     expect(rounded.anchors.some((a) => Math.abs(a.point.x - 50) < 1e-6 && a.point.y < sharpTip + 1e-6)).toBe(false);
