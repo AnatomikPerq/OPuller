@@ -381,7 +381,7 @@ export interface RoughenEffect {
   /** px, or % of the object's longer side when `relative` */
   size: number;
   relative: boolean;
-  /** points per inch (96 px) */
+  /** points per inch, an inch being 72 units as in Illustrator (round(L · detail / 72) pieces per segment) */
   detail: number;
   smooth: boolean;
   /** random seed (stable rendering) */

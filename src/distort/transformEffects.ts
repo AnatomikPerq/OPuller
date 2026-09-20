@@ -3,9 +3,9 @@
  * live geometry effects (Illustrator's set), as pure subpath → subpath functions.
  * No React, no paper.js, so vitest covers them.
  */
-import type { SubPath, Anchor, Vec, Rect, Matrix, ZigZagEffect, PuckerBloatEffect, RoughenEffect, TransformEffect, TweakEffect } from '@/model/types';
+import type { SubPath, Vec, Rect, Matrix, ZigZagEffect, PuckerBloatEffect, RoughenEffect, TransformEffect, TweakEffect } from '@/model/types';
 import { subpathToCubics, segmentCount, absHandleIn, absHandleOut, anchor as makeAnchor, transformSubPath } from '@/geometry/path';
-import { cubicPoint, cubicDerivative, cubicLength, cubicTAtLength, cubicSplit, type Cubic } from '@/geometry/bezier';
+import { cubicDerivative, cubicLength, cubicTAtLength, cubicSplit, type Cubic } from '@/geometry/bezier';
 import { compose, translate, scale as scaleM, rotate as rotateM } from '@/geometry/matrix';
 
 function norm(v: Vec): Vec {
@@ -31,48 +31,40 @@ export function seededRandom(seed: number): () => number {
   };
 }
 
-/** Catmull-Rom style smooth handles through a list of points (open or closed). */
-function smoothThrough(points: Vec[], closed: boolean, tension = 1 / 3): Anchor[] {
-  const n = points.length;
-  return points.map((p, i) => {
-    const prev = i > 0 ? points[i - 1] : closed ? points[n - 1] : null;
-    const next = i < n - 1 ? points[i + 1] : closed ? points[0] : null;
-    if (!prev || !next) {
-      // open ends: aim the single handle at the neighbour
-      const other = next ?? prev;
-      if (!other) return makeAnchor(p);
-      const h = { x: (other.x - p.x) * tension, y: (other.y - p.y) * tension };
-      return next ? makeAnchor(p, null, h, 'corner') : makeAnchor(p, h, null, 'corner');
-    }
-    const d = { x: ((next.x - prev.x) / 2) * tension, y: ((next.y - prev.y) / 2) * tension };
-    return makeAnchor(p, { x: -d.x, y: -d.y }, d, 'smooth');
-  });
+// ---------------------------------------------------------------------------
+// Resampling shared by Zig Zag and Roughen
+// ---------------------------------------------------------------------------
+
+/** A subpath resampled the way Illustrator's Zig Zag / Roughen do it (see `resampleSubPath`). */
+interface Resampled {
+  /** original anchors and inserted points, in path order */
+  points: Vec[];
+  /** unit normal at every point */
+  normals: Vec[];
+  /** smooth-mode handles (relative) */
+  handleIn: Array<Vec | null>;
+  handleOut: Array<Vec | null>;
+  /** index of the original anchor a point is, or −1 for an inserted point */
+  anchor: number[];
+  /** the segment an inserted point lies on (the outgoing one for an anchor) */
+  segment: number[];
+  /** arc length of every segment */
+  lengths: number[];
 }
 
-// ---------------------------------------------------------------------------
-// Zig Zag
-// ---------------------------------------------------------------------------
-
 /**
- * Zig Zag, as Illustrator does it (measured through scripts/illustrator/effect-fixtures.mjs,
- * fixtures in tests/fixtures/effects/zigZag.json). Every segment gets `ridges` peaks at equal
- * arc-length spacing s = L / (ridges + 1), and the anchors take part as well: all points of the
- * result — anchors and peaks alike — are pushed off the path alternately (the first anchor to
- * one side, the next point to the other, …) by `size` along the local normal. A peak's normal
- * is the curve normal; an anchor's is the weighted mean of the normals of its two sides, the
- * weight of a straight side being its spacing s and of a curved side the length of the handle
- * its first (last) Bézier piece keeps after the split — a corner between a short and a long
- * edge therefore leans towards the long one. Smooth mode adds handles: s/2 along the path on
- * straight sides, the handles of the pieces between the peaks (de Casteljau) on curved sides,
- * so a circle stays a circle at size 0; a handle that sits on its anchor counts as straight.
- * (Illustrator itself puts the very last point of a closed path slightly off; that is not
- * reproduced.) `relative` keeps OPuller's meaning — size as % of the segment length — because
- * Illustrator's dialog bakes its relative size into an absolute amount.
+ * Resample a subpath with `count(L, s)` inserted points on segment s (length L), spaced by equal
+ * arc length. The normal at an inserted point is the curve normal; at an anchor it is the weighted
+ * mean of the normals of its two sides, the weight of a straight side being its spacing and of a
+ * curved side the length of the handle its first (last) Bézier piece keeps after the split — a
+ * corner between a short and a long edge leans towards the long one. Smooth handles are half the
+ * spacing along the path on straight sides and the handles of the pieces between the points (de
+ * Casteljau) on curved sides, so a circle stays a circle when nothing moves; a handle that sits on
+ * its anchor counts as straight. Measured on Illustrator 2026 (tests/fixtures/effects/zigZag.json).
  */
-export function zigZagSubPath(sp: SubPath, e: ZigZagEffect): SubPath {
+function resampleSubPath(sp: SubPath, count: (L: number, s: number) => number): Resampled | null {
   const segs = segmentCount(sp);
-  const ridges = Math.max(0, Math.round(e.ridges));
-  if (segs < 1 || ridges === 0 || !(Math.abs(e.size) > 1e-9)) return sp;
+  if (segs < 1) return null;
   const n = sp.anchors.length;
   const cubics = subpathToCubics(sp);
   const EPS = 1e-9;
@@ -80,34 +72,35 @@ export function zigZagSubPath(sp: SubPath, e: ZigZagEffect): SubPath {
   const sub = (a: Vec, b: Vec): Vec => ({ x: a.x - b.x, y: a.y - b.y });
   const perp = (d: Vec): Vec => ({ x: -d.y, y: d.x });
 
-  /** One segment split at its peaks: the pieces between consecutive points (a straight segment keeps `pieces` empty). */
+  /** One segment split at its inserted points: the pieces between consecutive points (a straight segment keeps `pieces` empty). */
   interface Seg {
     straight: boolean;
     dir: Vec; // unit direction of a straight segment
     spacing: number;
-    amp: number;
+    length: number;
+    inner: number;
     peaks: Vec[];
-    normals: Vec[]; // unit normal at every peak
-    pieces: Cubic[]; // ridges + 1 pieces for a curved segment
+    normals: Vec[]; // unit normal at every inserted point
+    pieces: Cubic[]; // inner + 1 pieces for a curved segment
   }
-  const segments: Seg[] = cubics.map((c) => {
+  const segments: Seg[] = cubics.map((c, s) => {
     const straight = len(sub(c.p1, c.p0)) < EPS && len(sub(c.p3, c.p2)) < EPS;
     const L = cubicLength(c, 0.01);
-    const spacing = L / (ridges + 1);
-    const amp = e.relative ? (L * e.size) / 100 : e.size;
+    const inner = Math.max(0, Math.round(count(L, s)));
+    const spacing = L / (inner + 1);
     const dir = norm(sub(c.p3, c.p0));
     const peaks: Vec[] = [];
     const normals: Vec[] = [];
     const pieces: Cubic[] = [];
     if (straight || L < EPS) {
-      for (let k = 1; k <= ridges; k++) {
+      for (let k = 1; k <= inner; k++) {
         peaks.push({ x: c.p0.x + dir.x * spacing * k, y: c.p0.y + dir.y * spacing * k });
         normals.push(perp(dir));
       }
     } else {
       // split at the arc-length-uniform parameters, piece by piece (de Casteljau)
       let rest = c;
-      for (let k = 1; k <= ridges; k++) {
+      for (let k = 1; k <= inner; k++) {
         const t = cubicTAtLength(rest, spacing);
         const [left, right] = cubicSplit(rest, t);
         pieces.push(left);
@@ -117,7 +110,7 @@ export function zigZagSubPath(sp: SubPath, e: ZigZagEffect): SubPath {
       }
       pieces.push(rest);
     }
-    return { straight, dir, spacing, amp, peaks, normals, pieces };
+    return { straight, dir, spacing, length: L, inner, peaks, normals, pieces };
   });
 
   /** Tangent direction, weight and smooth-mode handle of the side of an anchor that starts segment s (out) or ends it (in). */
@@ -133,10 +126,7 @@ export function zigZagSubPath(sp: SubPath, e: ZigZagEffect): SubPath {
     return { dir: norm(h2), weight: len(h2), handle: null, degenerate: true };
   };
 
-  const points: Vec[] = [];
-  const normals: Vec[] = [];
-  const handleIn: Array<Vec | null> = [];
-  const handleOut: Array<Vec | null> = [];
+  const out: Resampled = { points: [], normals: [], handleIn: [], handleOut: [], anchor: [], segment: [], lengths: segments.map((g) => g.length) };
   const pushAnchor = (i: number) => {
     const p = sp.anchors[i].point;
     const hasIn = sp.closed || i > 0;
@@ -157,48 +147,107 @@ export function zigZagSubPath(sp: SubPath, e: ZigZagEffect): SubPath {
     }
     const nrm = norm({ x: nx, y: ny });
     const tangent = { x: nrm.y, y: -nrm.x };
-    points.push(p);
-    normals.push(nrm);
+    out.points.push(p);
+    out.normals.push(nrm);
+    out.anchor.push(i);
+    out.segment.push(hasOut ? i % segs : (i - 1 + segs) % segs);
     const spacingIn = hasIn ? segments[(i - 1 + segs) % segs].spacing : 0;
     const spacingOut = hasOut ? segments[i % segs].spacing : 0;
-    handleIn.push(!sIn ? null : sIn.degenerate ? { x: -tangent.x * spacingIn * 0.5, y: -tangent.y * spacingIn * 0.5 } : sIn.handle);
-    handleOut.push(!sOut ? null : sOut.degenerate ? { x: tangent.x * spacingOut * 0.5, y: tangent.y * spacingOut * 0.5 } : sOut.handle);
+    out.handleIn.push(!sIn ? null : sIn.degenerate ? { x: -tangent.x * spacingIn * 0.5, y: -tangent.y * spacingIn * 0.5 } : sIn.handle);
+    out.handleOut.push(!sOut ? null : sOut.degenerate ? { x: tangent.x * spacingOut * 0.5, y: tangent.y * spacingOut * 0.5 } : sOut.handle);
   };
-  const amps: number[] = [];
   for (let s = 0; s < segs; s++) {
     pushAnchor(s);
-    amps.push(s === 0 ? segments[0].amp : (segments[s - 1].amp + segments[s].amp) / 2);
     const g = segments[s];
-    for (let k = 0; k < ridges; k++) {
-      points.push(g.peaks[k]);
-      normals.push(g.normals[k]);
-      amps.push(g.amp);
+    for (let k = 0; k < g.inner; k++) {
+      out.points.push(g.peaks[k]);
+      out.normals.push(g.normals[k]);
+      out.anchor.push(-1);
+      out.segment.push(s);
       if (g.straight) {
-        handleIn.push({ x: -g.dir.x * g.spacing * 0.5, y: -g.dir.y * g.spacing * 0.5 });
-        handleOut.push({ x: g.dir.x * g.spacing * 0.5, y: g.dir.y * g.spacing * 0.5 });
+        out.handleIn.push({ x: -g.dir.x * g.spacing * 0.5, y: -g.dir.y * g.spacing * 0.5 });
+        out.handleOut.push({ x: g.dir.x * g.spacing * 0.5, y: g.dir.y * g.spacing * 0.5 });
       } else {
-        handleIn.push(sub(g.pieces[k].p2, g.pieces[k].p3));
-        handleOut.push(sub(g.pieces[k + 1].p1, g.pieces[k + 1].p0));
+        out.handleIn.push(sub(g.pieces[k].p2, g.pieces[k].p3));
+        out.handleOut.push(sub(g.pieces[k + 1].p1, g.pieces[k + 1].p0));
       }
     }
   }
-  if (!sp.closed) {
-    pushAnchor(n - 1);
-    amps.push(segments[segs - 1].amp);
-  }
-  const anchors = points.map((p, i) => {
-    const sign = i % 2 === 0 ? -1 : 1;
-    const q = { x: p.x + normals[i].x * amps[i] * sign, y: p.y + normals[i].y * amps[i] * sign };
-    if (!e.smooth) return makeAnchor(q, null, null, 'corner');
-    const hin = handleIn[i];
-    const hout = handleOut[i];
+  if (!sp.closed) pushAnchor(n - 1);
+  return out;
+}
+
+/** Anchors of a resampled subpath after moving every point by `offset(i)` along its normal (smooth mode keeps the handles). */
+function displaced(r: Resampled, closed: boolean, smooth: boolean, offset: (i: number) => number): SubPath {
+  const anchors = r.points.map((p, i) => {
+    const d = offset(i);
+    const q = { x: p.x + r.normals[i].x * d, y: p.y + r.normals[i].y * d };
+    if (!smooth) return makeAnchor(q, null, null, 'corner');
+    const hin = r.handleIn[i];
+    const hout = r.handleOut[i];
     return makeAnchor(q, hin, hout, kindFor(hin, hout));
   });
-  return { anchors, closed: sp.closed };
+  return { anchors, closed };
+}
+
+// ---------------------------------------------------------------------------
+// Zig Zag
+// ---------------------------------------------------------------------------
+
+/**
+ * Zig Zag, as Illustrator does it (measured through scripts/illustrator/effect-fixtures.mjs,
+ * fixtures in tests/fixtures/effects/zigZag.json). Every segment gets `ridges` peaks at equal
+ * arc-length spacing, and the anchors take part as well: all points of the result — anchors and
+ * peaks alike — are pushed off the path alternately (the first anchor to one side, the next
+ * point to the other, …) by `size` along the local normal (see `resampleSubPath` for the normals
+ * and the smooth-mode handles). Illustrator itself puts the very last point of a closed path
+ * slightly off; that is not reproduced. `relative` keeps OPuller's meaning — size as % of the
+ * segment length — because Illustrator's dialog bakes its relative size into an absolute amount.
+ */
+export function zigZagSubPath(sp: SubPath, e: ZigZagEffect): SubPath {
+  const ridges = Math.max(0, Math.round(e.ridges));
+  if (ridges === 0 || !(Math.abs(e.size) > 1e-9)) return sp;
+  const r = resampleSubPath(sp, () => ridges);
+  if (!r) return sp;
+  const segs = r.lengths.length;
+  const ampOf = (s: number) => (e.relative ? (r.lengths[s] * e.size) / 100 : e.size);
+  return displaced(r, sp.closed, e.smooth, (i) => {
+    const sign = i % 2 === 0 ? -1 : 1;
+    const a = r.anchor[i];
+    // an anchor between two segments takes the mean of their amplitudes (relative mode)
+    const amp = a < 0 ? ampOf(r.segment[i]) : sp.closed || (a > 0 && a < sp.anchors.length - 1) ? (ampOf((a - 1 + segs) % segs) + ampOf(a % segs)) / 2 : ampOf(r.segment[i]);
+    return sign * amp;
+  });
 }
 
 export function zigZagSubPaths(sps: SubPath[], e: ZigZagEffect): SubPath[] {
   return sps.map((sp) => zigZagSubPath(sp, e));
+}
+
+// ---------------------------------------------------------------------------
+// Roughen
+// ---------------------------------------------------------------------------
+
+/**
+ * Roughen, structured like Illustrator's (measured on Illustrator 2026 with a negligible size):
+ * every segment of length L is cut into round(L · detail / 72) equal arc-length pieces — Illustrator
+ * counts `detail` points per inch of 72 units — and every point, the anchors included, moves along
+ * its normal (see `resampleSubPath`) by a random amount up to `size`: px, or `size` % of the object's
+ * longer side when `relative`. Smooth mode keeps the handles of the resampling, so the outline
+ * wobbles instead of jagging. The random sequence itself is OPuller's own (`seed` keeps it stable).
+ */
+export function roughenSubPath(sp: SubPath, e: RoughenEffect, frame: Rect, rnd: () => number): SubPath {
+  const size = e.relative ? (Math.max(frame.width, frame.height) * e.size) / 100 : e.size;
+  if (!(size > 1e-9)) return sp;
+  const detail = Math.max(0.1, e.detail);
+  const r = resampleSubPath(sp, (L) => Math.max(1, Math.round((L * detail) / 72)) - 1);
+  if (!r) return sp;
+  return displaced(r, sp.closed, e.smooth, () => (rnd() * 2 - 1) * size);
+}
+
+export function roughenSubPaths(sps: SubPath[], e: RoughenEffect, frame: Rect): SubPath[] {
+  const rnd = seededRandom(e.seed);
+  return sps.map((sp) => roughenSubPath(sp, e, frame, rnd));
 }
 
 // ---------------------------------------------------------------------------
@@ -242,52 +291,6 @@ export function puckerBloatSubPath(sp: SubPath, amount: number, centre: Vec): Su
 export function puckerBloatSubPaths(sps: SubPath[], e: PuckerBloatEffect, frame: Rect): SubPath[] {
   const centre = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
   return sps.map((sp) => puckerBloatSubPath(sp, e.amount, centre));
-}
-
-// ---------------------------------------------------------------------------
-// Roughen
-// ---------------------------------------------------------------------------
-
-/**
- * Roughen: the outline is resampled at `detail` points per inch (96 px) and every point
- * is moved by a random distance up to `size` (absolute, or a percentage of the frame's
- * longer side when `relative`). Corner points give a jagged edge, smooth points a wobbly
- * one. `seed` makes the randomness stable between renders.
- */
-export function roughenSubPath(sp: SubPath, e: RoughenEffect, frame: Rect, rnd: () => number): SubPath {
-  const segs = segmentCount(sp);
-  if (segs < 1) return sp;
-  const size = e.relative ? (Math.max(frame.width, frame.height) * e.size) / 100 : e.size;
-  if (!(size > 1e-9)) return sp;
-  const spacing = 96 / Math.max(0.1, e.detail);
-  const cubics = subpathToCubics(sp);
-  const points: Vec[] = [];
-  const jitter = (p: Vec, tg: Vec): Vec => {
-    const nrm = (rnd() * 2 - 1) * size;
-    const tan = (rnd() * 2 - 1) * size * 0.5;
-    return { x: p.x - tg.y * nrm + tg.x * tan, y: p.y + tg.x * nrm + tg.y * tan };
-  };
-  for (let s = 0; s < segs; s++) {
-    const c = cubics[s];
-    const len = cubicLength(c, 0.05);
-    points.push(jitter(c.p0, tangentAt(c, 0)));
-    const inner = Math.max(0, Math.round(len / spacing) - 1);
-    for (let k = 1; k <= inner; k++) {
-      const t = cubicTAtLength(c, (len * k) / (inner + 1));
-      points.push(jitter(cubicPoint(c, t), tangentAt(c, t)));
-    }
-  }
-  if (!sp.closed) {
-    const c = cubics[segs - 1];
-    points.push(jitter(c.p3, tangentAt(c, 1)));
-  }
-  if (e.smooth) return { anchors: smoothThrough(points, sp.closed), closed: sp.closed };
-  return { anchors: points.map((p) => makeAnchor(p)), closed: sp.closed };
-}
-
-export function roughenSubPaths(sps: SubPath[], e: RoughenEffect, frame: Rect): SubPath[] {
-  const rnd = seededRandom(e.seed);
-  return sps.map((sp) => roughenSubPath(sp, e, frame, rnd));
 }
 
 // ---------------------------------------------------------------------------

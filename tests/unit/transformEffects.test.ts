@@ -82,13 +82,14 @@ describe('Pucker & Bloat', () => {
 });
 
 describe('Roughen', () => {
-  it('adds points at the requested detail, moves them at most by size and is stable for a seed', () => {
-    const sq = rectSubPath(96, 96); // 4 inch perimeter
+  it('adds points at the requested detail (per 72 units, like Illustrator), moves them along the normal by at most size and is stable for a seed', () => {
+    const sq = rectSubPath(96, 96);
     const e: RoughenEffect = { type: 'roughen', enabled: true, size: 3, relative: false, detail: 10, smooth: false, seed: 7 };
     const out = roughenSubPaths([sq], e, { x: 0, y: 0, width: 96, height: 96 })[0];
-    // ~10 points per inch → about 40 points around
-    expect(out.anchors.length).toBeGreaterThanOrEqual(36);
-    expect(out.anchors.length).toBeLessThanOrEqual(44);
+    // Illustrator: round(96 · 10 / 72) = 13 pieces per side → 52 points around
+    expect(out.anchors.length).toBe(52);
+    // points on the top edge move only along the normal (x stays on the grid of 96 / 13)
+    expect(out.anchors.slice(1, 13).every((an) => Math.abs((an.point.x / (96 / 13)) % 1) < 1e-6 || Math.abs(((an.point.x / (96 / 13)) % 1) - 1) < 1e-6)).toBe(true);
     const b = pathBounds([out])!;
     expect(b.x).toBeGreaterThanOrEqual(-3.5);
     expect(b.y).toBeGreaterThanOrEqual(-3.5);
@@ -98,7 +99,9 @@ describe('Roughen', () => {
     const other = roughenSubPaths([sq], { ...e, seed: 8 }, { x: 0, y: 0, width: 96, height: 96 })[0];
     expect(other).not.toEqual(out);
     const smooth = roughenSubPaths([sq], { ...e, smooth: true }, { x: 0, y: 0, width: 96, height: 96 })[0];
-    expect(smooth.anchors.every((a) => a.kind === 'smooth')).toBe(true);
+    // smooth: handles half the spacing along the edges, kept after the move (the corners stay corners)
+    expect(smooth.anchors.filter((a) => a.kind === 'smooth').length).toBeGreaterThanOrEqual(44);
+    expect(Math.hypot(smooth.anchors[1].handleOut!.x, smooth.anchors[1].handleOut!.y)).toBeCloseTo(96 / 13 / 2, 6);
     // relative size: 10 % of the longer side
     const rel = roughenSubPaths([sq], { ...e, size: 10, relative: true, detail: 2 }, { x: 0, y: 0, width: 96, height: 96 })[0];
     const rb = pathBounds([rel])!;

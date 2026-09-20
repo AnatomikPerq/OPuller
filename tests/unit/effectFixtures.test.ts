@@ -7,13 +7,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { puckerBloatSubPaths, zigZagSubPaths } from '@/distort/transformEffects';
+import { puckerBloatSubPaths, zigZagSubPaths, transformEffectSubPaths } from '@/distort/transformEffects';
 import { warpSubPaths } from '@/distort/warp';
 import { subpathToCubics } from '@/geometry/path';
 import { cubicPoint } from '@/geometry/bezier';
 import { pathBounds } from '@/geometry/path';
 import { roundCornersEffect } from '@/geometry/roundCornersEffect';
-import type { SubPath, Anchor, WarpEffect, WarpStyle } from '@/model/types';
+import type { SubPath, Anchor, WarpEffect, WarpStyle, TransformEffect } from '@/model/types';
 
 type FixtureAnchor = [number, number, number, number, number, number]; // x y inx iny outx outy (absolute)
 interface Fixture {
@@ -167,5 +167,30 @@ describe('Warp of oblique and curved segments matches Illustrator', () => {
     expect(failures).toEqual([]);
     // Illustrator's own split decisions are borderline in a few cases; the structure agrees in most
     expect(sameCount / cases).toBeGreaterThanOrEqual(0.7);
+  });
+});
+
+describe('Transform effect matches Illustrator', () => {
+  const fx = load('transform');
+  const ORIGINS = ['topLeft', 'top', 'topRight', 'left', 'center', 'right', 'bottomLeft', 'bottom', 'bottomRight'] as const;
+  it.skipIf(!fx)(`the object and every copy of every fixture case (${fx?.cases.length ?? 0})`, () => {
+    const failures: string[] = [];
+    for (const c of fx!.cases) {
+      if (c.error) continue;
+      const sp = toSubPath(fx!.shapes[c.shape]);
+      const frame = pathBounds([sp])!;
+      const p = c.params;
+      const e: TransformEffect = { type: 'transform', enabled: true, copies: Number(p.copies ?? 0), dx: Number(p.dx ?? 0), dy: Number(p.dy ?? 0), scaleX: Number(p.scaleX ?? 100), scaleY: Number(p.scaleY ?? 100), angle: Number(p.angle ?? 0), reflectX: !!p.reflectX, reflectY: !!p.reflectY, origin: ORIGINS[Number(p.pin ?? 4)] };
+      const ours = transformEffectSubPaths([sp], e, frame);
+      if (ours.length !== c.outlines.length) {
+        failures.push(`${c.shape} ${JSON.stringify(p)}: ${ours.length} outlines, Illustrator has ${c.outlines.length}`);
+        continue;
+      }
+      ours.forEach((o, i) => {
+        const d = compare(o, c.outlines[i]);
+        if (typeof d === 'string' || d > 0.01) failures.push(`${c.shape} ${JSON.stringify(p)} outline ${i}: ${typeof d === 'string' ? d : `${d.toFixed(3)} px`}`);
+      });
+    }
+    expect(failures).toEqual([]);
   });
 });

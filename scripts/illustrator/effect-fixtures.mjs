@@ -9,10 +9,11 @@
  * Effects (LiveEffect name → dictionary keys, from the plug-in binaries):
  *   puckerBloat  "Adobe Punk and Bloat"      R d_factor <percent>
  *   zigZag       "Adobe Zigzag"              R amount <pt | percent> R ridges <n> R roundness 0|1 I absoluteness 1|0 (relAmount is ignored)
- *   roughen      "Adobe Roughen"             R size <pt> R asiz <percent> R dtal <per inch> R roundness 0|1 I absoluteness 1|0
+ *   roughen      "Adobe Roughen"             R asiz <pt> R size <percent of the diagonal> R dtal <per inch> R roundness 0|1 I absoluteness 1|0
  *   roundCorners "Adobe Round Corners"       R radius <pt>
  *   offsetPath   "Adobe Offset Path"         R ofst <pt> I jntp 0|1|2 (round, bevel, miter) R mlim <limit>
  *   tweak        "Adobe Scribble and Tweak"  R horz R vert R ahor R aver I absoluteness B anch B in B out
+ *   transform    "Adobe Transform"           R scaleH_Factor R scaleV_Factor R moveH_Pts R moveV_Pts (y up) R rotate_Radians I numCopies I pinPoint 0..8 B reflectX B reflectY
  *   warp         "Adobe Deform"              R DeformValue <bend/100> R DeformHoriz R DeformVert I DeformStyle 1..15 B Rotate 0|1
  *
  * Coordinates in the output are screen-oriented (y down), in points = px of the reference
@@ -26,10 +27,11 @@ import { runJsx, JSX_JSON } from './ai.mjs';
 export const EFFECTS = {
   puckerBloat: { name: 'Adobe Punk and Bloat', params: (p) => `R d_factor ${p.amount} ` },
   zigZag: { name: 'Adobe Zigzag', params: (p) => `R amount ${p.size} R relAmount 0 R ridges ${p.ridges} R roundness ${p.smooth ? 1 : 0} I absoluteness ${p.relative ? 0 : 1} ` },
-  roughen: { name: 'Adobe Roughen', params: (p) => `R size ${p.size} R asiz ${p.relSize ?? 0} R dtal ${p.detail} R roundness ${p.smooth ? 1 : 0} I absoluteness ${p.relative ? 0 : 1} ` },
+  roughen: { name: 'Adobe Roughen', params: (p) => `R size ${p.relSize ?? 0} R asiz ${p.size ?? 0} R dtal ${p.detail} R roundness ${p.smooth ? 1 : 0} I absoluteness ${p.relative ? 0 : 1} ` },
   roundCorners: { name: 'Adobe Round Corners', params: (p) => `R radius ${p.radius} ` },
   offsetPath: { name: 'Adobe Offset Path', params: (p) => `R ofst ${p.offset} I jntp ${{ round: 0, bevel: 1, miter: 2 }[p.join ?? 'miter']} R mlim ${p.miterLimit ?? 4} ` },
   warp: { name: 'Adobe Deform', params: (p) => `R DeformValue ${(p.bend ?? 0) / 100} R DeformHoriz ${(p.hDistort ?? 0) / 100} R DeformVert ${(p.vDistort ?? 0) / 100} I DeformStyle ${p.style ?? 1} B Rotate ${p.vertical ? 1 : 0} ` },
+  transform: { name: 'Adobe Transform', params: (p) => `R scaleH_Factor ${(p.scaleX ?? 100) / 100} R scaleV_Factor ${(p.scaleY ?? 100) / 100} R moveH_Pts ${p.dx ?? 0} R moveV_Pts ${-(p.dy ?? 0)} R rotate_Radians ${((p.angle ?? 0) * Math.PI) / 180} I numCopies ${p.copies ?? 0} I pinPoint ${p.pin ?? 4} B reflectX ${p.reflectX ? 1 : 0} B reflectY ${p.reflectY ? 1 : 0} B randomize 0 B scaleLines 0 B transformObjects 1 ` },
   tweak: { name: 'Adobe Scribble and Tweak', params: (p) => `R horz ${p.horizontal} R vert ${p.vertical} R ahor ${p.horizontal} R aver ${p.vertical} I absoluteness ${p.relative ? 0 : 1} B anch ${p.anchors === false ? 0 : 1} B in ${p.inControl === false ? 0 : 1} B out ${p.outControl === false ? 0 : 1} ` },
 };
 
