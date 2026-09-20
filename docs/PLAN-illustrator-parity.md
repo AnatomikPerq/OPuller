@@ -154,6 +154,21 @@
 ## Что осталось
 
 * `tests/e2e/liquify.spec.ts` «Alt-drag resizes the brush…» — тест нестабилен (ввод в NumberField гонится с обновлением состояния), не связан с планом.
+* Не сверены с Illustrator (нет скриптового доступа или это случайные эффекты): Tweak; геометрия шагов Blend (параметры перехода задаются только диалогом — нужен записанный Action); дуги живых углов (corner widget не скриптуется); режим Relative у Zig Zag (Illustrator пересчитывает его в диалоге). Для кривых сторон под Warp ручки Illustrator отличаются на несколько px от точного образа — его собственная аппроксимация, контуры совпадают в пределах ~1 px.
+
+## Сверено с Illustrator 2026 (фикстуры в `tests/fixtures/`)
+
+| Что | Фикстура | Совпадение |
+|---|---|---|
+| Warp: решётки и контур прямоугольника, 15 стилей, обе оси, дисторсии | `warp/illustrator*.json` | ≤ 0.1 px |
+| Warp: разбиение наклонных и кривых сегментов при Expand | `effects/warp-shapes.json` | прямые ≤ 0.6 px, кривые ≤ 2 px; структура совпадает в 75 % случаев |
+| Pucker & Bloat | `effects/puckerBloat.json` | ≤ 0.01 px |
+| Zig Zag (corner и smooth, 1–5 пиков) | `effects/zigZag.json` | ≤ 0.05 px |
+| Round Corners (эффект) | `effects/roundCorners.json` | ≤ 0.01 px |
+| Offset Path (miter/round/bevel, лимит угла, открытые контуры) | `effects/offsetPath.json` + `tests/e2e/offset-illustrator.spec.ts` | обвод ≤ 0.5 px |
+| Transform (копии, опорные точки) | `effects/transform.json` | ≤ 0.01 px |
+| Roughen (структура точек, направление сдвига) | измерено при нулевом размере | структура 1:1, случайность своя |
+| Уроки: сова, котёнок, рябина, пейзаж, лиса | `tests/e2e/lessons/illustrator/*.png` | IoU 0.97–0.996 |
 
 ## Порядок работ (оценка)
 
