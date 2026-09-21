@@ -7,14 +7,15 @@ import type { Document, ID, Node, PathNode, TextNode, Paint, StrokeStyle, LiveSh
 import { isContainer } from '@/model/types';
 import { getState, setState, useStore } from '@/store/store';
 import { makeShape, makePath, makeText, makeImage, newId, clonePaint, cloneStroke } from '@/model/nodes';
-import { addNode, removeNode, worldBounds, selectionBounds, applyWorldMatrix, refreshLiveShape, worldSubPaths, setWorldSubPaths, topmostOf, descendants, cloneSubtree, addSubtree, getChildren, moveNode, indexInParent, isEditable } from '@/model/document';
+import { addNode, removeNode, worldBounds, selectionBounds, applyWorldMatrix, refreshLiveShape, worldSubPaths, setWorldSubPaths, topmostOf, descendants, cloneSubtree, addSubtree, getChildren, moveNode, indexInParent, isEditable, worldMatrix } from '@/model/document';
 import { translate, scale as scaleM, rotate as rotateM, multiply, compose, identity, applyToPoint } from '@/geometry/matrix';
 import { parseSvgPathData, pathToSvgD } from '@/geometry/path';
 import { rectUnion } from '@/geometry/vec';
 import { allCommands, runCommand, getCommand, isEnabled } from '@/commands/registry';
 import { appearanceTargets } from '@/commands/appearance';
 import { setCornerRadii } from '@/tools/pathEditing/corners';
-import { applyBlendOptions, makeBlendCommand } from '@/blend/register';
+import { applyBlendOptions, makeBlendCommand, blendOptionsFrom } from '@/blend/register';
+import { blendGroupsOf } from '@/blend/ops';
 import { applyOffsetPath } from '@/ui/dialogs/offsetPath/register';
 import { applySimplify } from '@/ui/dialogs/simplify/register';
 import { applyEffect, effectDef, EFFECT_DEFS, type EffectType } from '@/commands/effectCommands/effects';
@@ -46,10 +47,22 @@ function requireNode(id: ID): Node {
   return n;
 }
 
+/**
+ * Target ids of a call: `ids` (or `id`) when given, otherwise the selection. Ids that name no
+ * node are dropped; when none of the given ids exists the call fails instead of silently
+ * acting on the selection.
+ */
 function idsParam(p: Params): ID[] {
   const s = getState();
-  if (Array.isArray(p.ids) && p.ids.length) return p.ids.filter((id: ID) => !!s.doc.nodes[id]);
-  if (typeof p.id === 'string') return s.doc.nodes[p.id] ? [p.id] : [];
+  if (Array.isArray(p.ids) && p.ids.length) {
+    const ids = p.ids.filter((id: ID) => !!s.doc.nodes[id]);
+    if (!ids.length) throw new Error(`Unknown node ids: ${p.ids.map(String).join(', ')}`);
+    return ids;
+  }
+  if (typeof p.id === 'string') {
+    if (!s.doc.nodes[p.id]) throw new Error(`Unknown node id "${p.id}"`);
+    return [p.id];
+  }
   return s.selection.slice();
 }
 
@@ -150,6 +163,32 @@ function toStroke(p: any, base: StrokeStyle): StrokeStyle {
   if (p.markerEnd) out.markerEnd = p.markerEnd;
   if (p.markerScale !== undefined) out.markerScale = Number(p.markerScale);
   if (Array.isArray(p.widthProfile)) out.widthProfile = p.widthProfile;
+  return out;
+}
+
+/**
+ * Effect parameters checked against the effect's own fields (`def.defaults()`): unknown keys and
+ * values of another type are errors, numbers must be finite. `enabled` is handled by the caller.
+ */
+function checkEffectParams(type: string, template: Record<string, unknown>, params: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const known = Object.keys(template).filter((k) => k !== 'type' && k !== 'enabled');
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'enabled' || key === 'type') continue;
+    if (!(key in template)) throw new Error(`Effect "${type}" has no parameter "${key}"; parameters: ${known.join(', ')}`);
+    const want = template[key];
+    if (typeof want === 'number') {
+      const v = Number(value);
+      if (typeof value === 'boolean' || typeof value === 'object' || !Number.isFinite(v)) throw new Error(`Effect "${type}": "${key}" must be a number`);
+      out[key] = v;
+    } else if (typeof want === 'boolean') {
+      if (typeof value !== 'boolean') throw new Error(`Effect "${type}": "${key}" must be true or false`);
+      out[key] = value;
+    } else if (typeof want === 'string') {
+      if (typeof value !== 'string') throw new Error(`Effect "${type}": "${key}" must be a string`);
+      out[key] = value;
+    } else out[key] = value;
+  }
   return out;
 }
 
@@ -268,8 +307,11 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     const cmd = getCommand(p.id);
     if (!cmd) throw new Error(`Unknown command "${p.id}"`);
     if (!isEnabled(cmd)) throw new Error(`Command "${p.id}" is disabled in the current state`);
-    runCommand(p.id, p.arg);
-    return { ok: true, selection: getState().selection, dialog: getState().dialog?.type ?? null };
+    // run the command directly: an error it throws is the caller's (the menu path toasts it instead)
+    const result = () => ({ ok: true, selection: getState().selection, dialog: getState().dialog?.type ?? null });
+    const r = cmd.run(p.arg);
+    if (r && typeof (r as Promise<void>).then === 'function') return (r as Promise<void>).then(result);
+    return result();
   },
   setTool(p) {
     if (!getTool(p.id)) throw new Error(`Unknown tool "${p.id}"`);
@@ -593,21 +635,43 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     const scaleStrokes = p.scaleStrokes !== undefined ? !!p.scaleStrokes : s.prefs.scaleStrokes;
     const scaleEffects = p.scaleEffects !== undefined ? !!p.scaleEffects : scaleStrokes;
     const k = scaleFactor(m);
+    // scaleCorners: false keeps every corner at its world size: remember the radii and the world
+    // scale of each path before the transform (the bake changes both, and not always by k)
+    const corners = new Map<ID, { k: number; radii: [number, number, number, number] | null; anchors: Array<Array<number | undefined>> }>();
+    if (p.scaleCorners === false) {
+      for (const id of ids) {
+        for (const leaf of descendants(s.doc, id, true)) {
+          const n = s.doc.nodes[leaf];
+          if (!n || n.type !== 'path') continue;
+          corners.set(leaf, { k: scaleFactor(worldMatrix(s.doc, leaf)) || 1, radii: n.shape?.kind === 'rect' ? ([...n.shape.radii] as [number, number, number, number]) : null, anchors: n.subpaths.map((sp) => sp.anchors.map((a) => a.cornerRadius)) });
+        }
+      }
+    }
     const result = transformDocument(s.doc, ids, m, { scaleStrokes });
     let doc = result.doc;
-    if ((scaleEffects !== scaleStrokes || p.scaleCorners === false) && Math.abs(k - 1) > 1e-9) {
+    const rescaleEffects = scaleEffects !== scaleStrokes && Math.abs(k - 1) > 1e-9;
+    if (rescaleEffects || corners.size) {
       doc = produce(doc, (d) => {
         for (const id of result.ids) {
           for (const leaf of descendants(d, id, true)) {
             const n = d.nodes[leaf];
             if (!n || (n.type !== 'path' && n.type !== 'text')) continue;
-            if (scaleEffects !== scaleStrokes) n.effects = n.effects.map((e) => scaleEffect(e, scaleEffects ? k : 1 / k));
-            if (p.scaleCorners === false && n.type === 'path') {
-              if (n.shape?.kind === 'rect') {
-                n.shape = { ...n.shape, radii: n.shape.radii.map((r) => r / k) as [number, number, number, number] };
+            if (rescaleEffects) n.effects = n.effects.map((e) => scaleEffect(e, scaleEffects ? k : 1 / k));
+            const snap = corners.get(leaf);
+            if (snap && n.type === 'path') {
+              // old local radius * (old world scale / new world scale) = the same world radius
+              const ratio = snap.k / (scaleFactor(worldMatrix(d, leaf)) || 1);
+              if (snap.radii && n.shape?.kind === 'rect') {
+                n.shape = { ...n.shape, radii: snap.radii.map((r) => r * ratio) as [number, number, number, number] };
                 refreshLiveShape(n);
               }
-              for (const sp of n.subpaths) for (const a of sp.anchors) if (a.cornerRadius) a.cornerRadius /= k;
+              n.subpaths.forEach((sp, si) => {
+                sp.anchors.forEach((a, ai) => {
+                  const r = snap.anchors[si]?.[ai];
+                  if (r) a.cornerRadius = r * ratio;
+                  else if (a.cornerRadius) delete a.cornerRadius;
+                });
+              });
             }
           }
         }
@@ -694,18 +758,14 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     for (const k of ['spacing', 'steps', 'distance', 'colors'] as const) if (p[k] !== undefined) opts[k] = p[k];
     let groups: ID[] = [];
     if (op === 'make') {
-      if (Object.keys(opts).length) {
-        const before = getState().docVersion;
-        groups = applyBlendOptions(opts);
-        if (getState().docVersion === before) throw new Error('Blend needs at least two paths');
-      } else {
-        const gid = makeBlendCommand();
-        if (!gid) throw new Error('Blend needs at least two paths');
-        groups = [gid];
-      }
+      if (blendGroupsOf(getState().doc, getState().selection).length) throw new Error('The selection already is a blend (use op "options" to change it)');
+      const gid = makeBlendCommand(blendOptionsFrom(opts));
+      if (!gid) throw new Error('Blend needs at least two paths');
+      groups = [gid];
     } else if (op === 'options') {
+      if (!blendGroupsOf(getState().doc, getState().selection).length) throw new Error('No blend in the selection (use op "make" to create one)');
+      if (!Object.keys(opts).length) throw new Error('options needs spacing, steps, distance and/or colors');
       groups = applyBlendOptions(opts);
-      if (!groups.length) throw new Error('No blend in the selection');
     } else if (op === 'expand' || op === 'release' || op === 'reverse' || op === 'reverseStack') {
       const cmd = op === 'reverse' ? 'blend.reverseSpine' : `blend.${op}`;
       const c = getCommand(cmd);
@@ -750,7 +810,8 @@ export const mcpApi: Record<string, (p: Params) => any> = {
       if (!type) throw new Error('add needs an effect "type"');
       const def = effectDef(type);
       if (!def) throw new Error(`Unknown effect type "${type}"; known: ${EFFECT_DEFS.map((d) => d.type).join(', ')}`);
-      const effect = { ...def.defaults(), ...params, type, enabled: params.enabled !== false } as Effect;
+      const defaults = def.defaults() as unknown as Record<string, unknown>;
+      const effect = { ...defaults, ...checkEffectParams(type, defaults, params), type, enabled: params.enabled !== false } as Effect;
       applyEffect(effect, ids, p.replace ? { kind: 'replaceType' } : { kind: 'append' }, def.label);
       return { op, nodes: ids.map((id) => ({ id, effects: list(id) })) };
     }
@@ -763,7 +824,11 @@ export const mcpApi: Record<string, (p: Params) => any> = {
           const idx = typeof p.index === 'number' ? p.index : type ? n.effects.findIndex((e) => e.type === type) : n.effects.length - 1;
           if (idx < 0 || !n.effects[idx]) continue;
           if (op === 'remove') n.effects.splice(idx, 1);
-          else n.effects[idx] = { ...n.effects[idx], ...params, type: n.effects[idx].type } as Effect;
+          else {
+            const cur = n.effects[idx];
+            const template = (effectDef(cur.type)?.defaults() ?? cur) as unknown as Record<string, unknown>;
+            n.effects[idx] = { ...cur, ...checkEffectParams(cur.type, template, params), type: cur.type } as Effect;
+          }
           touched++;
         }
       }, op === 'remove' ? 'Remove Effect' : 'Edit Effect');
@@ -777,8 +842,9 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     const ids = idsParam(p);
     if (ids.length) s.setSelection(ids);
     if (getState().selection.length === 0) throw new Error('align needs a selection or ids');
+    if (p.h === undefined && p.v === undefined && p.distribute === undefined) throw new Error('Nothing to do: give h, v and/or distribute');
+    // `done` lists the steps that moved something (an already aligned selection gives [])
     const done = alignFromParams(p);
-    if (!done.length) throw new Error('Nothing to do: give h, v and/or distribute');
     const st = getState();
     return { done, nodes: st.selection.map((id) => summary(st.doc, id, 0, true)) };
   },
@@ -881,15 +947,16 @@ export const mcpApi: Record<string, (p: Params) => any> = {
     if (p.stroke !== undefined) patch.stroke = toStroke(p.stroke, s.appearance.stroke);
     if (p.textStyle) patch.textStyle = { ...s.appearance.textStyle, ...p.textStyle };
     const targets = target === 'defaults' ? [] : appearanceTargets(idsParam(p));
+    if (target !== 'defaults' && !targets.length) throw new Error('No paths or text to apply the appearance to (select something or give ids)');
     if (targets.length) {
-      const stroke = patch.stroke as StrokeStyle | undefined;
+      // objects are patched with what was given: a stroke width alone keeps every object's own colour and dash
       s.updateDoc((d) => {
         for (const id of targets) {
           const n = d.nodes[id];
           if (!n || (n.type !== 'path' && n.type !== 'text')) continue;
-          if (patch.fill) n.fill = clonePaint(patch.fill);
-          if (stroke) n.stroke = { ...n.stroke, ...cloneStroke(stroke) };
-          if (patch.textStyle && n.type === 'text') n.style = { ...n.style, ...patch.textStyle };
+          if (p.fill !== undefined) n.fill = toPaint(p.fill, n.fill);
+          if (p.stroke !== undefined) n.stroke = toStroke(p.stroke, n.stroke);
+          if (p.textStyle && n.type === 'text') n.style = { ...n.style, ...p.textStyle };
         }
       }, 'Appearance');
     }

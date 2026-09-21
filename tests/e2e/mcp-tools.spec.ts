@@ -217,6 +217,84 @@ test.describe('scripting tools', () => {
     expect((await api(page, 'fonts', { op: 'list' })).uploaded.some((u: any) => u.family === fam)).toBe(false);
   });
 
+  test('ids that exist no more are an error, not a fallback to the selection', async ({ page }) => {
+    const a = await api(page, 'createShape', { kind: 'rect', x: 100, y: 100, width: 50, height: 50, fill: '#ff0000', stroke: 'none', name: 'A' });
+    const b = await api(page, 'createShape', { kind: 'rect', x: 300, y: 100, width: 50, height: 50, fill: '#00ff00', stroke: 'none', name: 'B' });
+    await api(page, 'select', { ids: [a.id, b.id] });
+    const before = (await getState(page)).docVersion;
+    await expect(api(page, 'corners', { ids: ['nope'], radius: 5 })).rejects.toThrow(/Unknown node ids: nope/);
+    await expect(api(page, 'setAppearance', { ids: ['nope'], target: 'selection', fill: '#000000' })).rejects.toThrow(/Unknown node ids/);
+    await expect(api(page, 'align', { ids: ['gone'], h: 'left' })).rejects.toThrow(/Unknown node ids/);
+    await expect(api(page, 'effect', { id: 'gone', op: 'list' })).rejects.toThrow(/Unknown node id "gone"/);
+    await expect(api(page, 'transform', { ids: ['gone'], scale: 2 })).rejects.toThrow(/Unknown node ids/);
+    await expect(api(page, 'pathfinder', { ids: ['x', 'y'], op: 'unite' })).rejects.toThrow(/Unknown node ids/);
+    // nothing happened to the selected objects
+    expect((await getState(page)).docVersion).toBe(before);
+    expect((await nodeById(page, a.id)).fill.color).toBe('#ff0000');
+    // a mix of known and unknown ids acts on the known ones
+    const r = await api(page, 'corners', { ids: [a.id, 'nope'], radius: 5 });
+    expect(r.corners).toBe(4);
+    expect((await nodeById(page, a.id)).shape.radii).toEqual([5, 5, 5, 5]);
+    expect((await nodeById(page, b.id)).shape.radii).toEqual([0, 0, 0, 0]);
+  });
+
+  test('setAppearance on objects patches each object; unknown params and command errors are reported', async ({ page }) => {
+    const a = await api(page, 'createShape', { kind: 'rect', x: 100, y: 100, width: 50, height: 50, fill: '#ff0000', stroke: { color: '#0000ff', width: 2, dash: [4, 2] }, name: 'A' });
+    const b = await api(page, 'createShape', { kind: 'rect', x: 300, y: 100, width: 50, height: 50, fill: '#00ff00', stroke: { color: '#ff00ff', width: 3 }, name: 'B' });
+    // a stroke width for the selection keeps every object's own colour and dash
+    const r = await api(page, 'setAppearance', { ids: [a.id, b.id], target: 'selection', stroke: { width: 7 } });
+    expect(r.applied).toHaveLength(2);
+    const na = await nodeById(page, a.id);
+    const nb = await nodeById(page, b.id);
+    expect(na.stroke.width).toBe(7);
+    expect(na.stroke.paint.color).toBe('#0000ff');
+    expect(na.stroke.dash).toEqual([4, 2]);
+    expect(nb.stroke.width).toBe(7);
+    expect(nb.stroke.paint.color).toBe('#ff00ff');
+    expect(na.fill.color).toBe('#ff0000');
+    // the defaults were not touched by target "selection"
+    expect((await getState(page)).appearance.stroke.width).not.toBe(7);
+    await expect(api(page, 'setAppearance', { ids: [a.id], target: 'selection', stroke: { width: 'thick' } })).resolves.toBeTruthy();
+    // nothing selected and no ids: an error rather than a silent no-op
+    await api(page, 'select', { ids: [] });
+    await expect(api(page, 'setAppearance', { target: 'selection', fill: '#000000' })).rejects.toThrow(/No paths or text/);
+    // effect params are checked against the effect's fields
+    await expect(api(page, 'effect', { op: 'add', ids: [a.id], type: 'zigZag', params: { ridgez: 3 } })).rejects.toThrow(/no parameter "ridgez"/);
+    await expect(api(page, 'effect', { op: 'add', ids: [a.id], type: 'zigZag', params: { size: 'big' } })).rejects.toThrow(/"size" must be a number/);
+    await expect(api(page, 'effect', { op: 'add', ids: [a.id], type: 'zigZag', params: { smooth: 'yes' } })).rejects.toThrow(/"smooth" must be true or false/);
+    const ok = await api(page, 'effect', { op: 'add', ids: [a.id], type: 'zigZag', params: { size: '6', ridges: 2, smooth: true } });
+    expect(ok.nodes[0].effects[0]).toMatchObject({ type: 'zigZag', size: 6, ridges: 2, smooth: true });
+    await expect(api(page, 'effect', { op: 'update', ids: [a.id], type: 'zigZag', params: { bogus: 1 } })).rejects.toThrow(/no parameter "bogus"/);
+    // a command that fails on its argument reports the failure (the menu path would toast it)
+    await api(page, 'select', { ids: [a.id] });
+    await expect(api(page, 'runCommand', { id: 'path.simplify', arg: { tolerance: -1 } })).rejects.toThrow(/positive "tolerance"/);
+    expect((await nodeById(page, a.id)).effects).toHaveLength(1);
+  });
+
+  test('blend: make with options in one step, options only on a blend, an already aligned selection reports no steps', async ({ page }) => {
+    const a = await api(page, 'createShape', { kind: 'circle', cx: 100, cy: 300, r: 20, fill: '#ff0000', stroke: 'none', name: 'A' });
+    const b = await api(page, 'createShape', { kind: 'circle', cx: 400, cy: 300, r: 20, fill: '#0000ff', stroke: 'none', name: 'B' });
+    await expect(api(page, 'blend', { op: 'options', ids: [a.id, b.id], steps: 4 })).rejects.toThrow(/No blend in the selection/);
+    expect((await getState(page)).past.map((h: any) => h.label)).not.toContain('Make Blend');
+    const made = await api(page, 'blend', { op: 'make', ids: [a.id, b.id], spacing: 'distance', distance: 50, colors: false });
+    expect(made.groups[0].blend.spacing).toBe('distance');
+    expect(made.groups[0].blend.distance).toBe(50);
+    expect(made.groups[0].blend.colors).toBe(false);
+    expect(await label(page)).toBe('Make Blend');
+    await expect(api(page, 'blend', { op: 'make', ids: [made.groups[0].id] })).rejects.toThrow(/already is a blend/);
+    await expect(api(page, 'blend', { op: 'options', ids: [made.groups[0].id] })).rejects.toThrow(/options needs/);
+    await expect(api(page, 'blend', { op: 'options', ids: [made.groups[0].id], spacing: 'bogus' })).rejects.toThrow(/spacing must be/);
+    // align: only effective steps are listed, and the parameters are validated
+    const c = await api(page, 'createShape', { kind: 'rect', x: 100, y: 500, width: 50, height: 50, fill: '#ff0000', stroke: 'none', name: 'C' });
+    const d = await api(page, 'createShape', { kind: 'rect', x: 100, y: 600, width: 50, height: 50, fill: '#00ff00', stroke: 'none', name: 'D' });
+    const r = await api(page, 'align', { ids: [c.id, d.id], h: 'left' });
+    expect(r.done).toEqual([]);
+    const r2 = await api(page, 'align', { ids: [c.id, d.id], h: 'left', v: 'top' });
+    expect(r2.done).toEqual(['Align top edges']);
+    await expect(api(page, 'align', { ids: [c.id, d.id] })).rejects.toThrow(/Nothing to do/);
+    await expect(api(page, 'align', { ids: [c.id, d.id], h: 'left', to: 'key', key: 'nope' })).rejects.toThrow(/Unknown key object/);
+  });
+
   test('transform scale flags and pathfinder cleanup (plan items 12, 14)', async ({ page }) => {
     const rect = await api(page, 'createShape', { kind: 'rect', x: 100, y: 100, width: 100, height: 100, radii: [10, 10, 10, 10], fill: '#cccccc', stroke: { color: '#000000', width: 4 }, name: 'R' });
     await api(page, 'effect', { op: 'add', ids: [rect.id], type: 'dropShadow', params: { dx: 5, dy: 5, blur: 4 } });
@@ -233,11 +311,25 @@ test.describe('scripting tools', () => {
     expect(n.stroke.width).toBeCloseTo(2, 6);
     expect(n.effects[0].dx).toBeCloseTo(2.5, 6);
     expect(n.shape.radii[0]).toBeCloseTo(10, 6);
-    // scaleCorners false keeps the radii
+    // scaleCorners false keeps the radii, also under a non-uniform scale (the bake would take the smaller factor)
     await api(page, 'transform', { ids: [rect.id], scale: 2, scaleCorners: false });
     n = await nodeById(page, rect.id);
     expect(n.shape.radii[0]).toBeCloseTo(10, 6);
     expect((await worldBounds(page, rect.id))!.width).toBeCloseTo(200, 3);
+    await api(page, 'transform', { ids: [rect.id], scale: { x: 1.5, y: 3 }, scaleCorners: false });
+    n = await nodeById(page, rect.id);
+    expect(n.shape.radii).toEqual([10, 10, 10, 10]);
+    expect((await worldBounds(page, rect.id))!.height).toBeCloseTo(600, 3);
+    // live corners of a polygon inside a scaled group keep their world radius too
+    const poly = await api(page, 'createShape', { kind: 'polygon', cx: 800, cy: 300, radius: 40, sides: 6, fill: '#00ffff', stroke: 'none', name: 'P' });
+    await api(page, 'corners', { ids: [poly.id], radius: 7 });
+    const w0 = (await worldBounds(page, poly.id))!.width;
+    const g = await api(page, 'group', { ids: [poly.id] });
+    await api(page, 'transform', { ids: [g.selection[0]], scale: 3, scaleCorners: false });
+    const pn = await nodeById(page, poly.id);
+    const worldScale = Math.hypot(pn.transform.a, pn.transform.b);
+    expect(pn.subpaths[0].anchors[0].cornerRadius * worldScale).toBeCloseTo(7, 4);
+    expect((await worldBounds(page, poly.id))!.width).toBeCloseTo(3 * w0, 1);
     // pathfinder: a subtraction that leaves a sliver keeps only the real piece
     const base = await api(page, 'createShape', { kind: 'rect', x: 400, y: 100, width: 200, height: 100, fill: '#ff0000', stroke: 'none', name: 'Base' });
     const cutter = await api(page, 'createShape', { kind: 'rect', x: 500, y: 90, width: 200, height: 120, fill: '#00ff00', stroke: 'none', name: 'Cut' });

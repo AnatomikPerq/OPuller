@@ -284,37 +284,48 @@ export function docOf(s: EditorState): Document {
  */
 export function alignFromParams(params: Record<string, unknown>): string[] {
   const done: string[] = [];
-  const mode: AlignTo = params.to === 'artboard' || params.to === 'key' ? params.to : 'selection';
-  if (typeof params.key === 'string') useTransformStore.getState().setKeyObject(params.key);
+  const to = params.to;
+  if (to !== undefined && to !== 'selection' && to !== 'artboard' && to !== 'key') throw new Error('to must be selection | artboard | key');
+  const mode: AlignTo = to === 'artboard' || to === 'key' ? to : 'selection';
+  if (mode === 'key' && params.key !== undefined && (typeof params.key !== 'string' || !getState().doc.nodes[params.key])) throw new Error(`Unknown key object "${String(params.key)}"`);
   const H: Record<string, AlignKind> = { left: 'left', center: 'hcenter', hcenter: 'hcenter', middle: 'hcenter', right: 'right' };
   const V: Record<string, AlignKind> = { top: 'top', center: 'vcenter', vcenter: 'vcenter', middle: 'vcenter', bottom: 'bottom' };
-  if (typeof params.h === 'string') {
-    const k = H[params.h];
-    if (!k) throw new Error('h must be left | center | right');
-    alignSelection(k, mode);
-    done.push(ALIGN_LABELS[k]);
-  }
-  if (typeof params.v === 'string') {
-    const k = V[params.v];
-    if (!k) throw new Error('v must be top | middle | bottom');
-    alignSelection(k, mode);
-    done.push(ALIGN_LABELS[k]);
-  }
-  if (typeof params.distribute === 'string') {
-    const d = params.distribute;
-    if (d === 'h' || d === 'v') {
-      const spacing = params.spacing === undefined || params.spacing === 'auto' ? null : Number(params.spacing);
-      if (spacing === null && mode !== 'artboard' && params.spacing === undefined) {
-        // plain "distribute" = equal spacing between the objects' edges
-        distributeSpacingSelection(d, mode, null);
-      } else distributeSpacingSelection(d, mode, spacing);
-      done.push(d === 'h' ? 'Distribute horizontal spacing' : 'Distribute vertical spacing');
-    } else {
-      const k = (H[d] && (d === 'left' || d === 'right' || d === 'hcenter' || d === 'center') ? H[d] : V[d]) as DistributeKind | undefined;
-      if (!k) throw new Error('distribute must be h | v | left | center | right | top | middle | bottom');
-      distributeSelection(k, mode);
-      done.push(DISTRIBUTE_LABELS[k]);
+  // a step counts only when it moved something (already aligned objects, a single object, ...)
+  const step = (label: string, run: () => void) => {
+    const before = getState().docVersion;
+    run();
+    if (getState().docVersion !== before) done.push(label);
+  };
+  const transform = useTransformStore.getState();
+  const prevKey = transform.keyObject;
+  if (typeof params.key === 'string') transform.setKeyObject(params.key);
+  try {
+    if (typeof params.h === 'string') {
+      const k = H[params.h];
+      if (!k) throw new Error('h must be left | center | right');
+      step(ALIGN_LABELS[k], () => alignSelection(k, mode));
     }
+    if (typeof params.v === 'string') {
+      const k = V[params.v];
+      if (!k) throw new Error('v must be top | middle | bottom');
+      step(ALIGN_LABELS[k], () => alignSelection(k, mode));
+    }
+    if (typeof params.distribute === 'string') {
+      const d = params.distribute;
+      if (d === 'h' || d === 'v') {
+        const spacing = params.spacing === undefined || params.spacing === 'auto' ? null : Number(params.spacing);
+        if (spacing !== null && !Number.isFinite(spacing)) throw new Error('spacing must be a number or "auto"');
+        // plain "distribute" = equal spacing between the objects' edges
+        step(d === 'h' ? 'Distribute horizontal spacing' : 'Distribute vertical spacing', () => distributeSpacingSelection(d, mode, spacing));
+      } else {
+        const k = (H[d] && (d === 'left' || d === 'right' || d === 'hcenter' || d === 'center') ? H[d] : V[d]) as DistributeKind | undefined;
+        if (!k) throw new Error('distribute must be h | v | left | center | right | top | middle | bottom');
+        step(DISTRIBUTE_LABELS[k], () => distributeSelection(k, mode));
+      }
+    }
+  } finally {
+    // the key object given for this call does not replace the one the Align panel uses
+    if (typeof params.key === 'string') useTransformStore.getState().setKeyObject(prevKey);
   }
   return done;
 }

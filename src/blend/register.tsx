@@ -259,15 +259,22 @@ function BlendOptionsDialog({ close }: { close: () => void }) {
 }
 
 /** Blend Options from parameters: existing blends of the selection get the options, otherwise a blend is made. */
-export function applyBlendOptions(params: Record<string, unknown>): ID[] {
-  const s = getState();
+/** Blend options from loose parameters (scripting / dialog apply): unknown spacing values are ignored, steps 1..1000. */
+export function blendOptionsFrom(params: Record<string, unknown>): Partial<Omit<BlendSpec, 'sources'>> {
   const opts: Partial<Omit<BlendSpec, 'sources'>> = {};
   if (params.spacing === 'steps' || params.spacing === 'distance' || params.spacing === 'smooth') opts.spacing = params.spacing;
+  else if (params.spacing !== undefined) throw new Error('spacing must be steps | distance | smooth');
   if (params.steps !== undefined) opts.steps = Math.max(1, Math.min(1000, Math.round(Number(params.steps))));
   if (params.distance !== undefined) opts.distance = Math.max(0.5, Number(params.distance));
   if (params.colors !== undefined) opts.colors = !!params.colors;
   if (opts.steps !== undefined && !opts.spacing) opts.spacing = 'steps';
   else if (opts.distance !== undefined && !opts.spacing) opts.spacing = 'distance';
+  return opts;
+}
+
+export function applyBlendOptions(params: Record<string, unknown>): ID[] {
+  const s = getState();
+  const opts = blendOptionsFrom(params);
   const groups = targetGroups(s);
   if (groups.length) {
     s.updateDoc((d) => {

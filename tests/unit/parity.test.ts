@@ -8,6 +8,7 @@ import { getState } from '@/store/store';
 import { makeShape, makePath, makeText } from '@/model/nodes';
 import { addNode, worldBounds } from '@/model/document';
 import { alignFromParams } from '@/transform/align';
+import { useTransformStore } from '@/transform/store';
 import { cleanupResults, SLIVER_AREA } from "@/pathops/cleanup";
 import { rectSubPath, ellipseSubPath } from '@/geometry/shapes';
 import { roundSubPathCorners, cornerAngle } from '@/geometry/corners';
@@ -95,7 +96,21 @@ describe('align / distribute from parameters (plan item 12)', () => {
     expect(xs[1].x - (xs[0].x + xs[0].width)).toBeCloseTo(20, 6);
     expect(xs[2].x - (xs[1].x + xs[1].width)).toBeCloseTo(20, 6);
     expect(() => alignFromParams({ h: 'sideways' })).toThrow(/h must be/);
+    expect(() => alignFromParams({ to: 'page' })).toThrow(/to must be/);
+    expect(() => alignFromParams({ h: 'left', to: 'key', key: 'nope' })).toThrow(/Unknown key object/);
     expect(alignFromParams({})).toEqual([]);
+    // only the steps that moved something are reported: the selection is already left-aligned
+    s.setSelection([a.id, b.id]);
+    alignFromParams({ h: 'left' });
+    const v0 = getState().docVersion;
+    expect(alignFromParams({ h: 'left' })).toEqual([]);
+    expect(getState().docVersion).toBe(v0);
+    expect(alignFromParams({ h: 'left', v: 'top' })).toEqual(['Align top edges']);
+    // the key object of the call does not replace the Align panel's key object
+    useTransformStore.getState().setKeyObject(c.id);
+    alignFromParams({ v: 'bottom', to: 'key', key: a.id });
+    expect(useTransformStore.getState().keyObject).toBe(c.id);
+    useTransformStore.getState().setKeyObject(null);
   });
 });
 
