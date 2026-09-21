@@ -63,7 +63,8 @@ export function cutPathAt(ctx: ToolContext, hit: CutHit): ID[] {
   s.updateDoc((d) => {
     const n = d.nodes[hit.nodeId] as PathNode | undefined;
     if (!n) return;
-    const world = worldSubPaths(d, hit.nodeId, { liveCorners: true });
+    // the cut lands on the anchors / segments the user sees (raw geometry); interior live corners stay live
+    const world = worldSubPaths(d, hit.nodeId);
     const sp = world[hit.subpath];
     if (!sp) return;
     let pieces: SubPath[];

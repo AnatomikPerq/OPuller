@@ -49,7 +49,7 @@ import { directCursor } from '../pathEditing/cursors';
 import { AnchorHighlight, HandleHighlight, SegmentHighlight, HL } from '../pathEditing/overlay';
 import { convertSelectedAnchors } from '../pathEditing/register';
 import { cubicPoint } from '@/geometry/bezier';
-import { selectionCornerWidgets, hitCornerWidget, widgetWorldPosition, radiusForPointer, setCornerRadiusWorld, type CornerWidget } from '../pathEditing/corners';
+import { selectionCornerWidgets, hitCornerWidget, widgetWorldPosition, radiusForPointer, applyCornerDrag, type CornerWidget } from '../pathEditing/corners';
 
 // ---------------------------------------------------------------------------
 // Gesture state
@@ -366,14 +366,15 @@ function pointerMove(e: ToolPointerEvent, ctx: ToolContext): void {
   }
 
   if (g.kind === 'corner') {
-    const r = radiusForPointer(g.primary, e.world, ctx.zoom);
+    const wanted = radiusForPointer(g.primary, e.world, ctx.zoom);
     g.moved = true;
+    let applied = wanted;
     s.replaceDoc(
       produce(g.base, (d) => {
-        for (const w of g.widgets) setCornerRadiusWorld(d, w.nodeId, w.target, Math.min(r, w.maxRadius));
+        applied = applyCornerDrag(d, g.widgets, wanted);
       }),
     );
-    useOverlayStore.getState().setHud({ screen: e.screen, text: `Corners: ${formatLength(r, s.prefs.units)}` });
+    useOverlayStore.getState().setHud({ screen: e.screen, text: `Corners: ${formatLength(applied, s.prefs.units)}` });
     ctx.requestOverlay();
     return;
   }
@@ -529,6 +530,8 @@ function pointerUp(e: ToolPointerEvent, ctx: ToolContext): void {
     finalizeObjects(ctx, g.ids);
   } else if (g.kind === 'corner') {
     if (g.moved) ctx.commit('Round Corners');
+    // the widgets sit at their final positions now (the hover state alone may not repaint)
+    ctx.requestOverlay();
   }
   pointerMove(e, ctx);
 }
@@ -640,11 +643,13 @@ function overlay(ctx: ToolContext): React.ReactNode {
   const s = ctx.state;
   const items: React.ReactNode[] = [];
   const g = gesture;
-  // live corner widgets (Illustrator: a small circle inside every corner of the selection)
-  const widgets = g.kind === 'corner' ? g.widgets : selectionCornerWidgets(s.doc, s.selection, s.selectedAnchors);
+  // live corner widgets (Illustrator: a small circle inside every corner of the selection); while one is
+  // dragged the widgets follow the radius of the current document, the dragged ones highlighted
+  const widgets = selectionCornerWidgets(s.doc, s.selection, s.selectedAnchors);
+  const dragged = g.kind === 'corner' ? new Set(g.widgets.map((w) => w.key)) : null;
   for (const w of widgets) {
     const p = ctx.worldToScreen(widgetWorldPosition(w, ctx.zoom));
-    const active = g.kind === 'corner' ? true : hoverWidget?.key === w.key;
+    const active = dragged ? dragged.has(w.key) : hoverWidget?.key === w.key;
     items.push(
       <g key={`cw-${w.key}`} className="corner-widget" data-testid="corner-widget" data-corner={w.key} pointerEvents="none">
         <circle cx={p.x} cy={p.y} r={active ? 5.5 : 4.5} fill={active ? HL : '#ffffff'} stroke={HL} strokeWidth={1.25} />

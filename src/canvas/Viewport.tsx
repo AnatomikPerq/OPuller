@@ -569,7 +569,7 @@ function HudOverlay() {
   const lines = hud.text.split('\n');
   const w = Math.max(...lines.map((l) => l.length)) * 6.4 + 12;
   return (
-    <g transform={`translate(${hud.screen.x + 14} ${hud.screen.y + 14})`} pointerEvents="none">
+    <g transform={`translate(${hud.screen.x + 14} ${hud.screen.y + 14})`} pointerEvents="none" data-testid="hud">
       <rect x={0} y={0} width={w} height={lines.length * 14 + 6} rx={3} fill="rgba(20,20,22,0.9)" stroke="#555" />
       {lines.map((l, i) => (
         <text key={i} x={6} y={13 + i * 14} fontSize={11} fill="#eee" fontFamily="Inter, system-ui, sans-serif">

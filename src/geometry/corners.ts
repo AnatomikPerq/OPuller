@@ -85,6 +85,38 @@ function cornerVertices(sp: SubPath): Array<{ i: number; theta: number }> {
   return out;
 }
 
+/**
+ * Largest radius that a set of corners can all take at once (dragging several widgets
+ * together): the other corners keep `radiusOf`, and the answer is the biggest r for which no
+ * corner of the set has to give up part of its trim to a neighbour of the set.
+ */
+export function maxSharedRadius(sp: SubPath, indices: number[], radiusOf: (j: number, a: Anchor) => number = (_, a) => a.cornerRadius ?? 0): number {
+  const set = new Set(indices);
+  if (!set.size) return 0;
+  const others = (j: number, a: Anchor) => (set.has(j) ? 0 : radiusOf(j, a));
+  let hi = Infinity;
+  for (const i of set) hi = Math.min(hi, maxCornerRadius(sp, i, others));
+  if (!Number.isFinite(hi) || hi <= 0) return 0;
+  const cache = new Map<number, number>();
+  const fits = (r: number): boolean => {
+    const plans = planTrims(sp, (j, a) => (set.has(j) ? r : radiusOf(j, a)), cache);
+    for (const pl of plans) {
+      if (!set.has(pl.i)) continue;
+      const wanted = r / Math.tan(pl.theta / 2);
+      if (pl.d < wanted - 1e-6) return false;
+    }
+    return true;
+  };
+  if (fits(hi)) return hi;
+  let lo = 0;
+  for (let k = 0; k < 30; k++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
 function segLength(sp: SubPath, i: number, cache: Map<number, number>): number {
   let l = cache.get(i);
   if (l === undefined) {

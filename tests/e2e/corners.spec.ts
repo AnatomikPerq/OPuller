@@ -207,6 +207,29 @@ test.describe('live corners', () => {
     expect(n.shape.kind).toBe('rect'); // still live
     expect(n.shape.radii.every((r: number) => r > 5)).toBe(true);
     expect(n.subpaths[0].anchors).toHaveLength(8);
+    // dragging far: the four corners are capped together at half the short side, the HUD reports what was applied
+    const w2 = await widgetScreen(page, `${id}/rect/0`);
+    await page.mouse.move(w2.x, w2.y);
+    await page.mouse.down();
+    await page.mouse.move(w2.x + 150, w2.y + 150, { steps: 10 });
+    await expect(page.locator('[data-testid="hud"]')).toContainText('60');
+    await page.mouse.up();
+    n = await nodeById(page, id);
+    expect(n.shape.radii.map((r: number) => Math.round(r * 1000) / 1000)).toEqual([60, 60, 60, 60]);
+    expect(n.subpaths[0].anchors).toHaveLength(8);
+    let bb = (await worldBounds(page, id))!;
+    expect(bb.width).toBeCloseTo(200, 3);
+    expect(bb.height).toBeCloseTo(120, 3);
+    // a single corner (an anchor of its arc selected) is limited by the neighbours: the others keep their 60
+    await clickWorld(page, 160, 100);
+    await expect(page.locator('[data-testid="corner-widget"]')).toHaveCount(1);
+    const w3 = await widgetScreen(page, `${id}/rect/0`);
+    await page.mouse.move(w3.x, w3.y);
+    await page.mouse.down();
+    await page.mouse.move(w3.x + 150, w3.y + 150, { steps: 10 });
+    await page.mouse.up();
+    n = await nodeById(page, id);
+    expect(n.shape.radii.map((r: number) => Math.round(r * 1000) / 1000)).toEqual([60, 60, 60, 60]);
     // corners are capped at the edges: no radius can exceed half the short side when all four are equal
     await page.evaluate((id) => (window as any).__opuller.mcp.corners({ ids: [id], radius: 500 }), id);
     n = await nodeById(page, id);
@@ -216,7 +239,58 @@ test.describe('live corners', () => {
     expect(b.height).toBeCloseTo(120, 3);
   });
 
-  test('booleans and cutting use the rounded outline; project files keep the radii', async ({ page }) => {
+  test('dragging every corner of a path together: all corners get the same radius, limited by the shared edges', async ({ page }) => {
+    await openApp(page);
+    const id = await makeTriangle(page);
+    await selectTool(page, 'direct');
+    await withStore(page, (s) => s.setSelection([Object.keys(s.doc.nodes).find((k: string) => s.doc.nodes[k].name === 'Ear')]));
+    await expect(page.locator('[data-testid="corner-widget"]')).toHaveCount(3);
+    const w = await widgetScreen(page, `${id}/0/2`);
+    await page.mouse.move(w.x, w.y);
+    await page.mouse.down();
+    await page.mouse.move(w.x, w.y + 300, { steps: 12 });
+    await page.mouse.up();
+    const n = await nodeById(page, id);
+    const radii = n.subpaths[0].anchors.map((a: any) => a.cornerRadius as number);
+    // base 200 shared by its two corners (θ ≈ 63.4°), sides 223.6 shared with the tip (θ ≈ 53.1°): both give ≈ 61.8
+    const t0 = Math.tan(Math.atan2(200, 100) / 2); // half of the base angle
+    const t2 = Math.tan(Math.atan2(100, 200)); // half of the tip angle (2 · atan(100 / 200))
+    const expected = Math.min(100 * t0, Math.hypot(100, 200) / (1 / t0 + 1 / t2));
+    for (const r of radii) expect(r).toBeCloseTo(expected, 1);
+    // the outline really carries the full arc at the tip (no proportional cut): it sits r / sin(θ/2) − r below the vertex
+    const top = await topY(page, id);
+    expect(top - 200).toBeCloseTo(expected / Math.sin(Math.atan2(100, 200)) - expected, 0);
+    const s = await getState(page);
+    expect(s.past[s.past.length - 1].label).toBe('Round Corners');
+  });
+
+  test('clicking uses the rounded outline for the fill; the scissors cut the raw path at its anchor', async ({ page }) => {
+    await openApp(page);
+    const id = await page.evaluate(() => (window as any).__opuller.mcp.createShape({ kind: 'rect', x: 100, y: 100, width: 200, height: 200, fill: '#00aa00', stroke: 'none' }).id);
+    await page.evaluate((id) => (window as any).__opuller.mcp.corners({ ids: [id], radius: 100 }), id);
+    await selectTool(page, 'select');
+    await withStore(page, (s) => s.clearSelection());
+    // the bounding-box corner lies outside the disc: nothing is selected there
+    await clickWorld(page, 106, 106);
+    expect((await getState(page)).selection).toEqual([]);
+    await clickWorld(page, 200, 200);
+    expect((await getState(page)).selection).toEqual([id]);
+    // scissors on a live-corner triangle: the cut lands on the sharp vertex the user clicked, the other corners stay live
+    const tri = await makeTriangle(page);
+    await page.evaluate((tri) => (window as any).__opuller.mcp.corners({ ids: [tri], radius: 20 }), tri);
+    await selectTool(page, 'scissors');
+    await clickWorld(page, 300, 200);
+    const n = await nodeById(page, tri);
+    expect(n.subpaths).toHaveLength(1);
+    expect(n.subpaths[0].closed).toBe(false);
+    expect(n.subpaths[0].anchors).toHaveLength(4);
+    expect(n.subpaths[0].anchors[0].point).toEqual({ x: 300, y: 200 });
+    expect(n.subpaths[0].anchors[3].point).toEqual({ x: 300, y: 200 });
+    expect(n.subpaths[0].anchors[1].cornerRadius).toBe(20);
+    expect(n.subpaths[0].anchors[2].cornerRadius).toBe(20);
+  });
+
+  test('booleans use the rounded outline; project files keep the radii', async ({ page }) => {
     await openApp(page);
     const id = await makeTriangle(page);
     await page.evaluate((id) => (window as any).__opuller.mcp.corners({ ids: [id], radius: 20 }), id);

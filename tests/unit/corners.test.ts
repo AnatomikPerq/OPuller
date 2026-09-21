@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clampRectRadii, roundSubPathCorners, applyLiveCorners, cornerAngle, isRoundableCorner, maxCornerRadius, cornerBisector } from '@/geometry/corners';
+import { clampRectRadii, roundSubPathCorners, applyLiveCorners, cornerAngle, isRoundableCorner, maxCornerRadius, maxSharedRadius, cornerBisector } from '@/geometry/corners';
 import { rectSubPath, polygonSubPath, roundCorners } from '@/geometry/shapes';
 import { polylineSubPath, subpathToCubics, pathBounds, flattenSubPath, segmentCount } from '@/geometry/path';
 import { warpSubPaths } from '@/distort/warp';
@@ -8,7 +8,10 @@ import type { SubPath, WarpEffect } from '@/model/types';
 import { transformSubPath } from '@/geometry/path';
 import { scale, rotate, multiply, translate } from '@/geometry/matrix';
 import { createDocument, makeShape, makePath } from '@/model/nodes';
-import { addNode, worldSubPaths, refreshLiveShape, localBounds } from '@/model/document';
+import { noStroke } from '@/model/defaults';
+import { addNode, worldSubPaths, refreshLiveShape, localBounds, bakeTransform } from '@/model/document';
+import { nodeCornerWidgets, applyCornerDrag } from '@/tools/pathEditing/corners';
+import { hitTest, hitTestAnchors } from '@/canvas/hitTest';
 import { validateDocument } from '@/io/project';
 
 /** Length of the straight run of a rounded rectangle along x = 0 (between the two left-side arcs). */
@@ -203,5 +206,120 @@ describe('live corners in the model', () => {
     junk.nodes[path.id].subpaths[0].anchors[2].cornerRadius = NaN;
     const cleaned = validateDocument(junk);
     expect((cleaned.nodes[path.id] as any).subpaths[0].anchors.every((a: any) => a.cornerRadius === undefined)).toBe(true);
+  });
+});
+
+describe('dragging several corner widgets at once', () => {
+  it('maxSharedRadius: every dragged corner really gets the radius, the others keep theirs', () => {
+    const sq = rectSubPath(100, 100);
+    // all four corners together: two roundings share every edge
+    expect(maxSharedRadius(sq, [0, 1, 2, 3])).toBeCloseTo(50, 6);
+    // corners 0 and 1 dragged, corner 2 already at 60: the edge 1-2 leaves 40 for corner 1
+    sq.anchors[2].cornerRadius = 60;
+    expect(maxSharedRadius(sq, [0, 1])).toBeCloseTo(40, 6);
+    sq.anchors[2].cornerRadius = 30;
+    expect(maxSharedRadius(sq, [0, 1])).toBeCloseTo(50, 6);
+    // a lone corner: the same answer as maxCornerRadius
+    expect(maxSharedRadius(sq, [1])).toBeCloseTo(maxCornerRadius(sq, 1), 6);
+    expect(maxSharedRadius(sq, [])).toBe(0);
+    // the triangle: the base is shared by its two corners, the sides by a base corner and the tip
+    const tri = triangle();
+    const shared = maxSharedRadius(tri, [0, 1, 2]);
+    const t0 = Math.tan(cornerAngle(tri, 0) / 2);
+    const t2 = Math.tan(cornerAngle(tri, 2) / 2);
+    const bySide = Math.hypot(50, 100) / (1 / t0 + 1 / t2);
+    expect(shared).toBeCloseTo(Math.min(100 / 2 * t0, bySide), 3);
+    const out = roundSubPathCorners(tri, () => shared);
+    expect(out.anchors).toHaveLength(6);
+  });
+
+  it('applyCornerDrag: rectangle corners are clamped together, path anchors share their edges, the applied radius is reported', () => {
+    const doc = createDocument({ name: 'c', width: 400, height: 400 });
+    const rect = makeShape({ kind: 'rect', width: 200, height: 120, radii: [0, 0, 0, 0] }, { transform: { a: 2, b: 0, c: 0, d: 2, e: 10, f: 10 } });
+    addNode(doc, rect, doc.layers[0]);
+    const widgets = nodeCornerWidgets(doc, rect.id);
+    expect(widgets).toHaveLength(4);
+    // 500 world px = 250 local: the pairs along the 120 side scale down together to 60 / 60
+    const applied = applyCornerDrag(doc, widgets, 500);
+    expect((doc.nodes[rect.id] as any).shape.radii).toEqual([60, 60, 60, 60]);
+    expect(applied).toBeCloseTo(120, 6); // reported in world units (scale 2)
+    // one corner alone: its neighbours keep their 60, so it gets 120 − 60 along the short side; the others are untouched
+    const one = applyCornerDrag(doc, widgets.filter((w) => w.target.kind === 'rect' && w.target.corner === 0), 500);
+    expect((doc.nodes[rect.id] as any).shape.radii).toEqual([60, 60, 60, 60]);
+    expect(one).toBeCloseTo(120, 6);
+    (doc.nodes[rect.id] as any).shape.radii = [0, 0, 0, 0];
+    expect(applyCornerDrag(doc, widgets.filter((w) => w.target.kind === 'rect' && w.target.corner === 0), 500)).toBeCloseTo(240, 6);
+    expect((doc.nodes[rect.id] as any).shape.radii).toEqual([120, 0, 0, 0]);
+    // two adjacent corners split their edge: the 200 side gives 100 each, but the 120 sides cap them at 120 − 0
+    (doc.nodes[rect.id] as any).shape.radii = [0, 0, 0, 0];
+    expect(applyCornerDrag(doc, widgets.filter((w) => w.target.kind === 'rect' && w.target.corner <= 1), 500)).toBeCloseTo(200, 6);
+    expect((doc.nodes[rect.id] as any).shape.radii).toEqual([100, 100, 0, 0]);
+    // a path: all three corners dragged far beyond the room → the shared maximum, stored on every anchor
+    const tri = triangle();
+    const path = makePath([tri], { name: 'Ear' });
+    addNode(doc, path, doc.layers[0]);
+    const tw = nodeCornerWidgets(doc, path.id);
+    expect(tw).toHaveLength(3);
+    const got = applyCornerDrag(doc, tw, 1000);
+    const radii = (doc.nodes[path.id] as any).subpaths[0].anchors.map((a: any) => a.cornerRadius);
+    expect(got).toBeCloseTo(maxSharedRadius(tri, [0, 1, 2]), 6);
+    for (const r of radii) expect(r).toBeCloseTo(got, 6);
+    // a lone widget is capped by its neighbours' radii (world units follow the node's scale)
+    const solo = applyCornerDrag(doc, [tw[2]], 1000);
+    expect(solo).toBeCloseTo(maxCornerRadius((doc.nodes[path.id] as any).subpaths[0], 2), 6);
+    // dragging back to zero removes the radius
+    expect(applyCornerDrag(doc, tw, 0)).toBe(0);
+    expect((doc.nodes[path.id] as any).subpaths[0].anchors.every((a: any) => a.cornerRadius === undefined)).toBe(true);
+  });
+
+  it('widgets of a scaled node measure the neighbours in world units once', () => {
+    const doc = createDocument({ name: 'c', width: 400, height: 400 });
+    const sq = rectSubPath(100, 100);
+    sq.anchors[1].cornerRadius = 30;
+    const path = makePath([sq], { name: 'Sq', transform: { a: 3, b: 0, c: 0, d: 3, e: 0, f: 0 } });
+    addNode(doc, path, doc.layers[0]);
+    const w = nodeCornerWidgets(doc, path.id);
+    const w0 = w.find((x) => x.target.kind === 'anchor' && x.target.index === 0)!;
+    const w1 = w.find((x) => x.target.kind === 'anchor' && x.target.index === 1)!;
+    expect(w1.radius).toBeCloseTo(90, 6);
+    // corner 0 has 300 − 90 = 210 world px of the top edge and the whole left edge: min → 210
+    expect(w0.maxRadius).toBeCloseTo(210, 6);
+  });
+});
+
+describe('live corners under transforms and hit testing', () => {
+  it('baking a uniform scale into a polygon scales its live corners; a rectangle keeps its radii', () => {
+    const doc = createDocument({ name: 'c', width: 400, height: 400 });
+    const poly = makeShape({ kind: 'polygon', sides: 6, radius: 50 }, { transform: { a: 2, b: 0, c: 0, d: 2, e: 100, f: 100 } });
+    poly.subpaths[0].anchors[1].cornerRadius = 7;
+    addNode(doc, poly, doc.layers[0]);
+    bakeTransform(doc, poly.id);
+    const p = doc.nodes[poly.id] as any;
+    expect(p.shape.radius).toBeCloseTo(100, 9);
+    expect(p.subpaths[0].anchors[1].cornerRadius).toBeCloseTo(14, 9);
+    expect(p.subpaths[0].anchors[0].cornerRadius).toBeUndefined();
+    expect(p.transform.a).toBeCloseTo(1, 9);
+    const rect = makeShape({ kind: 'rect', width: 100, height: 50, radii: [10, 0, 0, 0] }, { transform: { a: 2, b: 0, c: 0, d: 3, e: 0, f: 0 } });
+    addNode(doc, rect, doc.layers[0]);
+    bakeTransform(doc, rect.id);
+    const r = doc.nodes[rect.id] as any;
+    expect(r.shape.width).toBe(200);
+    expect(r.shape.height).toBe(150);
+    expect(r.shape.radii[0]).toBeCloseTo(20, 9);
+    expect(r.subpaths[0].anchors.length).toBe(5); // one rounded corner: 4 + 1
+  });
+
+  it('the fill hit test uses the rounded outline, the anchor / segment tests the raw path', () => {
+    const doc = createDocument({ name: 'c', width: 400, height: 400 });
+    const sq = rectSubPath(100, 100);
+    for (const a of sq.anchors) a.cornerRadius = 50; // a circle
+    const path = makePath([sq], { name: 'Disc', fill: { type: 'solid', color: '#ff0000', opacity: 1 }, stroke: noStroke() });
+    addNode(doc, path, doc.layers[0]);
+    // the centre is painted, the corner of the bounding box is not
+    expect(hitTest(doc, { x: 50, y: 50 }, { tolerance: 2 })?.kind).toBe('fill');
+    expect(hitTest(doc, { x: 3, y: 3 }, { tolerance: 2 })).toBeNull();
+    // the raw corner is still an editing target (anchor / outline of the raw path)
+    expect(hitTestAnchors(doc, [path.id], { x: 0.5, y: 0.5 }, 2)?.kind).toBe('anchor');
+    expect(hitTest(doc, { x: 0.5, y: 0.5 }, { tolerance: 2 })?.kind).toBe('stroke');
   });
 });

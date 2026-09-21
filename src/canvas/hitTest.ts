@@ -8,6 +8,8 @@ import { invert, applyToPoint, scaleFactor, multiply } from '@/geometry/matrix';
 import { nearestPointOnPath, pointInPath, absHandleIn, absHandleOut, hasHandle } from '@/geometry/path';
 import { layoutText } from '@/text/layout';
 import { rectContainsPoint } from '@/geometry/vec';
+import { hasLiveCorners } from '@/geometry/corners';
+import { effectiveSubPaths, hasGeometryEffects } from './effectiveGeometry';
 
 export interface HitOptions {
   /** tolerance in world units */
@@ -132,7 +134,8 @@ function hitNode(doc: Document, id: ID, world: Vec, opts: HitOptions, target: ID
         distance: loc.distance * s,
       };
     }
-    if (opts.fills && n.fill.type !== 'none' && pointInPath(n.subpaths, local, n.fillRule)) {
+    // the painted area is the rendered outline (live corners, geometry effects); segments stay raw for editing
+    if (opts.fills && n.fill.type !== 'none' && pointInPath(hasLiveCorners(n.subpaths) || hasGeometryEffects(n.effects) ? effectiveSubPaths(n) : n.subpaths, local, n.fillRule)) {
       return { id, target, kind: 'fill', point: world, distance: 0 };
     }
     return null;

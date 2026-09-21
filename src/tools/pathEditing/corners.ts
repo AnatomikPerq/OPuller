@@ -10,7 +10,7 @@ import type { Document, ID, Vec, AnchorRef, PathNode } from '@/model/types';
 import { worldMatrix, refreshLiveShape } from '@/model/document';
 import { scaleFactor, applyToPoint, applyToVector } from '@/geometry/matrix';
 import { transformSubPath } from '@/geometry/path';
-import { cornerAngle, cornerBisector, isRoundableCorner, maxCornerRadius, clampRectRadii } from '@/geometry/corners';
+import { cornerAngle, cornerBisector, isRoundableCorner, maxCornerRadius, maxSharedRadius, clampRectRadii } from '@/geometry/corners';
 import { normalize, sub, dot } from '@/geometry/vec';
 
 type RectPath = PathNode & { shape: { kind: 'rect'; width: number; height: number; radii: [number, number, number, number] } };
@@ -96,6 +96,27 @@ export function rectCornerMax(width: number, height: number, radii: [number, num
   }
 }
 
+/** The largest radius a set of rectangle corners can share, the other corners keeping theirs (two dragged corners split their edge). */
+export function rectSharedMax(width: number, height: number, radii: [number, number, number, number], corners: Set<number>): number {
+  const w = Math.abs(width);
+  const h = Math.abs(height);
+  const sides: Array<[number, number, number]> = [
+    [0, 1, w],
+    [1, 2, h],
+    [2, 3, w],
+    [3, 0, h],
+  ];
+  let r = Infinity;
+  for (const [a, b, len] of sides) {
+    const da = corners.has(a);
+    const db = corners.has(b);
+    if (da && db) r = Math.min(r, len / 2);
+    else if (da) r = Math.min(r, len - radii[b]);
+    else if (db) r = Math.min(r, len - radii[a]);
+  }
+  return Number.isFinite(r) ? Math.max(0, r) : 0;
+}
+
 /** Widgets of one path: its live-rect corners, or its roundable anchors (optionally only `only` anchor indices per subpath). */
 export function nodeCornerWidgets(doc: Document, id: ID, only?: Map<number, Set<number>>): CornerWidget[] {
   const n = doc.nodes[id];
@@ -126,7 +147,8 @@ export function nodeCornerWidgets(doc: Document, id: ID, only?: Map<number, Set<
       const theta = cornerAngle(wsp, i);
       const radius = (sp.anchors[i].cornerRadius ?? 0) * k;
       // the room for this corner is measured with the other corners at their current radii
-      const maxR = maxCornerRadius(wsp, i, (j, a) => (j === i ? Number.MAX_SAFE_INTEGER : (a.cornerRadius ?? 0) * k));
+      // (wsp is world space: transformSubPath already scaled the neighbours' radii)
+      const maxR = maxCornerRadius(wsp, i, (j, a) => (j === i ? Number.MAX_SAFE_INTEGER : (a.cornerRadius ?? 0)));
       out.push({ key: `${id}/${si}/${i}`, nodeId: id, target: { kind: 'anchor', subpath: si, index: i }, vertex: { ...wsp.anchors[i].point }, bisector: cornerBisector(wsp, i), theta, radius, maxRadius: Number.isFinite(maxR) ? maxR : 0 });
     }
   });
@@ -230,6 +252,50 @@ export function setCornerRadiusWorld(draft: Document, nodeId: ID, target: Corner
   if (r > 1e-9) a.cornerRadius = r;
   else delete a.cornerRadius;
   return true;
+}
+
+/**
+ * Apply one dragged radius (world units) to a set of widgets at once: the corners of a live
+ * rectangle are clamped together, and the anchors of one subpath share their edges (the
+ * radius is capped so every dragged corner really gets it instead of a proportional cut).
+ * Returns the radius actually stored (world units).
+ */
+export function applyCornerDrag(draft: Document, widgets: CornerWidget[], radiusWorld: number): number {
+  let applied = radiusWorld;
+  const byNode = new Map<ID, CornerWidget[]>();
+  for (const w of widgets) (byNode.get(w.nodeId) ?? byNode.set(w.nodeId, []).get(w.nodeId)!).push(w);
+  for (const [nodeId, list] of byNode) {
+    const n = draft.nodes[nodeId];
+    if (!n || n.type !== 'path') continue;
+    const k = scaleFactor(worldMatrix(draft, nodeId)) || 1;
+    const rects = new Set<number>();
+    for (const w of list) if (w.target.kind === 'rect') rects.add(w.target.corner);
+    if (rects.size && n.shape?.kind === 'rect') {
+      const radii = [...n.shape.radii] as [number, number, number, number];
+      const local = Math.min(radiusWorld / k, rectSharedMax(n.shape.width, n.shape.height, radii, rects));
+      for (const c of rects) radii[c] = local;
+      n.shape = { ...n.shape, radii };
+      refreshLiveShape(n);
+      applied = Math.min(applied, local * k);
+    }
+    const bySub = new Map<number, number[]>();
+    for (const w of list) if (w.target.kind === 'anchor') (bySub.get(w.target.subpath) ?? bySub.set(w.target.subpath, []).get(w.target.subpath)!).push(w.target.index);
+    for (const [si, indices] of bySub) {
+      const sp = n.subpaths[si];
+      if (!sp) continue;
+      // the room is measured with the other corners at their current radii (a lone widget too)
+      const local = Math.min(radiusWorld / k, maxSharedRadius(sp, indices));
+      for (const i of indices) {
+        const a = sp.anchors[i];
+        if (!a) continue;
+        const r = Math.max(0, local);
+        if (r > 1e-9) a.cornerRadius = r;
+        else delete a.cornerRadius;
+      }
+      applied = Math.min(applied, local * k);
+    }
+  }
+  return Math.max(0, applied);
 }
 
 /** Set one radius (local units) on every corner of the given paths / anchors (Object > Path > Corners…). */

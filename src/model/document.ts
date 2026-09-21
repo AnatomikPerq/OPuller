@@ -354,7 +354,7 @@ export function bakeTransform(doc: Document, id: ID): void {
         n.shape = { ...n.shape, x1: n.shape.x1 * sx, y1: n.shape.y1 * sy, x2: n.shape.x2 * sx, y2: n.shape.y2 * sy };
         n.transform = { a: 1, b: 0, c: 0, d: 1, e: m.e, f: m.f };
       }
-      n.subpaths = liveShapeSubPaths(n.shape);
+      refreshLiveShape(n);
       return;
     }
     const uniform = Math.abs(m.a * m.a + m.b * m.b - (m.c * m.c + m.d * m.d)) < 1e-6 && Math.abs(m.a * m.c + m.b * m.d) < 1e-6;
@@ -366,7 +366,9 @@ export function bakeTransform(doc: Document, id: ID): void {
       else if (n.shape.kind === 'star') n.shape = { ...n.shape, outerRadius: n.shape.outerRadius * s, innerRadius: n.shape.innerRadius * s };
       else if (n.shape.kind === 'ellipse') n.shape = { ...n.shape, rx: n.shape.rx * s, ry: n.shape.ry * s };
       else if (n.shape.kind === 'rect') n.shape = { ...n.shape, width: n.shape.width * s, height: n.shape.height * s, radii: n.shape.radii.map((r) => r * s) as [number, number, number, number] };
-      n.subpaths = liveShapeSubPaths(n.shape);
+      // live corners of a polygon / star scale with it (refreshLiveShape keeps them by anchor index)
+      for (const sp of n.subpaths) for (const a of sp.anchors) if (a.cornerRadius) a.cornerRadius *= s;
+      refreshLiveShape(n);
       n.transform = rot;
       return;
     }
