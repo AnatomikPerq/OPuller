@@ -109,6 +109,8 @@ test.describe('colour module', () => {
     // stroke target
     await page.getByTestId('color-stroke-swatch').click();
     await expect(page.getByTestId('color-target-label')).toHaveText(/Stroke/);
+    // the hex field takes the stroke colour in an effect after the label: let it settle before typing
+    await expect(page.locator('#color-hex')).toHaveValue('000000');
     await page.locator('#color-hex').fill('00ff00');
     await page.locator('#color-hex').press('Enter');
     n = await nodeById(page, id);

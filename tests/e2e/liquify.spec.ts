@@ -201,6 +201,7 @@ test.describe('liquify tools', () => {
     s = await getState(page);
     expect(s.toolOptions.warp.width).toBeGreaterThan(120);
     await expect(page.getByTestId('liquify-width')).toBeVisible();
+    await expect(page.getByTestId('liquify-width')).toHaveValue(String(s.toolOptions.warp.width));
     await page.getByTestId('liquify-width').fill('150');
     await page.getByTestId('liquify-width').press('Enter');
     s = await getState(page);
@@ -208,6 +209,8 @@ test.describe('liquify tools', () => {
     expect(s.toolOptions.bloat.width).toBe(150);
     await page.getByTestId('liquify-options').click();
     await expect(page.getByTestId('liquify-dialog-ok')).toBeVisible();
+    // the field shows the current width once its effect ran: typing earlier appends to the old text
+    await expect(page.getByTestId('liquify-dialog-width')).toHaveValue('150');
     await page.getByTestId('liquify-dialog-width').fill('90');
     await page.getByTestId('liquify-dialog-width').press('Enter');
     await page.getByTestId('liquify-dialog-ok').click();
